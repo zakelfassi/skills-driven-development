@@ -1,14 +1,14 @@
-# Skills-Driven Development
+# Skills-Driven Development (SkDD)
 
 > Agents that learn by doing — and remember how they did it.
 
-Skills-Driven Development (SDD) is a methodology where AI agents **create, evolve, and share reusable skills** as a natural byproduct of their work. Instead of front-loading all knowledge into prompts, agents forge skills on the fly and persist them for future reuse.
+Skills-Driven Development (SkDD) is a methodology where AI agents **create, evolve, and share reusable skills** as a natural byproduct of their work. Instead of front-loading all knowledge into prompts, agents forge skills on the fly and persist them for future reuse.
 
-A skill is a self-contained directory with a `SKILL.md` file that follows the [Agent Skills](https://agentskills.io) open specification. But SDD goes further: it treats skills as **living artifacts** — discovered, forked, evolved, and composed by agents across projects and sessions.
+A skill is a self-contained directory with a `SKILL.md` file that follows the [Agent Skills](https://agentskills.io) open specification. But SkDD goes further: it treats skills as **living artifacts** — discovered, forked, evolved, and composed by agents across projects and sessions.
 
 ## The Core Idea
 
-Most agent workflows today are stateless: the agent reads a prompt, does work, and forgets. SDD adds a feedback loop:
+Most agent workflows today are stateless: the agent reads a prompt, does work, and forgets. SkDD adds a feedback loop:
 
 ```
 Work → Notice a reusable pattern → Forge a skill → Persist it → Discover it next time
@@ -22,7 +22,7 @@ This turns agent experience into **compound knowledge**. The more an agent works
 |------|-----------|
 | [`docs/`](docs/) | The methodology: skill colony concept, forging mechanics, specification alignment |
 | [`skillforge/`](skillforge/) | The meta-skill: agents use this to create new skills |
-| [`examples/`](examples/) | A sample project showing SDD in action |
+| [`examples/`](examples/) | A sample project showing SkDD in action |
 | [`colony/`](colony/) | The skill colony pattern: discovery, evolution, sharing |
 
 ## Quick Start
@@ -81,19 +81,19 @@ Agent X evolves:    deploy-preview-vercel (adds rollback)
 
 Skills aren't static documentation. They're **living process memory**.
 
-## How SDD Relates to the Agent Skills Spec
+## How SkDD Relates to the Agent Skills Spec
 
-SDD is fully compatible with the [Agent Skills specification](https://agentskills.io/specification.md):
+SkDD is fully compatible with the [Agent Skills specification](https://agentskills.io/specification.md):
 
-| Agent Skills Spec | SDD Extension |
-|-------------------|---------------|
+| Agent Skills Spec | SkDD Extension |
+|-------------------|----------------|
 | `SKILL.md` with YAML frontmatter | ✅ Same format |
 | `scripts/`, `references/`, `assets/` | ✅ Same structure |
 | Manual skill creation | ➕ Agents forge skills autonomously |
 | Static skill libraries | ➕ Skills evolve through use |
 | Per-project skills | ➕ Colony-level discovery + sharing |
 
-SDD doesn't replace the spec — it adds a **lifecycle** on top of it.
+SkDD doesn't replace the spec — it adds a **lifecycle** on top of it.
 
 ## Principles
 
@@ -115,7 +115,7 @@ Skills are markdown files that humans can read, review, and edit. But they're st
 ## Inspiration & Prior Art
 
 - [Agent Skills Specification](https://agentskills.io) — The open format this builds on
-- [Forgeloop](https://github.com/zakelfassi/forgeloop-kit) — Agentic build loop framework where SDD was first implemented
+- [Forgeloop](https://github.com/zakelfassi/forgeloop-kit) — Agentic build loop framework where SkDD was first implemented (embedded under the hood before it was extracted as a standalone methodology)
 - [how-to-ralph-wiggum](https://github.com/ghuntley/how-to-ralph-wiggum) — The Ralph methodology for agent-driven development
 - [marge-simpson](https://github.com/Soupernerd/marge-simpson) — Knowledge persistence patterns across sessions
 
