@@ -1,0 +1,157 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/zakelfassi/skills-driven-development/blob/main/docs/spec/colony-v1.json",
+  "title": "SkDD Colony Manifest",
+  "description": "JSON Schema (draft-07) for `.colony.json` — the manifest a SkDD colony publishes so marketplaces, validators, and adapter tools can discover and index it. Spec version: agentskills.io/v1. This schema is a SkDD extension layered on top of the Agent Skills SKILL.md spec; skills themselves remain spec-compliant and live in their own directories.",
+  "type": "object",
+  "required": ["name", "version", "description", "spec"],
+  "additionalProperties": false,
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "description": "URI of the JSON Schema this manifest conforms to."
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64,
+      "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$",
+      "description": "Colony name. Kebab-case, 1-64 chars. Same regex as Agent Skills `name` field so colonies and skills share naming conventions."
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+(-[0-9A-Za-z.-]+)?(\\+[0-9A-Za-z.-]+)?$",
+      "description": "Semver version. Bump major on breaking changes to the colony's public surface (removed skills, changed registry shape, etc.)."
+    },
+    "description": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1024,
+      "description": "One-paragraph human-readable description. Same length bounds as a SKILL.md description."
+    },
+    "spec": {
+      "type": "string",
+      "enum": ["agentskills.io/v1"],
+      "description": "Which Agent Skills spec version this colony targets. Currently only 'agentskills.io/v1' is defined."
+    },
+    "skills": {
+      "type": "array",
+      "description": "Top-level skills in this colony. Each entry points at a SKILL.md path relative to the manifest.",
+      "items": {
+        "type": "object",
+        "required": ["name", "path"],
+        "additionalProperties": true,
+        "properties": {
+          "name": {
+            "type": "string",
+            "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$",
+            "minLength": 1,
+            "maxLength": 64
+          },
+          "path": {
+            "type": "string",
+            "description": "Path to the SKILL.md, relative to the manifest root."
+          },
+          "description": { "type": "string", "maxLength": 1024 },
+          "status": {
+            "type": "string",
+            "enum": ["active", "archived", "deprecated", "draft"]
+          },
+          "version": { "type": "string" }
+        }
+      }
+    },
+    "examples": {
+      "type": "array",
+      "description": "Example projects or subcolonies that illustrate how to use the main colony.",
+      "items": {
+        "type": "object",
+        "required": ["name", "path"],
+        "additionalProperties": true,
+        "properties": {
+          "name": { "type": "string" },
+          "path": { "type": "string" },
+          "description": { "type": "string" },
+          "skills": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Paths of SKILL.md files that belong to this example, relative to the manifest root."
+          }
+        }
+      }
+    },
+    "homepage": { "type": "string", "format": "uri" },
+    "repository": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "type": { "type": "string" },
+        "url": { "type": "string", "format": "uri" },
+        "directory": { "type": "string" }
+      }
+    },
+    "license": { "type": "string" },
+    "maintainers": {
+      "type": "array",
+      "items": {
+        "oneOf": [
+          { "type": "string" },
+          {
+            "type": "object",
+            "additionalProperties": true,
+            "properties": {
+              "name": { "type": "string" },
+              "email": { "type": "string", "format": "email" },
+              "github": { "type": "string" },
+              "url": { "type": "string", "format": "uri" }
+            }
+          }
+        ]
+      }
+    },
+    "cli": {
+      "type": "object",
+      "description": "Optional pointer to the CLI that ships alongside this colony.",
+      "required": ["package"],
+      "additionalProperties": true,
+      "properties": {
+        "package": { "type": "string" },
+        "path": { "type": "string" },
+        "version": { "type": "string" }
+      }
+    },
+    "plugins": {
+      "type": "array",
+      "description": "Harness-specific plugin wrappers bundled with this colony.",
+      "items": {
+        "type": "object",
+        "required": ["name", "path", "target"],
+        "additionalProperties": true,
+        "properties": {
+          "name": { "type": "string" },
+          "path": { "type": "string" },
+          "target": {
+            "type": "string",
+            "enum": [
+              "claude-code",
+              "codex",
+              "cursor",
+              "copilot",
+              "gemini-cli",
+              "opencode",
+              "goose",
+              "amp",
+              "roo-code",
+              "junie",
+              "vscode"
+            ]
+          }
+        }
+      }
+    },
+    "keywords": {
+      "type": "array",
+      "items": { "type": "string" }
+    }
+  }
+}

@@ -1,0 +1,54 @@
+name: Publish CLI
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+jobs:
+  publish:
+    name: Publish skdd to npm
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          registry-url: "https://registry.npmjs.org"
+          cache: pnpm
+          cache-dependency-path: cli/pnpm-lock.yaml
+
+      - name: Install CLI deps
+        working-directory: cli
+        run: pnpm install --frozen-lockfile
+
+      - name: Run tests
+        working-directory: cli
+        run: pnpm test
+
+      - name: Build CLI
+        working-directory: cli
+        run: pnpm build
+
+      - name: Publish to npm
+        working-directory: cli
+        run: pnpm publish --no-git-checks --provenance --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      # Marketplace submissions (SkillsMP, Skills.sh, ClawHub, Claude Code Marketplace)
+      # are intentionally deferred to a future milestone - see the P4 section of the
+      # project roadmap. This workflow publishes the CLI only; colony submissions
+      # will be added when .colony.json v1 stabilizes.

@@ -1,0 +1,62 @@
+name: Validate Skills
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  validate:
+    name: Validate SKILL.md files
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: pnpm
+          cache-dependency-path: cli/pnpm-lock.yaml
+
+      - name: Install CLI deps
+        working-directory: cli
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck CLI
+        working-directory: cli
+        run: pnpm typecheck
+
+      - name: Run CLI unit tests
+        working-directory: cli
+        run: pnpm test
+
+      - name: Build CLI
+        working-directory: cli
+        run: pnpm build
+
+      - name: Validate repo skills with skdd
+        run: node cli/dist/index.js validate skillforge examples/webapp-starter/skills plugins/skdd-claude/skills
+
+      - name: Regression grep - ensure no stale "SDD" strings
+        run: |
+          if grep -rn '\bSDD\b' --include='*.md' .; then
+            echo "::error::Stale 'SDD' strings found - replace with 'SkDD'"
+            exit 1
+          fi
+          echo "OK - no stale SDD strings"
+
+      - name: Markdown link check (best effort, non-blocking)
+        uses: gaurav-nelson/github-action-markdown-link-check@v1
+        with:
+          use-quiet-mode: "yes"
+          use-verbose-mode: "yes"
+          config-file: ".github/markdown-link-check.json"
+        continue-on-error: true

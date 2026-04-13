@@ -1,0 +1,32 @@
+# Opt-in pre-commit hooks for SkDD contributors.
+# Install with: pip install pre-commit && pre-commit install
+# Documented in CONTRIBUTING.md — this is NOT required to merge, just a local safety net.
+
+repos:
+  - repo: local
+    hooks:
+      - id: no-stale-sdd
+        name: No stale SDD strings
+        description: Regression guard — the repo was renamed SDD → SkDD; catch strays early.
+        entry: bash -c 'if grep -rn "\bSDD\b" --include="*.md" .; then echo "Found stale SDD string(s). Replace with SkDD."; exit 1; fi'
+        language: system
+        pass_filenames: false
+
+      - id: skdd-validate
+        name: Validate SKILL.md files with skdd
+        description: Runs the locally built skdd CLI against every skill in the repo.
+        entry: bash -c 'if [ -f cli/dist/index.js ]; then node cli/dist/index.js validate skillforge examples/webapp-starter/skills; else echo "skdd not built — run: pnpm -C cli build"; exit 0; fi'
+        language: system
+        pass_filenames: false
+        files: "(skillforge|examples/webapp-starter/skills)/.*SKILL\\.md$|cli/src/.*\\.ts$"
+
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.6.0
+    hooks:
+      - id: check-yaml
+        exclude: '.github/workflows/.*'
+      - id: check-json
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+      - id: mixed-line-ending
+        args: ["--fix=lf"]
