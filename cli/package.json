@@ -1,0 +1,57 @@
+{
+  "name": "skdd",
+  "version": "0.1.0",
+  "description": "Skills-Driven Development CLI — validate, init, forge, list, and export SkDD skill colonies.",
+  "type": "module",
+  "bin": {
+    "skdd": "./dist/index.js"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "packageManager": "pnpm@9.0.0",
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "lint": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@inquirer/prompts": "^7.0.0",
+    "commander": "^12.1.0",
+    "gray-matter": "^4.0.3",
+    "picocolors": "^1.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "tsup": "^8.3.0",
+    "typescript": "^5.6.0",
+    "vitest": "^2.1.0"
+  },
+  "keywords": [
+    "skills-driven-development",
+    "skdd",
+    "agent-skills",
+    "agentskills.io",
+    "ai-agents",
+    "claude-code",
+    "codex",
+    "cursor",
+    "copilot"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/zakelfassi/skills-driven-development.git",
+    "directory": "cli"
+  },
+  "homepage": "https://github.com/zakelfassi/skills-driven-development#readme"
+}
