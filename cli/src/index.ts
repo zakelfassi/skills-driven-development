@@ -5,17 +5,21 @@ import { runForge } from "./commands/forge.js";
 import { runList } from "./commands/list.js";
 import { runSync } from "./commands/sync.js";
 import { runLink } from "./commands/link.js";
+import { runDoctor } from "./commands/doctor.js";
+import { runImport } from "./commands/import.js";
 import { logger } from "./lib/logger.js";
 import type { Harness } from "./lib/harness.js";
 import type { LinkMode } from "./lib/fs-link.js";
 
-const VERSION = "0.2.0";
+const VERSION = "0.3.0";
 
 const program = new Command();
 
 program
   .name("skdd")
-  .description("Skills-Driven Development CLI — validate, init, forge, list, and sync skill colonies.")
+  .description(
+    "Skills-Driven Development CLI — validate, init, forge, list, link, doctor, import, and sync skill colonies.",
+  )
   .version(VERSION);
 
 program
@@ -123,6 +127,46 @@ program
     const code = await runList({ format: opts.format });
     process.exit(code);
   });
+
+program
+  .command("doctor")
+  .description(
+    "Health check: canonical skills/, registry, mirror drift, instruction blocks, .colony.json",
+  )
+  .option("-j, --json", "Emit a machine-readable JSON report instead of the human layout", false)
+  .action(async (opts: { json: boolean }) => {
+    const code = await runDoctor({ json: opts.json });
+    process.exit(code);
+  });
+
+program
+  .command("import")
+  .description(
+    "Scan an existing project for SKILL.md duplicates across harness mirrors; --apply consolidates into canonical skills/",
+  )
+  .argument("[target]", "Project root to scan (defaults to current directory)")
+  .option("-j, --json", "Emit a machine-readable JSON report", false)
+  .option(
+    "--apply",
+    "Consolidate duplicates/single-source skills into canonical skills/ and refresh mirrors via 'skdd link --force'",
+    false,
+  )
+  .option("--canonical <dir>", "Override the canonical skills directory (default: 'skills' or .colony.json's canonicalSkillsDir)")
+  .option("--skip-link", "Skip the post-consolidation 'skdd link' step (requires --apply)", false)
+  .action(
+    async (
+      target: string | undefined,
+      opts: { json: boolean; apply: boolean; canonical?: string; skipLink: boolean },
+    ) => {
+      const code = await runImport(target, {
+        json: opts.json,
+        apply: opts.apply,
+        canonical: opts.canonical,
+        skipLink: opts.skipLink,
+      });
+      process.exit(code);
+    },
+  );
 
 program
   .command("sync")

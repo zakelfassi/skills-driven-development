@@ -1,0 +1,92 @@
+{
+  "name": "skdd-vscode",
+  "displayName": "SkDD — Agent Skills",
+  "description": "SKILL.md frontmatter snippets, validation hints, and a Forge-a-Skill command for Skills-Driven Development.",
+  "version": "0.1.0",
+  "publisher": "skdd",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/zakelfassi/skills-driven-development.git",
+    "directory": "extensions/vscode"
+  },
+  "homepage": "https://github.com/zakelfassi/skills-driven-development#readme",
+  "engines": {
+    "vscode": "^1.80.0"
+  },
+  "categories": [
+    "Snippets",
+    "Other"
+  ],
+  "keywords": [
+    "agent-skills",
+    "agentskills.io",
+    "skills-driven-development",
+    "skdd",
+    "claude-code",
+    "codex",
+    "cursor"
+  ],
+  "activationEvents": [
+    "onLanguage:markdown",
+    "onCommand:skdd.forge",
+    "onCommand:skdd.doctor",
+    "onCommand:skdd.link"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "skdd.forge",
+        "title": "SkDD: Forge a new skill",
+        "category": "SkDD"
+      },
+      {
+        "command": "skdd.doctor",
+        "title": "SkDD: Run doctor health check",
+        "category": "SkDD"
+      },
+      {
+        "command": "skdd.link",
+        "title": "SkDD: Refresh harness mirrors",
+        "category": "SkDD"
+      }
+    ],
+    "snippets": [
+      {
+        "language": "markdown",
+        "path": "./snippets/skill.code-snippets"
+      }
+    ],
+    "jsonValidation": [
+      {
+        "fileMatch": ".colony.json",
+        "url": "https://raw.githubusercontent.com/zakelfassi/skills-driven-development/main/docs/spec/colony-v1.json"
+      }
+    ],
+    "configuration": {
+      "title": "SkDD",
+      "properties": {
+        "skdd.cliPath": {
+          "type": "string",
+          "default": "skdd",
+          "description": "Path to the skdd CLI binary. Defaults to 'skdd' (must be on PATH). Override to an absolute path if the CLI is installed locally."
+        },
+        "skdd.openTerminalOnCommand": {
+          "type": "boolean",
+          "default": true,
+          "description": "When true, SkDD commands run in a visible VS Code terminal so output streams live. When false, they run as background tasks."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "vscode:prepublish": "pnpm run compile"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.80.0",
+    "typescript": "^5.6.0"
+  }
+}

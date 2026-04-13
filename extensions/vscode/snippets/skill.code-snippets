@@ -1,0 +1,81 @@
+{
+  "SKILL.md frontmatter (minimal)": {
+    "prefix": "skill-frontmatter",
+    "scope": "markdown",
+    "description": "Spec-compliant Agent Skills frontmatter — name + description",
+    "body": [
+      "---",
+      "name: ${1:my-skill}",
+      "description: ${2:One-sentence summary. Use when <trigger condition>.}",
+      "---",
+      "",
+      "# ${3:My Skill}",
+      "",
+      "$0"
+    ]
+  },
+  "SKILL.md frontmatter (with SkDD metadata)": {
+    "prefix": "skill-frontmatter-full",
+    "scope": "markdown",
+    "description": "Agent Skills frontmatter with SkDD lifecycle metadata",
+    "body": [
+      "---",
+      "name: ${1:my-skill}",
+      "description: ${2:One-sentence summary. Use when <trigger condition>.}",
+      "metadata:",
+      "  forged-by: ${3:skdd-cli}",
+      "  forged-from: ${4:session-$CURRENT_YEAR-$CURRENT_MONTH-$CURRENT_DATE}",
+      "  forged-reason: \"${5:Why this skill was created.}\"",
+      "  status: active",
+      "---",
+      "",
+      "# ${6:My Skill}",
+      "",
+      "$0"
+    ]
+  },
+  "SKILL.md full skeleton": {
+    "prefix": "skill-skeleton",
+    "scope": "markdown",
+    "description": "Full SKILL.md skeleton with Inputs, Steps, Conventions, Edge Cases",
+    "body": [
+      "---",
+      "name: ${1:my-skill}",
+      "description: ${2:One-sentence summary. Use when <trigger condition>.}",
+      "metadata:",
+      "  status: active",
+      "---",
+      "",
+      "# ${3:My Skill}",
+      "",
+      "${2}",
+      "",
+      "## Inputs",
+      "",
+      "- ${4:input-name}: ${5:description}",
+      "",
+      "## Steps",
+      "",
+      "1. ${6:First step — imperative, copy-pasteable.}",
+      "2. ${7:Second step.}",
+      "3. $0",
+      "",
+      "## Conventions",
+      "",
+      "- ${8:Project-specific patterns that apply.}",
+      "",
+      "## Edge Cases",
+      "",
+      "- ${9:Known gotchas or special handling.}",
+      ""
+    ]
+  },
+  "Skills registry table row": {
+    "prefix": "skill-registry-row",
+    "scope": "markdown",
+    "description": "Row for .skills-registry.md available-skills table",
+    "body": [
+      "| ${1:skill-name} | ${2|local,forked,bundled|} | ${3:$CURRENT_YEAR-$CURRENT_MONTH-$CURRENT_DATE} | ${4:0} | ${5:Description. Use when <trigger>.} |"
+    ]
+  }
+}
