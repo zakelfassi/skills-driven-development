@@ -100,4 +100,33 @@ This is optional but valuable for understanding how a skill matured.
 
 Skills that haven't been used in 90 days and have fewer than 5 lifetime uses are candidates for archiving. This keeps the colony lean and relevant.
 
-An archived skill isn't deleted — it's moved to an `archived/` section in the registry. If someone needs it again, it can be revived.
+An archived skill isn't deleted — it's moved to the `## Archived` section in the registry. If someone needs it again, it can be revived.
+
+## Archiving
+
+A skill is archived, not deleted, when it falls under the decay rule, when it's superseded by a successor, or when the convention it encoded no longer applies. Archiving is cheap to undo and preserves the history that the skill once existed.
+
+**How to archive a skill:**
+
+1. Set `metadata.status: archived` and add `metadata.archived-reason: "<short reason>"` to the skill's frontmatter.
+2. Move the row out of the registry's `## Available Skills` table into a `## Archived` table with columns `Skill | Archived | Reason`.
+3. Leave the SKILL.md file in place. Do not delete the directory — other skills or colonies may still reference it by name for history.
+4. If a successor exists, add `metadata.superseded-by: <new-skill-name>` so agents can redirect.
+
+**How to revive a skill:**
+
+1. Clear `metadata.status` (or set it to `active`).
+2. Move the row back into `## Available Skills`.
+3. If conventions changed, review the skill before first use and evolve it in place.
+
+**Registry shape for archived entries:**
+
+```markdown
+## Archived
+
+| Skill | Archived | Reason |
+|-------|----------|--------|
+| css-module-setup | 2026-02-22 | Migrated to Tailwind; skill no longer applies |
+```
+
+Keep the archive table ordered by most-recently-archived so recent retirements are easy to scan.

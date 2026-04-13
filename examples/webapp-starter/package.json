@@ -1,0 +1,16 @@
+{
+  "name": "webapp-starter",
+  "version": "0.0.0-example",
+  "private": true,
+  "description": "Reference structure of a SkDD-enabled project. Not a runnable webapp — the files exist to show where skills, the registry, and agent instructions live.",
+  "scripts": {
+    "skills:list": "cat .skills-registry.md",
+    "skills:deploy-preview": "./skills/deploy-preview/scripts/deploy-preview.sh"
+  },
+  "skdd": {
+    "registry": ".skills-registry.md",
+    "skillsDir": "skills",
+    "harness": "claude"
+  },
+  "license": "MIT"
+}

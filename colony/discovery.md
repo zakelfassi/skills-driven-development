@@ -37,8 +37,8 @@ When working across multiple projects:
 ### Silent skills
 A skill exists but its description doesn't match common task phrasings. Fix: add more trigger phrases to the description.
 
-### Phantom skills
-A skill is referenced in the registry but the directory is missing. Fix: clean the registry periodically.
+### Dangling skills
+A skill is referenced in the registry but the directory is missing (deleted file, broken symlink, failed fork). Fix: run `skdd validate` (or scan the registry by hand) periodically and drop rows whose `path` no longer resolves.
 
 ### Discovery bypass
 An agent re-derives a solution that already exists as a skill. Fix: make registry scanning a mandatory first step in agent configuration (see AGENTS.md).

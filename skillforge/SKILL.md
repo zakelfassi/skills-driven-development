@@ -85,11 +85,13 @@ If the skill involves file generation or automation:
 ```
 
 ### 6. Register the skill
-Update `.skills-registry.md` (create if it doesn't exist):
+Update `.skills-registry.md` at the **project root** (same level as `.skills/`). Create it if it doesn't exist:
 
 ```markdown
 | <skill-name> | local | <today> | 1 | <description> |
 ```
+
+If the project uses the machine-readable registry (`.skills-registry.json`), update it too — `skdd forge` handles both formats automatically.
 
 ## Updating an Existing Skill
 

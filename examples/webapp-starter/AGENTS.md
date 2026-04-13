@@ -1,5 +1,7 @@
 # Agent Configuration — webapp-starter
 
+> **Heads up — this is a reference structure, not a runnable webapp.** There is no Express or React source code here. The files exist to show the *shape* of a SkDD-enabled project: where `.skills-registry.md` lives, what a forged SKILL.md looks like, and how `AGENTS.md` / `CLAUDE.md` should describe the colony. Scripts referenced from the skills (e.g. `scripts/deploy-preview.sh`, `scripts/notify-critical.sh`) are **illustrative** — `deploy-preview.sh` ships as a stub that prints what a real deploy would do; others are intentionally absent. Fork this into a real project to make the skills actually execute.
+
 This is a sample project demonstrating Skills-Driven Development.
 
 ## Agent Setup

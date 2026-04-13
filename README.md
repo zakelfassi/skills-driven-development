@@ -4,7 +4,11 @@
 
 Skills-Driven Development (SkDD) is a methodology where AI agents **create, evolve, and share reusable skills** as a natural byproduct of their work. Instead of front-loading all knowledge into prompts, agents forge skills on the fly and persist them for future reuse.
 
-A skill is a self-contained directory with a `SKILL.md` file that follows the [Agent Skills](https://agentskills.io) open specification. But SkDD goes further: it treats skills as **living artifacts** — discovered, forked, evolved, and composed by agents across projects and sessions.
+## What is a skill?
+
+A **skill** is a reusable, discoverable playbook — markdown instructions plus optional scripts and references — that an agent follows to accomplish a specific, repeatable task (e.g., "scaffold a REST endpoint", "deploy a preview branch", "triage a bug report"). Structurally it's a directory containing a `SKILL.md` file with YAML frontmatter, following the open [Agent Skills](https://agentskills.io) specification. Functionally it's process memory: agents discover skills by description, follow their steps, and evolve them when they encounter edge cases.
+
+SkDD treats skills as **living artifacts** — discovered, forked, evolved, and composed by agents across projects and sessions. The goal is not a static skill library but a **colony** that gets smarter every time it's used.
 
 ## The Core Idea
 
@@ -14,7 +18,45 @@ Most agent workflows today are stateless: the agent reads a prompt, does work, a
 Work → Notice a reusable pattern → Forge a skill → Persist it → Discover it next time
 ```
 
-This turns agent experience into **compound knowledge**. The more an agent works, the better it gets — not because the model improves, but because the skill library grows.
+This turns agent experience into **compound knowledge**. The more an agent works, the better it gets — not because the model improves, but because the skill colony grows.
+
+## The SkDD Lifecycle
+
+```
+              ┌──────────────────────────────────────────────┐
+              │                                              │
+              ▼                                              │
+     ┌────────────────┐      repeated pattern?      ┌────────┴───────┐
+     │ 1. Agent works │─── no ──────────────────────│ 5. Evolve      │
+     │    on a task   │                             │    Add edge    │
+     └───────┬────────┘                             │    cases, fix  │
+             │ yes                                  │    scripts,    │
+             ▼                                      │    split, etc. │
+     ┌────────────────┐                             └────────▲───────┘
+     │ 2. Forge       │                                      │
+     │    skillforge  │                                      │
+     │    writes      │                                      │
+     │    SKILL.md    │                                      │
+     └───────┬────────┘                                      │
+             │                                               │
+             ▼                                               │
+     ┌────────────────┐     session N+1                      │
+     │ 3. Register    │────────────────────┐                 │
+     │    in registry │                    ▼                 │
+     └────────────────┘         ┌────────────────┐           │
+                                │ 4. Discover    │───────────┘
+                                │    via desc    │    in-use
+                                │    match       │
+                                └───────┬────────┘
+                                        │ unused 90d
+                                        ▼
+                                ┌────────────────┐
+                                │ 6. Archive     │
+                                │    (reversible)│
+                                └────────────────┘
+```
+
+Every loop through the diagram *improves* the colony. Archiving is reversible; nothing is ever deleted.
 
 ## What This Repo Contains
 
@@ -22,49 +64,59 @@ This turns agent experience into **compound knowledge**. The more an agent works
 |------|-----------|
 | [`docs/`](docs/) | The methodology: skill colony concept, forging mechanics, specification alignment |
 | [`skillforge/`](skillforge/) | The meta-skill: agents use this to create new skills |
-| [`examples/`](examples/) | A sample project showing SkDD in action |
+| [`examples/`](examples/) | Reference structure of a SkDD-enabled project (skills, registry, AGENTS.md — not a runnable webapp) |
 | [`colony/`](colony/) | The skill colony pattern: discovery, evolution, sharing |
 
 ## Quick Start
 
-### 1. Add the skillforge to your project
+SkDD works in any harness that understands the Agent Skills spec (Claude Code, Codex, Cursor, GitHub Copilot, Gemini CLI, OpenCode, Goose, Amp, and more). The four steps below assume **Claude Code**; see [docs/configuration.md](docs/configuration.md) for Codex, Cursor, Copilot, and other harnesses.
 
-Copy `skillforge/SKILL.md` into your project's skills directory:
+### Step 1 — Drop the skillforge meta-skill into your project
+
+Run this from the root of **your own project** (not this repo):
 
 ```bash
-mkdir -p .skills/skillforge
-cp skillforge/SKILL.md .skills/skillforge/SKILL.md
+mkdir -p .claude/skills/skillforge
+curl -fsSL https://raw.githubusercontent.com/zakelfassi/skills-driven-development/main/skillforge/SKILL.md \
+  -o .claude/skills/skillforge/SKILL.md
+touch .skills-registry.md
 ```
 
-Or reference it in your agent configuration:
+This installs the one skill you need to forge more skills, plus an empty registry file at the project root.
 
-```yaml
-# AGENTS.md / .claude/settings.json / codex setup
-skills:
-  - skillforge/
+> Prefer a CLI? Once the `skdd` package is installed (`pnpm add -D skdd`), `skdd init --harness=claude` does the same thing and picks the right path for Codex/Cursor/Copilot automatically.
+
+### Step 2 — Tell the agent to use the colony
+
+Add these lines to your `CLAUDE.md` (or `AGENTS.md` for harnesses that read it):
+
+```markdown
+## Skills
+
+At session start, read `.skills-registry.md` to see what skills are available. When you notice a repeated pattern (2–3 occurrences) or when I ask you to "forge a skill for X", invoke the `skillforge` skill and follow its steps. Skills live under `.claude/skills/<name>/SKILL.md`; the registry lives at `.skills-registry.md` in the project root.
 ```
 
-### 2. Let agents forge skills as they work
+This is the "discovery contract." Without it, the agent won't know to look.
 
-When an agent encounters a repeatable pattern during development, it can invoke the skillforge to create a new skill:
+### Step 3 — Trigger the skillforge
 
-```
-"I notice I keep scaffolding API endpoints the same way.
-Let me forge a skill for this."
-```
+Forging is a natural-language prompt, not a CLI command. Any of these work:
 
-The agent creates:
-```
-.skills/api-endpoint/
-├── SKILL.md              # Instructions + triggers
-├── scripts/scaffold.sh   # Executable template
-└── references/
-    └── conventions.md    # Project-specific patterns
-```
+- *"Forge a skill for scaffolding a new API endpoint. Follow the skillforge steps."*
+- *"We've done this deploy dance three times today — let's make it a skill."*
+- *"Save this workflow as a skill so next session's agent can reuse it."*
 
-### 3. Skills persist across sessions
+The agent reads `.claude/skills/skillforge/SKILL.md`, walks through its checklist, and writes a new skill to `.claude/skills/<name>/SKILL.md`. It then appends a row to `.skills-registry.md`.
 
-Next time any agent works on the project, it discovers the `api-endpoint` skill automatically. No re-learning. No re-prompting. The pattern is encoded.
+### Step 4 — Verify it persisted
+
+Open a **fresh** Claude Code session in the same project and ask:
+
+- *"What skills are available in this project?"*
+
+The agent should list the skill you just forged. That confirms the discovery loop closed — the skill is now process memory that survives sessions.
+
+> **When does discovery happen?** Not "automatically." It happens because step 2 added instructions that tell the agent to read the registry. SkDD is a set of conventions plus a meta-skill; the harness (Claude Code, Codex, etc.) is what actually loads the skills when prompted.
 
 ## The Skill Colony
 

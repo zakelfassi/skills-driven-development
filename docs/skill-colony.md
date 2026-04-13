@@ -2,15 +2,32 @@
 
 > A shared, evolving library of agent capabilities that grows through use.
 
+## Terminology
+
+SkDD uses a small vocabulary consistently. Anchor links here when you use these words elsewhere in the docs or in a skill.
+
+- **Skill** — a directory containing a `SKILL.md` plus optional `scripts/`, `references/`, and `assets/`. The smallest unit of reusable agent procedure. See the [Agent Skills specification](https://agentskills.io/specification.md).
+- **Colony** — a discoverable collection of skills with a registry, update protocol, and lifecycle. Can span one project or many.
+- **Registry** — the `.skills-registry.md` file (and optional `.skills-registry.json` mirror) that lists a colony's skills with their metadata. Always lives at the **project root** unless the harness's spec says otherwise.
+- **Harness** — the agent runtime that loads and executes skills (Claude Code, Codex, Cursor, Copilot, Gemini CLI, OpenCode, Goose, Amp, etc.). SkDD is harness-agnostic; configuration lives in [`docs/configuration.md`](configuration.md).
+- **Forge** — the act of creating a new skill from an observed pattern. Trigger: 2-3 repeats of the same work, *or* an explicit request. Executed by the `skillforge` meta-skill.
+- **Evolve** — the act of updating an existing skill in place, usually to add an edge case, refine a step, or fix a script. Always prefer evolving an existing skill over forging a similar new one.
+- **Compose** — the act of one skill referencing another (`<skill:deploy-preview>` in the body, or `metadata.requires: [api-endpoint]` in the frontmatter) so agents can chain skills without duplicating their steps.
+- **Archive** — the act of retiring a skill that has decayed (unused past the staleness threshold) or been superseded. Reversible — see [`colony/evolution.md#archiving`](../colony/evolution.md#archiving).
+- **Skillforge** — the meta-skill at `skillforge/SKILL.md`. Its single job is to guide an agent through the forge-a-new-skill flow.
+
+
 ## What is a Skill Colony?
 
-A skill colony is what happens when skills stop being static files and start behaving like living organisms:
+A **skill colony** is a discoverable, mutable collection of `SKILL.md` files — spanning one project or many — that agents read, fork, update, and retire as they work. It has three moving parts: a **registry** (what skills exist and where), an **update protocol** (who can change a skill and how), and a **lifecycle** (how skills enter, mature, and leave the colony). Everything else is convention.
 
-- They're **born** when an agent notices a repeatable pattern
-- They **grow** when agents encounter edge cases and update the skill
-- They **reproduce** when skills are forked across projects
-- They **compete** when multiple skills solve the same problem (the better one gets used more)
-- They **decay** when they go unused (and can be archived)
+The behaviour to keep in mind when designing or reviewing a colony:
+
+- **Born** when an agent notices a repeatable pattern and forges a new skill.
+- **Grow** when agents encounter edge cases and update the skill in place.
+- **Reproduce** when skills are forked across projects or colonies.
+- **Compete** when multiple skills solve the same problem — usage stats decide which one sticks.
+- **Decay** when skills go unused past the staleness threshold (see [Archiving](../colony/evolution.md#archiving)).
 
 ## Colony vs. Library
 

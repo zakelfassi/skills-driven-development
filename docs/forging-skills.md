@@ -6,12 +6,23 @@
 
 An agent should forge a new skill when it notices **repeated friction** — the same pattern appearing 2-3 times in the same session or across sessions.
 
-### Signals that a skill should be forged
+### Trigger phrases the agent should recognize
+
+When the user (or an agent talking to itself) says any of these, treat it as an explicit forge request:
+
+- "forge a skill for X", "let's make this a skill", "save this as a skill"
+- "scaffold a new skill", "create a skill that does Y"
+- "every project I touch needs this — capture it"
+- "we've done this three times this week, write it down"
+
+When the agent *notices on its own*, the following are self-talk signals to act on:
 
 - "I just did this same sequence of steps for the third time"
 - "This workaround keeps coming up and I keep re-explaining it"
 - "There's a project convention that isn't written down anywhere"
 - "I solved a hard problem and the solution has reusable parts"
+
+Once triggered, load `skillforge/SKILL.md` (or the `skillforge` skill from the active colony) and follow its steps. Explicit user requests override the "2-3 repeats" heuristic — if the user asks, forge it.
 
 ### Signals that a skill should NOT be forged
 
@@ -132,9 +143,9 @@ description: "[DEPRECATED: use api-endpoint-v2] Old endpoint scaffold..."
 
 ## Skills as Living Memory
 
-The key insight of SDD is that skills are a form of **externalized agent memory**:
+The key insight of SkDD is that skills are a form of **externalized agent memory**:
 
-| Memory Type | Traditional Agent | SDD Agent |
+| Memory Type | Traditional Agent | SkDD Agent |
 |-------------|------------------|-----------|
 | How to do a task | Re-derived from training data each time | Read from skill |
 | Project conventions | Lost between sessions | Encoded in skill conventions section |
@@ -143,4 +154,4 @@ The key insight of SDD is that skills are a form of **externalized agent memory*
 
 Skills are **process memory that persists across sessions, agents, and projects.**
 
-This is why SDD treats skill forging not as overhead, but as one of the most valuable things an agent can do: every skill forged is future context saved.
+This is why SkDD treats skill forging not as overhead, but as one of the most valuable things an agent can do: every skill forged is future context saved.
