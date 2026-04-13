@@ -5,17 +5,14 @@
 ## Quick install
 
 ```bash
-mkdir -p .amp/skills/skillforge
-curl -fsSL https://raw.githubusercontent.com/zakelfassi/skills-driven-development/main/skillforge/SKILL.md \
-  -o .amp/skills/skillforge/SKILL.md
-touch .skills-registry.md
+pnpm dlx skdd init --harness=amp
 ```
 
-Or: `pnpm dlx skdd init --harness=amp`.
+Creates `skills/skillforge/SKILL.md` (canonical), `.skills-registry.md`, the `AGENTS.md` skills block, and `.amp/skills → ../skills` as the mirror Amp reads.
 
 ## Configure
 
-Amp reads `AGENTS.md`. Add the standard skills block from [`docs/configuration.md#amp`](../configuration.md#amp) pointing at `.amp/skills/`.
+Amp reads `AGENTS.md`. The skills block (auto-written by `skdd init`) references `skills/` as the canonical source and `.amp/skills` as the mirror maintained by `skdd link`. See [`docs/configuration.md#amp`](../configuration.md#amp) for the exact text.
 
 ## Harness notes
 

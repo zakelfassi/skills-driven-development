@@ -2,104 +2,105 @@
 
 > How to wire SkDD into each supported agent harness.
 
-SkDD is a set of conventions plus a meta-skill (`skillforge`). The actual loading, matching, and invocation of skills is done by your agent harness — Claude Code, Codex, Cursor, GitHub Copilot, Gemini CLI, OpenCode, Goose, or Amp. This doc walks through the wiring for each one so you can go from "interested" to "first skill forged" in a few minutes.
+SkDD is a set of conventions plus a meta-skill (`skillforge`) plus a CLI (`skdd`). The actual loading, matching, and invocation of skills is done by your agent harness — Claude Code, Codex, Cursor, GitHub Copilot, Gemini CLI, OpenCode, Goose, or Amp. This doc walks through the wiring so you can go from "interested" to "first skill forged" in a few minutes.
 
-All harnesses follow the same three-move pattern:
+## The canonical pattern
 
-1. **Place the skillforge meta-skill** somewhere the harness will find it.
-2. **Tell the harness about the registry** (usually via a project-level instruction file).
-3. **Prompt the agent** to use or forge a skill, then verify.
+Every harness expects skills in its own magic directory (`.claude/skills/`, `.codex/skills/`, `.cursor/skills/`, …). SkDD's answer is a **canonical** `skills/` directory at the project root plus per-harness **mirrors** (symlinks on Unix, file copies on Windows) managed by `skdd link`. Edit in one place, every harness sees the same bytes, no drift.
 
-If your harness isn't listed here, check its Agent Skills docs — SkDD only requires that the harness can read a `SKILL.md` file following the [agentskills.io](https://agentskills.io/specification.md) spec. Every item in this doc is a thin wrapper around that.
+```
+my-project/
+├── skills/                    # canonical — the source of truth
+│   ├── skillforge/SKILL.md
+│   └── <your forged skills>/
+├── .skills-registry.md        # colony registry (human-readable)
+├── .skdd-sync.json            # mirror state tracked by skdd link
+├── .claude/skills → ../skills  # symlink (Unix) or copy (Windows)
+├── .codex/skills  → ../skills
+└── .cursor/skills → ../skills
+```
+
+If you only use one harness, the mirror is invisible — you'll never notice it. If you use three, the CLI keeps them all in sync with `skdd link`.
+
+## The universal install
+
+```bash
+# With the CLI (recommended; pnpm required per repo policy)
+pnpm dlx skdd init --harness=claude      # or codex / cursor / copilot / gemini / opencode / goose / amp / auto
+```
+
+That creates `skills/skillforge/SKILL.md`, `.skills-registry.md`, the harness-specific instruction file with a `## Skills` block appended, a `.<harness>/skills` mirror pointing at `../skills`, and a `.skdd-sync.json` state file. Re-run `skdd link` any time to reconcile drift or add mirrors for additional harnesses.
+
+Manual equivalent (if you don't want the CLI yet):
+
+```bash
+mkdir -p skills/skillforge
+curl -fsSL https://raw.githubusercontent.com/zakelfassi/skills-driven-development/main/skillforge/SKILL.md \
+  -o skills/skillforge/SKILL.md
+touch .skills-registry.md
+mkdir -p .claude && ln -s ../skills .claude/skills    # Unix only; Windows: copy the dir
+```
+
+Then add the skills block (see each harness section below) to the instruction file your harness reads.
+
+## Per-harness specifics
+
+Every section below tells you **which instruction file to edit**, **what to paste into it**, and **how to verify**. The install step is the same for all of them: run `skdd init --harness=<name>` (or the manual equivalent). If you already ran init for one harness and want to add another, run `skdd link --harness=<new-name>` — your canonical `skills/` stays the same, only the mirror list grows.
 
 ---
 
-## Claude Code
+### Claude Code
 
-Claude Code honors skills at four scopes: enterprise (managed), personal (`~/.claude/skills/`), project (`.claude/skills/`), and plugin (`<plugin>/skills/`). SkDD uses the **project** scope by default so each colony is versioned with the code.
+- **Instruction file**: `CLAUDE.md` at the repo root
+- **Mirror**: `.claude/skills/` → `../skills`
+- **Scopes**: personal (`~/.claude/skills/`), project (`.claude/skills/` — SkDD uses this), plugin, enterprise
 
-### Install
+Install: `pnpm dlx skdd init --harness=claude`
 
-```bash
-mkdir -p .claude/skills/skillforge
-curl -fsSL https://raw.githubusercontent.com/zakelfassi/skills-driven-development/main/skillforge/SKILL.md \
-  -o .claude/skills/skillforge/SKILL.md
-touch .skills-registry.md
-```
-
-### Configure
-
-Add this block to `CLAUDE.md` at the repo root (create the file if it doesn't exist):
+Skills block (auto-written by `skdd init`):
 
 ```markdown
 ## Skills
 
-Skills live under `.claude/skills/<name>/SKILL.md`. The registry is at `.skills-registry.md` in the project root.
+Skills live at `skills/<name>/SKILL.md` (canonical, single source of truth). The registry is at `.skills-registry.md` in the project root. `.claude/skills` is a mirror maintained by `skdd link` so Claude Code can find skills at its conventional path.
 
-At session start, read `.skills-registry.md` to discover available skills. Before deriving a solution, check whether an existing skill covers the task and follow it. When you notice a pattern repeat 2-3 times, or when I ask you to "forge a skill for X", invoke the `skillforge` skill and follow its steps. Update the registry after forging or using a skill.
+At session start, read `.skills-registry.md` to discover available skills. Before deriving a solution, check whether an existing skill covers the task and follow it. When you notice a pattern repeat 2-3 times, or when I ask you to "forge a skill for X", invoke the `skillforge` skill and follow its steps. Always write new skills to `skills/`, never to the mirror.
 ```
 
-### Verify
+Verify in a fresh session:
 
-In a fresh Claude Code session, ask:
+1. *"What skills are available in this project?"* — lists `skillforge` from `.skills-registry.md`
+2. *"Forge a skill for running database migrations."* — walks through `skillforge/SKILL.md` and writes a new skill under `skills/`
+3. *(fresh session)* *"List skills."* — the new skill persists
 
-- *"What skills are available in this project?"* — the agent should read `.skills-registry.md` and list at least `skillforge`.
-- *"Forge a skill for running database migrations."* — the agent should read `skillforge/SKILL.md`, write a new `SKILL.md`, and update the registry.
-- *"List skills."* (in a second session) — the new skill should appear.
+Monorepo note: Claude Code auto-discovers nested `.claude/skills/`. You can keep per-package canonical dirs (`packages/frontend/skills/`) with per-package mirrors (`packages/frontend/.claude/skills`) and each scope will resolve locally.
 
-### Monorepo note
-
-Claude Code auto-discovers nested `.claude/skills/` directories. In a monorepo, place per-package skills at `packages/<pkg>/.claude/skills/` and they'll activate when the agent is working in that subdirectory.
+See [`docs/integrations/claude-code.md`](integrations/claude-code.md) for the full deep-dive, including the optional one-click plugin install.
 
 ---
 
-## OpenAI Codex
+### OpenAI Codex
 
-Codex reads skills from a user-level or project-level directory (`~/.codex/skills/` or `.codex/skills/` depending on your version; see [developers.openai.com/codex/skills](https://developers.openai.com/codex/skills)).
+- **Instruction file**: `AGENTS.md` at the repo root
+- **Mirror**: `.codex/skills/` → `../skills`
+- **Scopes**: user (`~/.codex/skills/`), project (`.codex/skills/`)
 
-### Install
+Install: `pnpm dlx skdd init --harness=codex`
 
-```bash
-mkdir -p .codex/skills/skillforge
-curl -fsSL https://raw.githubusercontent.com/zakelfassi/skills-driven-development/main/skillforge/SKILL.md \
-  -o .codex/skills/skillforge/SKILL.md
-touch .skills-registry.md
-```
+Paste the same skills block as Claude Code, but swap `.claude/skills` → `.codex/skills` in the text.
 
-### Configure
-
-Codex reads `AGENTS.md` if it exists. Add:
-
-```markdown
-## Skills
-
-Skills live under `.codex/skills/<name>/SKILL.md`. The registry is at `.skills-registry.md` in the project root. Load the registry at session start, prefer existing skills over re-derivation, and invoke `skillforge` when you notice a repeated pattern or when I ask you to forge a skill.
-```
-
-### Verify
-
-- Start a Codex session, ask *"What skills are available?"* — it should list `skillforge` from the registry.
-- Ask *"Forge a skill for bumping package versions."* — the agent should walk through the skillforge checklist and produce a new skill directory.
-- In a fresh session, ask *"Run the bump-version skill."* — the agent should discover it via the registry and follow its steps.
+Verify with the three-question check (`What skills do we have?` → `Forge …` → fresh session → `List skills`). See [developers.openai.com/codex/skills](https://developers.openai.com/codex/skills) for Codex's own docs.
 
 ---
 
-## Cursor
+### Cursor
 
-Cursor supports Agent Skills via its built-in agent mode. See [cursor.com/docs/context/skills](https://cursor.com/docs/context/skills). Skills are placed under `.cursor/skills/`.
+- **Instruction file**: `.cursor/rules/skills.mdc` (Cursor's agent-mode rules format)
+- **Mirror**: `.cursor/skills/` → `../skills`
 
-### Install
+Install: `pnpm dlx skdd init --harness=cursor`
 
-```bash
-mkdir -p .cursor/skills/skillforge
-curl -fsSL https://raw.githubusercontent.com/zakelfassi/skills-driven-development/main/skillforge/SKILL.md \
-  -o .cursor/skills/skillforge/SKILL.md
-touch .skills-registry.md
-```
-
-### Configure
-
-Cursor reads `.cursor/rules/*.mdc` and `AGENTS.md` / `CLAUDE.md`. Add a rules file at `.cursor/rules/skills.mdc`:
+Skills block (the rules file needs `alwaysApply: true` frontmatter so every agent conversation picks it up):
 
 ```markdown
 ---
@@ -107,169 +108,79 @@ description: Skills-Driven Development colony wiring
 alwaysApply: true
 ---
 
-Skills live under `.cursor/skills/<name>/SKILL.md`. The registry is at `.skills-registry.md` in the project root.
-
-At session start, read `.skills-registry.md` to discover available skills. Prefer existing skills over re-derivation. When you notice a repeated pattern or when I ask you to "forge a skill", invoke the `skillforge` skill and follow its steps. Update `.skills-registry.md` whenever a skill is forged or used.
+Skills live at `skills/<name>/SKILL.md` (canonical, single source of truth). `.cursor/skills` is a mirror maintained by `skdd link`. The registry is at `.skills-registry.md` in the project root. …
 ```
 
-### Verify
-
-- In Cursor's agent chat, ask *"List the skills you can see."*
-- Ask *"Forge a skill for writing Changesets."* — the agent should read `skillforge/SKILL.md` and produce a new skill.
-- Reload the window and ask *"What skills are available?"* to confirm persistence.
+Verify in Cursor's agent chat. Full details at [`docs/integrations/cursor.md`](integrations/cursor.md) and [cursor.com/docs/context/skills](https://cursor.com/docs/context/skills).
 
 ---
 
-## GitHub Copilot
+### GitHub Copilot
 
-Copilot reads skills from `.github/skills/` in the repo. See [docs.github.com/en/copilot/concepts/agents/about-agent-skills](https://docs.github.com/en/copilot/concepts/agents/about-agent-skills). Only the Copilot agent surfaces (chat, workspace, coding agent) honor skills — the inline completions ignore them.
+- **Instruction file**: `.github/copilot-instructions.md`
+- **Mirror**: `.github/skills/` → `../skills`
+- **Applies to**: Copilot agent surfaces (Chat, Workspace, Coding Agent). Inline ghost-text completions don't see skills.
 
-### Install
+Install: `pnpm dlx skdd init --harness=copilot`
 
-```bash
-mkdir -p .github/skills/skillforge
-curl -fsSL https://raw.githubusercontent.com/zakelfassi/skills-driven-development/main/skillforge/SKILL.md \
-  -o .github/skills/skillforge/SKILL.md
-touch .skills-registry.md
-```
-
-### Configure
-
-Copilot uses `.github/copilot-instructions.md` as its project-level instruction surface. Create or extend it:
-
-```markdown
-## Skills
-
-Skills live under `.github/skills/<name>/SKILL.md`. The registry is at `.skills-registry.md` at the repo root.
-
-Before working on any task, scan `.skills-registry.md` for a matching skill and follow it if one exists. When a pattern repeats or the user asks for a skill, invoke `skillforge` and follow its steps. Update `.skills-registry.md` after forging or using.
-```
-
-### Verify
-
-- In Copilot Chat, ask *"@workspace what skills are registered?"*
-- Ask *"Forge a skill for rotating secrets."* — Copilot should walk through skillforge and produce a new skill under `.github/skills/`.
-- Open a fresh chat and ask the same question; the new skill should appear.
+Verify in Copilot Chat with `@workspace what skills are registered?`. Full details at [`docs/integrations/github-copilot.md`](integrations/github-copilot.md).
 
 ---
 
-## Gemini CLI
+### Gemini CLI
 
-Gemini CLI (`gemini` binary, open-source) loads skills from `.gemini/skills/`. See [geminicli.com/docs/cli/skills/](https://geminicli.com/docs/cli/skills/).
+- **Instruction file**: `AGENTS.md`
+- **Mirror**: `.gemini/skills/` → `../skills`
 
-### Install
-
-```bash
-mkdir -p .gemini/skills/skillforge
-curl -fsSL https://raw.githubusercontent.com/zakelfassi/skills-driven-development/main/skillforge/SKILL.md \
-  -o .gemini/skills/skillforge/SKILL.md
-touch .skills-registry.md
-```
-
-### Configure
-
-Add instructions to `AGENTS.md` (Gemini CLI reads it by default):
-
-```markdown
-## Skills
-
-Skills live under `.gemini/skills/<name>/SKILL.md`. The registry is at `.skills-registry.md`. Load the registry at session start, prefer existing skills, and invoke `skillforge` when you notice a repeated pattern or when I ask to forge a skill.
-```
-
-### Verify
-
-- Run `gemini` in the project directory, ask *"What skills are available?"*
-- Ask *"Forge a skill for publishing release notes."* — the agent should produce a skill and update the registry.
-- Close the session, start a new one, ask again — the skill should persist.
+Install: `pnpm dlx skdd init --harness=gemini`. See [geminicli.com/docs/cli/skills/](https://geminicli.com/docs/cli/skills/) and [`docs/integrations/gemini-cli.md`](integrations/gemini-cli.md).
 
 ---
 
-## OpenCode
+### OpenCode
 
-OpenCode is an open-source CLI agent that supports the Agent Skills spec at `.opencode/skills/`. See [opencode.ai/docs/skills/](https://opencode.ai/docs/skills/).
+- **Instruction file**: `AGENTS.md`
+- **Mirror**: `.opencode/skills/` → `../skills`
 
-### Install
-
-```bash
-mkdir -p .opencode/skills/skillforge
-curl -fsSL https://raw.githubusercontent.com/zakelfassi/skills-driven-development/main/skillforge/SKILL.md \
-  -o .opencode/skills/skillforge/SKILL.md
-touch .skills-registry.md
-```
-
-### Configure
-
-OpenCode reads `AGENTS.md`. Add the same skills block as Gemini CLI above, with `.opencode/skills/` in place of `.gemini/skills/`.
-
-### Verify
-
-Same three-question verification: list skills → forge a skill → reopen and confirm persistence.
+Install: `pnpm dlx skdd init --harness=opencode`. See [opencode.ai/docs/skills/](https://opencode.ai/docs/skills/) and [`docs/integrations/opencode.md`](integrations/opencode.md).
 
 ---
 
-## Goose
+### Goose
 
-Goose is Block's open-source agent. Skills go under `~/.config/goose/skills/` (user scope) or project-level via Goose's extension config. See [block.github.io/goose/docs/guides/context-engineering/using-skills/](https://block.github.io/goose/docs/guides/context-engineering/using-skills/).
+- **Instruction file**: `AGENTS.md` (or `.goose/config.yaml` for Goose-specific settings)
+- **Mirror**: `.goose/skills/` → `../skills`
 
-### Install
-
-```bash
-mkdir -p .goose/skills/skillforge
-curl -fsSL https://raw.githubusercontent.com/zakelfassi/skills-driven-development/main/skillforge/SKILL.md \
-  -o .goose/skills/skillforge/SKILL.md
-touch .skills-registry.md
-```
-
-### Configure
-
-Add a Goose project instruction file (or reuse `AGENTS.md`) with the skills block pointing at `.goose/skills/`.
-
-### Verify
-
-Same three-question verification pattern.
+Install: `pnpm dlx skdd init --harness=goose`. See [block.github.io/goose/docs/guides/context-engineering/using-skills/](https://block.github.io/goose/docs/guides/context-engineering/using-skills/) and [`docs/integrations/goose.md`](integrations/goose.md).
 
 ---
 
-## Amp
+### Amp
 
-Amp (from Sourcegraph) supports Agent Skills as of late 2025. See [ampcode.com/manual#agent-skills](https://ampcode.com/manual#agent-skills). Skills are loaded from `.amp/skills/`.
+- **Instruction file**: `AGENTS.md`
+- **Mirror**: `.amp/skills/` → `../skills`
 
-### Install
-
-```bash
-mkdir -p .amp/skills/skillforge
-curl -fsSL https://raw.githubusercontent.com/zakelfassi/skills-driven-development/main/skillforge/SKILL.md \
-  -o .amp/skills/skillforge/SKILL.md
-touch .skills-registry.md
-```
-
-### Configure
-
-Amp reads `AGENTS.md`. Same skills block as above with `.amp/skills/`.
-
-### Verify
-
-Same three-question verification pattern.
+Install: `pnpm dlx skdd init --harness=amp`. See [ampcode.com/manual#agent-skills](https://ampcode.com/manual#agent-skills) and [`docs/integrations/amp.md`](integrations/amp.md).
 
 ---
 
 ## Using one colony across multiple harnesses
 
-If your project is worked on by more than one harness (e.g., Claude Code *and* Codex), you have two options:
+This is the common case once you've tried SkDD on one harness and want the same colony everywhere else. `skills/` is the single source of truth and `skdd link` materializes every requested mirror:
 
-1. **Symlink** `.claude/skills` → `.skills` → `.codex/skills` → `.cursor/skills`. Each harness reads the same underlying directory. This is the simplest setup but relies on each harness honoring the symlink.
-2. **Use `skdd export`** (Milestone D) to materialize harness-specific directories from a single source of truth. Good for CI-driven workflows and cases where symlinks are awkward (Windows, zipped archives).
+```bash
+skdd link --harness=claude,codex,cursor,copilot
+```
 
-Either way, keep one `.skills-registry.md` at the project root — all harnesses should update the same registry.
-
----
+Re-run the command anytime a new harness gets installed or a mirror drifts. `.skdd-sync.json` tracks what's been materialized, so it's idempotent — no-ops when everything's in sync, drift-repair when it isn't.
 
 ## Troubleshooting
 
 **Agent doesn't discover the skillforge.** The skills block in your instruction file is probably missing or mis-scoped. Open a fresh session and explicitly prompt: *"Read `.skills-registry.md` and list what's there."* If that works but the agent doesn't auto-scan, the instruction file isn't being loaded — check the harness docs for the exact filename and scope.
 
-**Agent forges skills but they don't persist.** Check `.skills-registry.md` — if new rows aren't landing, the agent isn't following the full skillforge checklist. Re-prompt with *"After writing the skill, update `.skills-registry.md` with a new row."*
+**Agent forges skills but they land in the wrong place.** The agent likely wrote to `.claude/skills/<name>/` directly instead of `skills/<name>/`. Re-prompt: *"Write skills to `skills/<name>/`, not the mirror. The mirror is auto-managed by `skdd link`."* Then run `skdd link` to reconcile.
 
-**Multiple agents forge the same skill differently.** That's the colony doing its job — let them coexist, and use `skdd list` (Milestone C) to see usage counts. The more-used one wins; the other can be deprecated.
+**Symlinks don't work on my machine.** You're probably on Windows without developer mode / elevated shell. Run `skdd init --harness=<name>` — the CLI detects Windows and falls back to file copies tracked in `.skdd-sync.json`. Re-run `skdd link` after editing `skills/` to refresh the copies.
 
-**Scripts in a forged skill don't run.** Skills can include `scripts/` but the harness has to grant the agent tool permissions to execute them. Check your harness's tool-use policy and, if necessary, add an `allowed-tools` line to the skill's frontmatter.
+**Multiple agents forge the same skill differently.** Let them coexist under different names and use `skdd list` to see usage counts. The more-used one wins; the other can be archived.
+
+**Scripts in a forged skill don't run.** Skills can include `scripts/` but the harness has to grant the agent tool permissions to execute them. Check your harness's tool-use policy and add an `allowed-tools` line to the skill's frontmatter if needed.

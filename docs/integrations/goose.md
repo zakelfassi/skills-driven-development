@@ -5,17 +5,14 @@
 ## Quick install (project scope)
 
 ```bash
-mkdir -p .goose/skills/skillforge
-curl -fsSL https://raw.githubusercontent.com/zakelfassi/skills-driven-development/main/skillforge/SKILL.md \
-  -o .goose/skills/skillforge/SKILL.md
-touch .skills-registry.md
+pnpm dlx skdd init --harness=goose
 ```
 
-Or: `pnpm dlx skdd init --harness=goose`.
+Creates `skills/skillforge/SKILL.md` (canonical), `.skills-registry.md`, the `AGENTS.md` skills block, and `.goose/skills → ../skills` as the mirror Goose reads.
 
 ## Configure
 
-Goose reads project-level instructions from `AGENTS.md` or a Goose-specific `.goose/config.yaml`. SkDD recommends `AGENTS.md` for portability — add the standard skills block from [`docs/configuration.md#goose`](../configuration.md#goose) pointing at `.goose/skills/`.
+Goose reads project-level instructions from `AGENTS.md` or a Goose-specific `.goose/config.yaml`. SkDD recommends `AGENTS.md` for portability — the skills block (auto-written by `skdd init`) references `skills/` as canonical and `.goose/skills` as the mirror maintained by `skdd link`. See [`docs/configuration.md#goose`](../configuration.md#goose).
 
 ## Harness notes
 

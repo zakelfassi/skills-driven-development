@@ -5,28 +5,31 @@
 ## Install
 
 ```bash
-mkdir -p .github/skills/skillforge
-curl -fsSL https://raw.githubusercontent.com/zakelfassi/skills-driven-development/main/skillforge/SKILL.md \
-  -o .github/skills/skillforge/SKILL.md
-touch .skills-registry.md
+pnpm dlx skdd init --harness=copilot
 ```
 
-Or with the CLI:
+Creates `skills/skillforge/SKILL.md` (canonical) + `.skills-registry.md` + `.github/copilot-instructions.md` with the skills block + `.github/skills → ../skills` symlink + `.skdd-sync.json` state.
+
+Manual fallback:
 
 ```bash
-pnpm dlx skdd init --harness=copilot
+mkdir -p skills/skillforge
+curl -fsSL https://raw.githubusercontent.com/zakelfassi/skills-driven-development/main/skillforge/SKILL.md \
+  -o skills/skillforge/SKILL.md
+touch .skills-registry.md
+mkdir -p .github && ln -s ../skills .github/skills
 ```
 
 ## Configure
 
-Copilot's project-level instruction file is `.github/copilot-instructions.md`. Append (or create):
+Copilot's project-level instruction file is `.github/copilot-instructions.md`. `skdd init` writes:
 
 ```markdown
 ## Skills
 
-Skills live under `.github/skills/<name>/SKILL.md`. The registry is at `.skills-registry.md` at the repo root.
+Skills live at `skills/<name>/SKILL.md` (canonical, single source of truth). The registry is at `.skills-registry.md` at the repo root. `.github/skills` is a mirror maintained by `skdd link` so Copilot can find skills at its conventional path.
 
-Before working on any task, scan `.skills-registry.md` for a matching skill and follow it if one exists. When a pattern repeats or the user asks for a skill, invoke `skillforge` and follow its steps. Update `.skills-registry.md` after forging or using.
+Before working on any task, scan `.skills-registry.md` for a matching skill and follow it if one exists. When a pattern repeats or the user asks for a skill, invoke `skillforge` and follow its steps. Always write new skills to `skills/`, never to the mirror.
 ```
 
 See [docs.github.com/en/copilot/concepts/agents/about-agent-skills](https://docs.github.com/en/copilot/concepts/agents/about-agent-skills) for Copilot's own skill documentation.

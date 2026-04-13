@@ -69,31 +69,39 @@ Every loop through the diagram *improves* the colony. Archiving is reversible; n
 
 ## Quick Start
 
-SkDD works in any harness that understands the Agent Skills spec (Claude Code, Codex, Cursor, GitHub Copilot, Gemini CLI, OpenCode, Goose, Amp, and more). The four steps below assume **Claude Code**; see [docs/configuration.md](docs/configuration.md) for Codex, Cursor, Copilot, and other harnesses.
+SkDD works in any harness that understands the Agent Skills spec (Claude Code, Codex, Cursor, GitHub Copilot, Gemini CLI, OpenCode, Goose, Amp, and more). Skills live in a single canonical `skills/` directory at the project root, and each harness sees them through a symlink (Unix) or file copy (Windows) mirror — one source of truth, N places to discover from. The four steps below assume **Claude Code**; see [docs/configuration.md](docs/configuration.md) for Codex, Cursor, Copilot, and the others.
 
-### Step 1 — Drop the skillforge meta-skill into your project
+### Step 1 — Scaffold the colony
 
 Run this from the root of **your own project** (not this repo):
 
 ```bash
-mkdir -p .claude/skills/skillforge
-curl -fsSL https://raw.githubusercontent.com/zakelfassi/skills-driven-development/main/skillforge/SKILL.md \
-  -o .claude/skills/skillforge/SKILL.md
-touch .skills-registry.md
+# With the CLI (recommended)
+pnpm dlx skdd init --harness=claude
 ```
 
-This installs the one skill you need to forge more skills, plus an empty registry file at the project root.
+That one command creates `skills/skillforge/SKILL.md` (a stub of the meta-skill), `.skills-registry.md` at the project root, a `## Skills` block appended to `CLAUDE.md`, and a `.claude/skills` symlink → `../skills` so Claude Code discovers the colony at its conventional path. A `.skdd-sync.json` state file tracks the mirror so `skdd link` can reconcile drift later.
 
-> Prefer a CLI? Once the `skdd` package is installed (`pnpm add -D skdd`), `skdd init --harness=claude` does the same thing and picks the right path for Codex/Cursor/Copilot automatically.
+Prefer to stay CLI-free? The manual equivalent:
+
+```bash
+mkdir -p skills/skillforge
+curl -fsSL https://raw.githubusercontent.com/zakelfassi/skills-driven-development/main/skillforge/SKILL.md \
+  -o skills/skillforge/SKILL.md
+touch .skills-registry.md
+ln -s ../skills .claude/skills      # Unix; Windows users copy skills/ → .claude/skills
+```
 
 ### Step 2 — Tell the agent to use the colony
 
-Add these lines to your `CLAUDE.md` (or `AGENTS.md` for harnesses that read it):
+`skdd init` already wrote the block below into `CLAUDE.md`. If you're going manual, add it yourself:
 
 ```markdown
 ## Skills
 
-At session start, read `.skills-registry.md` to see what skills are available. When you notice a repeated pattern (2–3 occurrences) or when I ask you to "forge a skill for X", invoke the `skillforge` skill and follow its steps. Skills live under `.claude/skills/<name>/SKILL.md`; the registry lives at `.skills-registry.md` in the project root.
+Skills live at `skills/<name>/SKILL.md` (canonical, single source of truth). The registry is at `.skills-registry.md` in the project root. `.claude/skills` is a mirror maintained by `skdd link` so Claude Code can find skills at its conventional path.
+
+At session start, read `.skills-registry.md` to discover available skills. Before deriving a solution, check whether an existing skill covers the task and follow it. When you notice a pattern repeat 2–3 times, or when I ask you to "forge a skill for X", invoke the `skillforge` skill and follow its steps. Always write new skills to `skills/`, never to the mirror.
 ```
 
 This is the "discovery contract." Without it, the agent won't know to look.
@@ -106,7 +114,7 @@ Forging is a natural-language prompt, not a CLI command. Any of these work:
 - *"We've done this deploy dance three times today — let's make it a skill."*
 - *"Save this workflow as a skill so next session's agent can reuse it."*
 
-The agent reads `.claude/skills/skillforge/SKILL.md`, walks through its checklist, and writes a new skill to `.claude/skills/<name>/SKILL.md`. It then appends a row to `.skills-registry.md`.
+The agent reads `skills/skillforge/SKILL.md`, walks through its checklist, writes a new skill to `skills/<name>/SKILL.md`, and appends a row to `.skills-registry.md`. If you installed the CLI, `skdd forge <name>` does the same thing non-interactively and refreshes the harness mirror in one go.
 
 ### Step 4 — Verify it persisted
 
@@ -116,7 +124,9 @@ Open a **fresh** Claude Code session in the same project and ask:
 
 The agent should list the skill you just forged. That confirms the discovery loop closed — the skill is now process memory that survives sessions.
 
-> **When does discovery happen?** Not "automatically." It happens because step 2 added instructions that tell the agent to read the registry. SkDD is a set of conventions plus a meta-skill; the harness (Claude Code, Codex, etc.) is what actually loads the skills when prompted.
+> **Multiple harnesses on the same project?** Run `skdd link --harness=claude,codex,cursor` to materialize mirrors for all of them at once. One `skills/` directory, many mirror paths — no duplication, no drift.
+>
+> **When does discovery happen?** Not "automatically." It happens because step 2 added instructions that tell the agent to read the registry. SkDD is a set of conventions, a meta-skill, and a CLI; the harness (Claude Code, Codex, etc.) is what actually loads the skills when prompted.
 
 ## The Skill Colony
 

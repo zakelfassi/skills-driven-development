@@ -9,7 +9,8 @@ Thanks for wanting to contribute. This repo hosts the SkDD methodology, the `ski
 ## Ground rules
 
 - **Use pnpm** for all JavaScript/TypeScript work. This repo does not support npm or yarn; they will produce inconsistent lockfiles.
-- **Keep skills spec-compliant.** Every `SKILL.md` must pass `skdd validate` once the CLI is available. Until then, hand-check against the [Agent Skills specification](https://agentskills.io/specification.md).
+- **Keep skills spec-compliant.** Every `SKILL.md` must pass `skdd validate`. CI runs it on every PR; you can run it locally via `pnpm -C cli build && node cli/dist/index.js validate skillforge examples/webapp-starter/skills plugins/skdd-claude/skills`.
+- **Always write user-project skills to the canonical `skills/` directory.** Harness-specific paths (`.claude/skills`, `.codex/skills`, `.cursor/skills`, `.github/skills`, etc.) are **mirrors** maintained by `skdd link` — never edit them directly. If you find yourself needing to, the instruction block in `CLAUDE.md` / `AGENTS.md` / `.cursor/rules/skills.mdc` is probably missing the "always write to `skills/`, never to the mirror" line; fix that first. (This rule applies to user projects that consume SkDD; the SkDD methodology repo itself keeps `skillforge/` at the root because the canonical seed there is the meta-skill, not a multi-skill directory.)
 - **Don't break existing skills.** If you add a metadata field, make sure agents that don't recognize it still work. The spec allows arbitrary `metadata`; SkDD extensions must never move to *required* status.
 - **Prefer editing over duplicating.** If a skill or doc needs updating, edit it in place. Fork only when the divergence is large enough to justify two skills.
 

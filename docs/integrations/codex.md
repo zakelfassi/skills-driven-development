@@ -5,28 +5,31 @@
 ## Install
 
 ```bash
-mkdir -p .codex/skills/skillforge
-curl -fsSL https://raw.githubusercontent.com/zakelfassi/skills-driven-development/main/skillforge/SKILL.md \
-  -o .codex/skills/skillforge/SKILL.md
-touch .skills-registry.md
+pnpm dlx skdd init --harness=codex
 ```
 
-Or with the CLI:
+Creates `skills/skillforge/SKILL.md` (canonical) + `.skills-registry.md` + `AGENTS.md` with the skills block + `.codex/skills → ../skills` symlink + `.skdd-sync.json` state.
+
+Manual fallback:
 
 ```bash
-pnpm dlx skdd init --harness=codex
+mkdir -p skills/skillforge
+curl -fsSL https://raw.githubusercontent.com/zakelfassi/skills-driven-development/main/skillforge/SKILL.md \
+  -o skills/skillforge/SKILL.md
+touch .skills-registry.md
+mkdir -p .codex && ln -s ../skills .codex/skills
 ```
 
 ## Configure
 
-Codex reads `AGENTS.md` at the project root. Append:
+Codex reads `AGENTS.md` at the project root. `skdd init` appends:
 
 ```markdown
 ## Skills
 
-Skills live under `.codex/skills/<name>/SKILL.md`. The registry is at `.skills-registry.md` in the project root.
+Skills live at `skills/<name>/SKILL.md` (canonical, single source of truth). The registry is at `.skills-registry.md` in the project root. `.codex/skills` is a mirror maintained by `skdd link` so Codex can find skills at its conventional path.
 
-At session start, read `.skills-registry.md` to discover available skills. Before deriving a solution, check whether an existing skill covers the task and follow it. When you notice a pattern repeat 2-3 times, or when I ask you to "forge a skill for X", invoke the `skillforge` skill and follow its steps. Update the registry after forging or using a skill.
+At session start, read `.skills-registry.md` to discover available skills. Before deriving a solution, check whether an existing skill covers the task and follow it. When you notice a pattern repeat 2-3 times, or when I ask you to "forge a skill for X", invoke the `skillforge` skill and follow its steps. Always write new skills to `skills/`, never to the mirror.
 ```
 
 See [developers.openai.com/codex/skills](https://developers.openai.com/codex/skills) for Codex's own skill documentation and scope rules.
@@ -45,13 +48,13 @@ Codex supports both user-level (`~/.codex/skills/`) and project-level (`.codex/s
 
 ## Interop with other harnesses
 
-A team using both Claude Code and Codex on the same repo should symlink the skills directories:
+A team using both Claude Code and Codex on the same repo just runs:
 
 ```bash
-ln -sf .codex/skills .claude/skills      # or vice versa
+skdd link --harness=claude,codex
 ```
 
-Keep one registry at `.skills-registry.md`. Both harnesses will pick up any forged skill immediately.
+One canonical `skills/` directory, two mirrors (`.claude/skills → ../skills`, `.codex/skills → ../skills`), no drift. Forging a skill via either harness lands in the same canonical location and is visible through both mirrors.
 
 ## Troubleshooting
 

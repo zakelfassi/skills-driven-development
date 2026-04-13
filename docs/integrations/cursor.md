@@ -5,23 +5,26 @@
 ## Install
 
 ```bash
-mkdir -p .cursor/skills/skillforge
-curl -fsSL https://raw.githubusercontent.com/zakelfassi/skills-driven-development/main/skillforge/SKILL.md \
-  -o .cursor/skills/skillforge/SKILL.md
-touch .skills-registry.md
+pnpm dlx skdd init --harness=cursor
 ```
 
-Or with the CLI:
+Creates `skills/skillforge/SKILL.md` (canonical) + `.skills-registry.md` + `.cursor/rules/skills.mdc` with the rules block + `.cursor/skills → ../skills` symlink + `.skdd-sync.json` state.
+
+Manual fallback:
 
 ```bash
-pnpm dlx skdd init --harness=cursor
+mkdir -p skills/skillforge
+curl -fsSL https://raw.githubusercontent.com/zakelfassi/skills-driven-development/main/skillforge/SKILL.md \
+  -o skills/skillforge/SKILL.md
+touch .skills-registry.md
+mkdir -p .cursor && ln -s ../skills .cursor/skills
 ```
 
 ## Configure
 
 Cursor has two instruction surfaces: `.cursor/rules/*.mdc` (rules) and the legacy `AGENTS.md` / `CLAUDE.md`. SkDD uses a rules file so the instructions apply to Cursor's agent mode specifically.
 
-Create `.cursor/rules/skills.mdc`:
+`skdd init` creates `.cursor/rules/skills.mdc` with:
 
 ```markdown
 ---
@@ -29,9 +32,9 @@ description: Skills-Driven Development colony wiring
 alwaysApply: true
 ---
 
-Skills live under `.cursor/skills/<name>/SKILL.md`. The registry is at `.skills-registry.md` in the project root.
+Skills live at `skills/<name>/SKILL.md` (canonical, single source of truth). The registry is at `.skills-registry.md` in the project root. `.cursor/skills` is a mirror maintained by `skdd link` so Cursor can find skills at its conventional path.
 
-At session start, read `.skills-registry.md` to discover available skills. Before deriving a solution, check whether an existing skill covers the task and follow it. When you notice a pattern repeat 2-3 times, or when I ask you to "forge a skill for X", invoke the `skillforge` skill and follow its steps. Update the registry after forging or using a skill.
+At session start, read `.skills-registry.md` to discover available skills. Before deriving a solution, check whether an existing skill covers the task and follow it. When you notice a pattern repeat 2-3 times, or when I ask you to "forge a skill for X", invoke the `skillforge` skill and follow its steps. Always write new skills to `skills/`, never to the mirror.
 ```
 
 The `alwaysApply: true` frontmatter ensures Cursor injects the rule into every agent conversation.

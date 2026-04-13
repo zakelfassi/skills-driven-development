@@ -5,17 +5,14 @@
 ## Quick install
 
 ```bash
-mkdir -p .gemini/skills/skillforge
-curl -fsSL https://raw.githubusercontent.com/zakelfassi/skills-driven-development/main/skillforge/SKILL.md \
-  -o .gemini/skills/skillforge/SKILL.md
-touch .skills-registry.md
+pnpm dlx skdd init --harness=gemini
 ```
 
-Or: `pnpm dlx skdd init --harness=gemini`.
+That writes `skills/skillforge/SKILL.md` as the canonical source, `.gemini/skills → ../skills` as the mirror Gemini CLI actually reads, `.skills-registry.md`, and the skills block in `AGENTS.md`.
 
 ## Configure
 
-Gemini CLI reads `AGENTS.md`. Add the standard skills block pointing at `.gemini/skills/` and `.skills-registry.md`. See [`docs/configuration.md#gemini-cli`](../configuration.md#gemini-cli) for the exact text.
+Gemini CLI reads `AGENTS.md`. The skills block (auto-written by `skdd init`) references `skills/` as canonical and `.gemini/skills` as the mirror maintained by `skdd link`. See [`docs/configuration.md#gemini-cli`](../configuration.md#gemini-cli) for the exact text.
 
 ## Verify
 

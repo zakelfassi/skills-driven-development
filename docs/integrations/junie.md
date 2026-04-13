@@ -4,16 +4,21 @@
 
 ## Quick install
 
+Junie isn't a first-class `skdd init` target yet, so the install is manual:
+
 ```bash
-mkdir -p .junie/skills/skillforge
+mkdir -p skills/skillforge
 curl -fsSL https://raw.githubusercontent.com/zakelfassi/skills-driven-development/main/skillforge/SKILL.md \
-  -o .junie/skills/skillforge/SKILL.md
+  -o skills/skillforge/SKILL.md
 touch .skills-registry.md
+mkdir -p .junie && ln -s ../skills .junie/skills
 ```
+
+(Windows/JetBrains users on non-dev-mode: use a file copy instead of the symlink. A future `skdd init --harness=junie` will automate this.)
 
 ## Configure
 
-Junie reads `AGENTS.md` at the project root and the JetBrains-native `.junie/config.xml` for IDE-level settings. SkDD uses `AGENTS.md` — add the standard skills block from [`docs/configuration.md`](../configuration.md) pointing at `.junie/skills/`.
+Junie reads `AGENTS.md` at the project root and the JetBrains-native `.junie/config.xml` for IDE-level settings. SkDD uses `AGENTS.md` — add a skills block that references `skills/` as canonical and `.junie/skills` as the mirror. See [`docs/configuration.md`](../configuration.md) for the universal template.
 
 ## Harness notes
 

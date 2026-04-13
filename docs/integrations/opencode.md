@@ -5,17 +5,14 @@
 ## Quick install
 
 ```bash
-mkdir -p .opencode/skills/skillforge
-curl -fsSL https://raw.githubusercontent.com/zakelfassi/skills-driven-development/main/skillforge/SKILL.md \
-  -o .opencode/skills/skillforge/SKILL.md
-touch .skills-registry.md
+pnpm dlx skdd init --harness=opencode
 ```
 
-Or: `pnpm dlx skdd init --harness=opencode`.
+Scaffolds `skills/skillforge/SKILL.md` (canonical), `.skills-registry.md`, the `AGENTS.md` skills block, and `.opencode/skills → ../skills` as the mirror OpenCode reads.
 
 ## Configure
 
-OpenCode reads `AGENTS.md`. Add the standard skills block from [`docs/configuration.md#opencode`](../configuration.md#opencode) with `.opencode/skills/` as the skills directory.
+OpenCode reads `AGENTS.md`. The block `skdd init` writes references `skills/` as the canonical source and `.opencode/skills` as the mirror. See [`docs/configuration.md#opencode`](../configuration.md#opencode) for the exact text.
 
 ## Harness notes
 

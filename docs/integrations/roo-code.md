@@ -4,18 +4,21 @@
 
 ## Quick install
 
+Roo Code isn't a first-class `skdd init` target yet, so the install is manual:
+
 ```bash
-mkdir -p .roo/skills/skillforge
+mkdir -p skills/skillforge
 curl -fsSL https://raw.githubusercontent.com/zakelfassi/skills-driven-development/main/skillforge/SKILL.md \
-  -o .roo/skills/skillforge/SKILL.md
+  -o skills/skillforge/SKILL.md
 touch .skills-registry.md
+mkdir -p .roo && ln -s ../skills .roo/skills     # substitute .rooroo/skills on older builds
 ```
 
-(If your Roo Code install expects `.rooroo/skills/` instead, substitute.)
+(Once Roo Code is added to `skdd link`'s harness list, `skdd init --harness=roo-code` will wire it up automatically.)
 
 ## Configure
 
-Roo Code reads `AGENTS.md`. Add the standard skills block from [`docs/configuration.md`](../configuration.md) pointing at your Roo Code skills path.
+Roo Code reads `AGENTS.md`. Add a skills block that references `skills/` as canonical and `.roo/skills` as the mirror — see [`docs/configuration.md`](../configuration.md) for the universal template.
 
 ## Harness notes
 

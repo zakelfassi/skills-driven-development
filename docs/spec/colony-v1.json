@@ -34,6 +34,47 @@
       "enum": ["agentskills.io/v1"],
       "description": "Which Agent Skills spec version this colony targets. Currently only 'agentskills.io/v1' is defined."
     },
+    "canonicalSkillsDir": {
+      "type": "string",
+      "description": "Path (relative to this manifest) of the canonical skills directory — the single source of truth that every harness mirror points at. Defaults to 'skills'. For the seed SkDD repo itself this is 'skillforge' because the methodology repo's canonical seed is the meta-skill, not a multi-skill dir.",
+      "default": "skills"
+    },
+    "harnessMirrors": {
+      "type": "array",
+      "description": "Harness-expected skill directories that mirror the canonical. On Unix these are symlinks; on Windows they are file copies tracked in `.skdd-sync.json`. Managed by `skdd link` — do not hand-edit. The SkDD seed repo leaves this empty because it's a methodology repo, not a user project.",
+      "items": {
+        "type": "object",
+        "required": ["target"],
+        "additionalProperties": true,
+        "properties": {
+          "target": {
+            "type": "string",
+            "description": "Mirror path relative to the manifest. E.g. '.claude/skills'."
+          },
+          "harness": {
+            "type": "string",
+            "enum": [
+              "claude",
+              "codex",
+              "cursor",
+              "copilot",
+              "gemini",
+              "opencode",
+              "goose",
+              "amp",
+              "roo-code",
+              "junie",
+              "vscode"
+            ]
+          },
+          "mode": {
+            "type": "string",
+            "enum": ["symlink", "copy"],
+            "description": "How the mirror is materialized on this platform."
+          }
+        }
+      }
+    },
     "skills": {
       "type": "array",
       "description": "Top-level skills in this colony. Each entry points at a SKILL.md path relative to the manifest.",

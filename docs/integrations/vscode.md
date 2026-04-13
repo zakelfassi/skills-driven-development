@@ -4,6 +4,12 @@
 
 ## Quick install
 
+```bash
+pnpm dlx skdd init --harness=copilot
+```
+
+VS Code with Copilot Chat reads the same `.github/skills/` path as standalone Copilot, so `--harness=copilot` is the right choice. The CLI creates `skills/skillforge/SKILL.md` (canonical), `.skills-registry.md`, the `.github/copilot-instructions.md` skills block, and `.github/skills → ../skills` as the mirror VS Code's Copilot extension reads.
+
 If your project already uses GitHub Copilot, follow [`docs/integrations/github-copilot.md`](github-copilot.md) — the wiring is identical.
 
 ## VS Code-specific notes
