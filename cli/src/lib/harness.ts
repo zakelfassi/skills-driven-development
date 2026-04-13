@@ -78,26 +78,41 @@ export const HARNESSES: Record<Harness, HarnessProfile> = {
   },
 };
 
+const HARNESS_MARKERS: Array<[Harness, string[]]> = [
+  ["claude", [".claude/skills", "CLAUDE.md", ".claude"]],
+  ["cursor", [".cursor/skills", ".cursor/rules", ".cursor"]],
+  ["copilot", [".github/copilot-instructions.md", ".github/skills"]],
+  ["codex", [".codex/skills", ".codex"]],
+  ["gemini", [".gemini/skills", ".gemini"]],
+  ["opencode", [".opencode/skills", ".opencode"]],
+  ["goose", [".goose/skills", ".goose"]],
+  ["amp", [".amp/skills", ".amp"]],
+];
+
 export function detectHarness(cwd: string): Harness | null {
   const root = resolve(cwd);
-  const checks: Array<[Harness, string[]]> = [
-    ["claude", [".claude/skills", "CLAUDE.md", ".claude"]],
-    ["cursor", [".cursor/skills", ".cursor/rules", ".cursor"]],
-    ["copilot", [".github/copilot-instructions.md", ".github/skills"]],
-    ["codex", [".codex/skills", ".codex"]],
-    ["gemini", [".gemini/skills", ".gemini"]],
-    ["opencode", [".opencode/skills", ".opencode"]],
-    ["goose", [".goose/skills", ".goose"]],
-    ["amp", [".amp/skills", ".amp"]],
-  ];
-
-  for (const [harness, markers] of checks) {
+  for (const [harness, markers] of HARNESS_MARKERS) {
     if (markers.some((marker) => existsSync(join(root, marker)))) {
       return harness;
     }
   }
-
   return null;
+}
+
+/**
+ * Return every harness whose marker files/dirs exist in the project.
+ * Used by `skdd link` to mirror the canonical `skills/` directory into
+ * each harness-expected location at once.
+ */
+export function detectAllHarnesses(cwd: string): Harness[] {
+  const root = resolve(cwd);
+  const found: Harness[] = [];
+  for (const [harness, markers] of HARNESS_MARKERS) {
+    if (markers.some((marker) => existsSync(join(root, marker)))) {
+      found.push(harness);
+    }
+  }
+  return found;
 }
 
 export function resolveHarness(cwd: string, explicit: Harness | "auto" | undefined): HarnessProfile {

@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { detectHarness, resolveHarness, HARNESSES } from "../src/lib/harness.js";
+import { detectHarness, detectAllHarnesses, resolveHarness, HARNESSES } from "../src/lib/harness.js";
 
 let tmp: string;
 
@@ -45,6 +45,38 @@ describe("detectHarness", () => {
     mkdirSync(join(tmp, ".cursor"), { recursive: true });
     // claude is checked first in the detection order
     expect(detectHarness(tmp)).toBe("claude");
+  });
+});
+
+describe("detectAllHarnesses", () => {
+  it("returns empty array when no markers exist", () => {
+    expect(detectAllHarnesses(tmp)).toEqual([]);
+  });
+
+  it("returns a single harness when only one marker exists", () => {
+    writeFileSync(join(tmp, "CLAUDE.md"), "# Project");
+    expect(detectAllHarnesses(tmp)).toEqual(["claude"]);
+  });
+
+  it("returns every harness whose markers are present", () => {
+    writeFileSync(join(tmp, "CLAUDE.md"), "# Project");
+    mkdirSync(join(tmp, ".cursor"), { recursive: true });
+    mkdirSync(join(tmp, ".codex"), { recursive: true });
+    const found = detectAllHarnesses(tmp);
+    expect(found).toContain("claude");
+    expect(found).toContain("cursor");
+    expect(found).toContain("codex");
+    expect(found).toHaveLength(3);
+  });
+
+  it("returns harnesses in a stable, deterministic order", () => {
+    mkdirSync(join(tmp, ".amp"), { recursive: true });
+    mkdirSync(join(tmp, ".claude"), { recursive: true });
+    mkdirSync(join(tmp, ".cursor"), { recursive: true });
+    const found = detectAllHarnesses(tmp);
+    // claude comes before cursor comes before amp in the check order
+    expect(found.indexOf("claude")).toBeLessThan(found.indexOf("cursor"));
+    expect(found.indexOf("cursor")).toBeLessThan(found.indexOf("amp"));
   });
 });
 

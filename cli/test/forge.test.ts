@@ -16,8 +16,8 @@ afterEach(() => {
   rmSync(tmp, { recursive: true, force: true });
 });
 
-describe("runForge — non-interactive", () => {
-  it("writes a spec-compliant SKILL.md and registers it", async () => {
+describe("runForge — canonical mode (default)", () => {
+  it("writes the skill to canonical skills/<name>/ and links the harness mirror", async () => {
     const code = await runForge("test-skill", {
       cwd: tmp,
       harness: "claude",
@@ -26,18 +26,25 @@ describe("runForge — non-interactive", () => {
     });
     expect(code).toBe(0);
 
-    const skillPath = join(tmp, ".claude/skills/test-skill/SKILL.md");
-    expect(existsSync(skillPath)).toBe(true);
+    // Canonical location
+    const canonicalPath = join(tmp, "skills/test-skill/SKILL.md");
+    expect(existsSync(canonicalPath)).toBe(true);
 
-    const content = readFileSync(skillPath, "utf8");
+    const content = readFileSync(canonicalPath, "utf8");
     const parsed = matter(content);
     expect(parsed.data.name).toBe("test-skill");
     expect(parsed.data.description).toContain("Use when");
     expect(parsed.data.metadata).toBeDefined();
     expect((parsed.data.metadata as Record<string, unknown>).status).toBe("active");
+
+    // Harness mirror resolves through the symlink (on Unix) to the same file
+    if (process.platform !== "win32") {
+      expect(existsSync(join(tmp, ".claude/skills/test-skill/SKILL.md"))).toBe(true);
+      expect(existsSync(join(tmp, ".skdd-sync.json"))).toBe(true);
+    }
   });
 
-  it("adds the new skill to .skills-registry.md", async () => {
+  it("adds the new skill to .skills-registry.md with the canonical path", async () => {
     await runForge("reg-test", {
       cwd: tmp,
       harness: "claude",
@@ -49,6 +56,9 @@ describe("runForge — non-interactive", () => {
     expect(registry.skills).toHaveLength(1);
     expect(registry.skills[0]!.name).toBe("reg-test");
     expect(registry.skills[0]!.source).toBe("local");
+    // `path` is only surfaced through the JSON registry (the markdown table has no
+    // path column by convention). The canonical file existing on disk is the thing
+    // that matters — which we assert in the other test.
   });
 
   it("refuses to overwrite an existing skill", async () => {
@@ -84,5 +94,25 @@ describe("runForge — non-interactive", () => {
       nonInteractive: true,
     });
     expect(code).toBe(1);
+  });
+});
+
+describe("runForge — flat / --no-canonical mode", () => {
+  it("writes the skill directly to the harness dir without a mirror", async () => {
+    const code = await runForge("flat-skill", {
+      cwd: tmp,
+      harness: "claude",
+      fromDescription: "Flat layout. Use when preserving the old per-harness scheme.",
+      nonInteractive: true,
+      canonical: false,
+    });
+    expect(code).toBe(0);
+
+    // The skill lives at the harness path
+    expect(existsSync(join(tmp, ".claude/skills/flat-skill/SKILL.md"))).toBe(true);
+    // No canonical skills/ dir was created
+    expect(existsSync(join(tmp, "skills/flat-skill/SKILL.md"))).toBe(false);
+    // No sync state file should have been written
+    expect(existsSync(join(tmp, ".skdd-sync.json"))).toBe(false);
   });
 });

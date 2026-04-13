@@ -1,7 +1,7 @@
 {
   "name": "skdd",
-  "version": "0.1.0",
-  "description": "Skills-Driven Development CLI — validate, init, forge, list, and export SkDD skill colonies.",
+  "version": "0.2.0",
+  "description": "Skills-Driven Development CLI — validate, init, forge, list, link, and sync SkDD skill colonies. Manages the canonical skills/ + harness mirror pattern.",
   "type": "module",
   "bin": {
     "skdd": "./dist/index.js"

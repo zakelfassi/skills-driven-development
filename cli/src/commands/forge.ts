@@ -6,6 +6,7 @@ import { NAME_MAX_LENGTH, NAME_REGEX } from "../lib/spec.js";
 import { renderSkillSkeleton } from "../lib/templates.js";
 import { addRegistryEntry } from "../lib/registry.js";
 import { resolveHarness, type Harness } from "../lib/harness.js";
+import { runLink } from "./link.js";
 
 export interface ForgeOptions {
   cwd?: string;
@@ -13,11 +14,23 @@ export interface ForgeOptions {
   nonInteractive?: boolean;
   harness?: Harness | "auto";
   forgedBy?: string;
+  /**
+   * When true (default), write the skill to the canonical `skills/<name>/` and then
+   * run `skdd link` to refresh the harness mirror. When false, write to the harness's
+   * native skills directory (flat layout).
+   */
+  canonical?: boolean;
+  /**
+   * Skip the post-forge link step (useful in tests or CI pipelines that manage
+   * mirrors out-of-band).
+   */
+  skipLink?: boolean;
 }
 
 export async function runForge(name: string, opts: ForgeOptions = {}): Promise<number> {
   const cwd = resolve(opts.cwd ?? process.cwd());
   const profile = resolveHarness(cwd, opts.harness);
+  const canonical = opts.canonical !== false; // default true
 
   // Validate name
   const nameError = validateName(name);
@@ -26,11 +39,12 @@ export async function runForge(name: string, opts: ForgeOptions = {}): Promise<n
     return 1;
   }
 
-  const skillDir = join(cwd, profile.skillsDir, name);
+  const skillsRoot = canonical ? "skills" : profile.skillsDir;
+  const skillDir = join(cwd, skillsRoot, name);
   const skillPath = join(skillDir, "SKILL.md");
 
   if (existsSync(skillPath)) {
-    logger.error(`Skill already exists: ${profile.skillsDir}/${name}/SKILL.md`);
+    logger.error(`Skill already exists: ${skillsRoot}/${name}/SKILL.md`);
     logger.dim(`Use \`skdd forge\` with a different name, or edit the file directly.`);
     return 1;
   }
@@ -63,17 +77,23 @@ export async function runForge(name: string, opts: ForgeOptions = {}): Promise<n
     });
   }
 
-  const body = renderSkillSkeleton({ name, description, forgedBy, forgedFrom, forgedReason: forgedReason || undefined });
+  const body = renderSkillSkeleton({
+    name,
+    description,
+    forgedBy,
+    forgedFrom,
+    forgedReason: forgedReason || undefined,
+  });
   mkdirSync(skillDir, { recursive: true });
   writeFileSync(skillPath, body);
-  logger.success(`forged ${profile.skillsDir}/${name}/SKILL.md`);
+  logger.success(`forged ${skillsRoot}/${name}/SKILL.md`);
 
   // Register in the registry
   try {
     addRegistryEntry(cwd, {
       name,
       source: "local",
-      path: `${profile.skillsDir}/${name}/SKILL.md`,
+      path: `${skillsRoot}/${name}/SKILL.md`,
       lastUsed: forgedFrom,
       uses: 0,
       description,
@@ -82,6 +102,23 @@ export async function runForge(name: string, opts: ForgeOptions = {}): Promise<n
     logger.success(`registered ${name} in .skills-registry.md`);
   } catch (err) {
     logger.warn(`skill written but registry update failed: ${(err as Error).message}`);
+  }
+
+  // Refresh harness mirrors so the new skill is visible through the conventional path.
+  if (canonical && !opts.skipLink) {
+    const linkCode = await runLink({
+      cwd,
+      harnesses: [profile.id],
+      mode: "auto",
+      quiet: true,
+    });
+    if (linkCode === 0) {
+      logger.dim(`refreshed ${profile.skillsDir} mirror`);
+    } else {
+      logger.warn(
+        `skill written but mirror refresh returned non-zero. Run \`skdd link\` to retry.`,
+      );
+    }
   }
 
   if (!opts.nonInteractive) {

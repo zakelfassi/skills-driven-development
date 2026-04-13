@@ -90,6 +90,27 @@ At session start, read \`${registryPath}\` to discover available skills. Before 
 `;
 }
 
+/**
+ * Instruction block for projects using the canonical `skills/` + harness-mirror pattern.
+ * Agents should treat `skills/` as the single source of truth; the harness path is a mirror
+ * maintained by `skdd link` so the harness's conventional discovery still works.
+ */
+export function renderCanonicalInstructionBlock(
+  canonicalDir: string,
+  mirrorDir: string,
+  registryPath: string,
+  harnessLabel: string,
+): string {
+  return `## Skills
+
+Skills live at \`${canonicalDir}/<name>/SKILL.md\` (canonical, single source of truth). The registry is at \`${registryPath}\` in the project root.
+
+\`${mirrorDir}\` is a mirror of \`${canonicalDir}/\` maintained by \`skdd link\` so that ${harnessLabel} can find skills at its conventional path. Treat \`${canonicalDir}/\` as the source — edit there, and run \`skdd link\` (or let \`skdd forge\` do it automatically) to refresh the mirror. On Unix the mirror is a symlink; on Windows it's a file copy tracked in \`.skdd-sync.json\`.
+
+At session start, read \`${registryPath}\` to discover available skills. Before deriving a solution, check whether an existing skill covers the task and follow it. When you notice a pattern repeat 2-3 times, or when I ask you to "forge a skill for X", invoke the \`skillforge\` skill and follow its steps. Update the registry after forging or using a skill. **Always write new skills to \`${canonicalDir}/\`**, never to the mirror.
+`;
+}
+
 function toTitle(name: string): string {
   return name
     .split("-")
