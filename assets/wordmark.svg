@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 560 128" fill="none" role="img" aria-label="SkDD wordmark">
+  <title>SkDD — Skills-Driven Development</title>
+  <defs>
+    <linearGradient id="wm-bg" x1="0" y1="0" x2="560" y2="128" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#0f172a"/>
+      <stop offset="1" stop-color="#1e293b"/>
+    </linearGradient>
+    <linearGradient id="wm-accent" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#f59e0b"/>
+      <stop offset="1" stop-color="#38bdf8"/>
+    </linearGradient>
+  </defs>
+  <rect width="560" height="128" rx="20" fill="url(#wm-bg)"/>
+  <!-- Mini anvil mark on the left, matching logo.svg -->
+  <g transform="translate(24,24)">
+    <path d="M6 68 H74 V76 H66 V82 H14 V76 H6 Z" fill="url(#wm-accent)"/>
+    <path d="M12 54 H68 L74 68 H6 Z" fill="url(#wm-accent)"/>
+    <path d="M68 54 L86 50 L82 60 L68 60 Z" fill="url(#wm-accent)"/>
+    <path d="M40 24 L46 38 L40 52 L34 38 Z" fill="#fef3c7"/>
+  </g>
+  <!-- Wordmark: "SkDD" in bold, "Skills-Driven Development" underneath -->
+  <g font-family="ui-monospace, SFMono-Regular, Menlo, monospace" fill="#f8fafc">
+    <text x="140" y="70" font-size="54" font-weight="800" letter-spacing="-1">SkDD</text>
+    <text x="142" y="100" font-size="18" font-weight="500" letter-spacing="1" fill="#94a3b8">Skills-Driven Development</text>
+  </g>
+  <!-- Tagline strip on the right -->
+  <g font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif" fill="#38bdf8">
+    <text x="540" y="70" font-size="14" font-weight="600" text-anchor="end">agentskills.io/v1</text>
+    <text x="540" y="90" font-size="12" font-weight="400" fill="#94a3b8" text-anchor="end">forge · evolve · compose · archive</text>
+  </g>
+</svg>

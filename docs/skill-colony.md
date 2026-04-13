@@ -43,26 +43,25 @@ The behaviour to keep in mind when designing or reviewing a colony:
 
 ## Colony Architecture
 
-```
-┌─────────────────────────────────────────────┐
-│              Colony Registry                 │
-│  (shared index of available skills)          │
-│                                              │
-│  ┌──────────┐ ┌──────────┐ ┌──────────┐    │
-│  │ Project A │ │ Project B │ │ Project C │    │
-│  │ skills/   │ │ skills/   │ │ skills/   │    │
-│  │  deploy   │ │  deploy*  │ │  review   │    │
-│  │  scaffold │ │  scaffold*│ │  scaffold*│    │
-│  │  review   │ │  monitor  │ │  deploy*  │    │
-│  └──────────┘ └──────────┘ └──────────┘    │
-│       │              │             │         │
-│       └──────────────┼─────────────┘         │
-│                      │                        │
-│              Fork / Evolve / Share            │
-└─────────────────────────────────────────────┘
+```mermaid
+flowchart TB
+    subgraph Registry[Colony Registry &mdash; shared index of skills]
+        direction LR
+        PA["Project A<br/>skills/<br/>• deploy<br/>• scaffold<br/>• review"]
+        PB["Project B<br/>skills/<br/>• deploy*<br/>• scaffold*<br/>• monitor"]
+        PC["Project C<br/>skills/<br/>• review<br/>• scaffold*<br/>• deploy*"]
+    end
 
-* = forked from another project
+    PA -->|fork| PB
+    PB -->|evolve| PC
+    PA -->|share| PC
+    PC -.->|upstream fix| PA
+
+    classDef project fill:#0f172a,stroke:#38bdf8,stroke-width:2px,color:#f8fafc;
+    class PA,PB,PC project;
 ```
+
+`*` = forked from another project. Arrows represent fork / evolve / share / upstream-fix flows — the colony is a graph of projects exchanging skills, not a tree.
 
 ## Colony Lifecycle
 

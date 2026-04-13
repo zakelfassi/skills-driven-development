@@ -8,6 +8,31 @@ SkDD is a set of conventions plus a meta-skill (`skillforge`) plus a CLI (`skdd`
 
 Every harness expects skills in its own magic directory (`.claude/skills/`, `.codex/skills/`, `.cursor/skills/`, …). SkDD's answer is a **canonical** `skills/` directory at the project root plus per-harness **mirrors** (symlinks on Unix, file copies on Windows) managed by `skdd link`. Edit in one place, every harness sees the same bytes, no drift.
 
+```mermaid
+flowchart LR
+    SKILLS[["skills/<br/>(canonical &mdash; source of truth)"]]
+    REG[(".skills-registry.md<br/>+ .skdd-sync.json")]
+    CLAUDE[".claude/skills"]
+    CODEX[".codex/skills"]
+    CURSOR[".cursor/skills"]
+    COPILOT[".github/skills"]
+
+    SKILLS -->|symlink on Unix<br/>copy on Windows| CLAUDE
+    SKILLS -->|symlink / copy| CODEX
+    SKILLS -->|symlink / copy| CURSOR
+    SKILLS -->|symlink / copy| COPILOT
+    SKILLS -.-> REG
+
+    classDef canonical fill:#0f172a,stroke:#f59e0b,stroke-width:3px,color:#fef3c7;
+    classDef mirror fill:#1e293b,stroke:#38bdf8,stroke-width:2px,color:#e0f2fe;
+    classDef state fill:#334155,stroke:#94a3b8,stroke-width:1px,color:#f1f5f9;
+    class SKILLS canonical;
+    class CLAUDE,CODEX,CURSOR,COPILOT mirror;
+    class REG state;
+```
+
+Directory layout for a live project:
+
 ```
 my-project/
 ├── skills/                    # canonical — the source of truth

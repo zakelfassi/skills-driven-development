@@ -1,3 +1,18 @@
+<p align="center">
+  <a href="https://github.com/zakelfassi/skills-driven-development">
+    <img src="./assets/wordmark.svg" alt="SkDD — Skills-Driven Development" width="560"/>
+  </a>
+</p>
+
+<p align="center">
+  <a href="https://www.npmjs.com/package/skdd"><img alt="npm version" src="https://img.shields.io/npm/v/skdd?color=0ea5e9&label=skdd&logo=npm"></a>
+  <a href="https://www.npmjs.com/package/skdd"><img alt="downloads" src="https://img.shields.io/npm/dw/skdd?color=0ea5e9&label=downloads&logo=npm"></a>
+  <a href="https://github.com/zakelfassi/skills-driven-development/actions"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/zakelfassi/skills-driven-development/validate-skills.yml?branch=main&label=CI&logo=github"></a>
+  <a href="./LICENSE"><img alt="license" src="https://img.shields.io/badge/license-MIT-0ea5e9"></a>
+  <a href="https://github.com/zakelfassi/skills-driven-development/stargazers"><img alt="stars" src="https://img.shields.io/github/stars/zakelfassi/skills-driven-development?color=f59e0b&label=stars&logo=github"></a>
+  <a href="https://agentskills.io/specification.md"><img alt="agentskills.io v1" src="https://img.shields.io/badge/spec-agentskills.io%2Fv1-f59e0b"></a>
+</p>
+
 # Skills-Driven Development (SkDD)
 
 > Agents that learn by doing — and remember how they did it.
@@ -22,38 +37,26 @@ This turns agent experience into **compound knowledge**. The more an agent works
 
 ## The SkDD Lifecycle
 
-```
-              ┌──────────────────────────────────────────────┐
-              │                                              │
-              ▼                                              │
-     ┌────────────────┐      repeated pattern?      ┌────────┴───────┐
-     │ 1. Agent works │─── no ──────────────────────│ 5. Evolve      │
-     │    on a task   │                             │    Add edge    │
-     └───────┬────────┘                             │    cases, fix  │
-             │ yes                                  │    scripts,    │
-             ▼                                      │    split, etc. │
-     ┌────────────────┐                             └────────▲───────┘
-     │ 2. Forge       │                                      │
-     │    skillforge  │                                      │
-     │    writes      │                                      │
-     │    SKILL.md    │                                      │
-     └───────┬────────┘                                      │
-             │                                               │
-             ▼                                               │
-     ┌────────────────┐     session N+1                      │
-     │ 3. Register    │────────────────────┐                 │
-     │    in registry │                    ▼                 │
-     └────────────────┘         ┌────────────────┐           │
-                                │ 4. Discover    │───────────┘
-                                │    via desc    │    in-use
-                                │    match       │
-                                └───────┬────────┘
-                                        │ unused 90d
-                                        ▼
-                                ┌────────────────┐
-                                │ 6. Archive     │
-                                │    (reversible)│
-                                └────────────────┘
+```mermaid
+flowchart LR
+    A[1. Agent works<br/>on a task] -->|repeated pattern?| B{{Notice}}
+    B -->|yes| C[2. Forge<br/>skillforge writes<br/>SKILL.md]
+    B -->|no| A
+    C --> D[3. Register<br/>in .skills-registry.md]
+    D -->|session N+1| E[4. Discover<br/>via description match]
+    E -->|in-use| F[5. Evolve<br/>add edge cases,<br/>fix scripts, split]
+    F --> A
+    E -->|unused 90d| G[6. Archive<br/>reversible]
+    G -.->|restore| E
+
+    classDef work fill:#1e293b,stroke:#38bdf8,stroke-width:2px,color:#f8fafc;
+    classDef forge fill:#b45309,stroke:#f59e0b,stroke-width:2px,color:#fef3c7;
+    classDef discover fill:#0c4a6e,stroke:#38bdf8,stroke-width:2px,color:#f0f9ff;
+    classDef archive fill:#334155,stroke:#64748b,stroke-width:2px,color:#e2e8f0;
+    class A work;
+    class C,F forge;
+    class D,E discover;
+    class G archive;
 ```
 
 Every loop through the diagram *improves* the colony. Archiving is reversible; nothing is ever deleted.

@@ -1,0 +1,16 @@
+/* SkDD brand accents on top of Starlight's defaults. */
+:root {
+  --sl-color-accent-low: #0c4a6e;
+  --sl-color-accent: #38bdf8;
+  --sl-color-accent-high: #e0f2fe;
+}
+
+:root[data-theme="dark"] {
+  --sl-color-accent-low: #082f49;
+  --sl-color-accent: #38bdf8;
+  --sl-color-accent-high: #f0f9ff;
+}
+
+.hero img {
+  filter: drop-shadow(0 10px 30px rgba(56, 189, 248, 0.2));
+}

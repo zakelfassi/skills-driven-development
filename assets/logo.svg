@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" fill="none" role="img" aria-label="SkDD logo">
+  <title>SkDD — Skills-Driven Development</title>
+  <defs>
+    <linearGradient id="skdd-bg" x1="0" y1="0" x2="128" y2="128" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#0f172a"/>
+      <stop offset="1" stop-color="#1e293b"/>
+    </linearGradient>
+    <linearGradient id="skdd-anvil" x1="32" y1="40" x2="96" y2="96" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#f59e0b"/>
+      <stop offset="1" stop-color="#ef4444"/>
+    </linearGradient>
+  </defs>
+  <rect width="128" height="128" rx="24" fill="url(#skdd-bg)"/>
+  <!-- Anvil silhouette: base, body, horn -->
+  <path d="M26 92 H102 V100 H92 V108 H36 V100 H26 Z" fill="url(#skdd-anvil)"/>
+  <path d="M34 76 H94 L102 92 H26 Z" fill="url(#skdd-anvil)"/>
+  <path d="M94 76 L114 72 L110 82 L94 82 Z" fill="url(#skdd-anvil)"/>
+  <!-- Spark: a small diamond above the anvil signalling "forge" -->
+  <path d="M64 44 L70 58 L64 72 L58 58 Z" fill="#fef3c7" opacity="0.95"/>
+  <circle cx="64" cy="58" r="3" fill="#0f172a"/>
+  <!-- Loop arc around the anvil — the feedback loop motif -->
+  <path
+    d="M18 58 Q 18 22, 64 22 Q 110 22, 110 58"
+    fill="none"
+    stroke="#38bdf8"
+    stroke-width="4"
+    stroke-linecap="round"
+  />
+  <circle cx="18" cy="58" r="4" fill="#38bdf8"/>
+  <circle cx="110" cy="58" r="4" fill="#38bdf8"/>
+</svg>

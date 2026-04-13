@@ -1,0 +1,56 @@
+---
+title: Skills-Driven Development
+description: A methodology where AI agents create, evolve, and share reusable skills as a byproduct of their work. Spec-aligned with agentskills.io/v1.
+template: splash
+hero:
+  tagline: Agents that learn by doing — and remember how they did it.
+  image:
+    file: ../../assets/logo.svg
+  actions:
+    - text: Why SkDD?
+      link: /skills-driven-development/why-skdd/
+      icon: right-arrow
+      variant: primary
+    - text: GitHub
+      link: https://github.com/zakelfassi/skills-driven-development
+      icon: external
+---
+
+import { Card, CardGrid } from "@astrojs/starlight/components";
+
+## The one-minute pitch
+
+A **skill** is a reusable, discoverable playbook — a markdown file plus optional scripts — that an agent follows to accomplish a specific, repeatable task. SkDD adds a lifecycle on top of the [Agent Skills](https://agentskills.io) spec: **forge → register → discover → evolve → archive**. The skills get better the more your agents work, because your agents are the ones forging and evolving them.
+
+## Quick start
+
+```bash
+pnpm dlx skdd init --harness=claude       # or codex, cursor, copilot, gemini, opencode, goose, amp
+```
+
+That one command scaffolds a canonical `skills/` directory, writes `.skills-registry.md`, appends a Skills block to your harness instruction file, and materializes a `.claude/skills` symlink → `../skills` so the harness finds the colony at its conventional path. See [Configuration](./configuration/) for details.
+
+## Explore
+
+<CardGrid>
+  <Card title="Why SkDD?" icon="star">
+    The pitch, the lifecycle diagram, and who it's for. Start here if you want the narrative.
+  </Card>
+  <Card title="Configuration" icon="setting">
+    Per-harness wiring: Claude Code, Codex, Cursor, Copilot, Gemini CLI, OpenCode, Goose, Amp.
+  </Card>
+  <Card title="Skill colony concept" icon="puzzle">
+    What a colony is, how it differs from a static library, and the architecture diagram.
+  </Card>
+  <Card title="Forging skills" icon="seti:python">
+    The `skillforge` meta-skill checklist and what the agent actually does when you say "forge this."
+  </Card>
+</CardGrid>
+
+## Principles
+
+1. **Forge, don't front-load** — let agents create skills when they notice patterns during real work.
+2. **Small skills, composed loosely** — complex workflows emerge from composing small skills.
+3. **Skills are living documents** — agents should evolve them when they hit edge cases.
+4. **The colony is the product** — invest in the registry and discovery mechanisms.
+5. **Human-readable, machine-executable** — markdown for humans, frontmatter for agents.
