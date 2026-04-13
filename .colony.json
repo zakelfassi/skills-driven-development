@@ -1,0 +1,63 @@
+{
+  "$schema": "./docs/spec/colony-v1.json",
+  "name": "skills-driven-development",
+  "version": "0.1.0",
+  "description": "The seed colony for Skills-Driven Development — the skillforge meta-skill, methodology docs, and a reference webapp-starter example.",
+  "spec": "agentskills.io/v1",
+  "skills": [
+    {
+      "name": "skillforge",
+      "path": "skillforge/SKILL.md",
+      "description": "Create or update a reusable agent skill. Use when you notice a repeated pattern, when a workflow should be persisted for future sessions, or when asked to forge/create/scaffold a new skill.",
+      "status": "active"
+    }
+  ],
+  "examples": [
+    {
+      "name": "webapp-starter",
+      "path": "examples/webapp-starter",
+      "description": "Reference structure of a SkDD-enabled project: skills, registry, AGENTS.md, and CLAUDE.md. Not a runnable webapp — ships one real deploy-preview.sh stub and four example SKILL.md fixtures.",
+      "skills": [
+        "examples/webapp-starter/skills/api-endpoint",
+        "examples/webapp-starter/skills/bug-triage",
+        "examples/webapp-starter/skills/component-scaffold",
+        "examples/webapp-starter/skills/deploy-preview"
+      ]
+    }
+  ],
+  "homepage": "https://github.com/zakelfassi/skills-driven-development",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/zakelfassi/skills-driven-development.git"
+  },
+  "license": "MIT",
+  "maintainers": [
+    {
+      "name": "Zak El Fassi",
+      "github": "zakelfassi"
+    }
+  ],
+  "cli": {
+    "package": "skdd",
+    "path": "cli"
+  },
+  "plugins": [
+    {
+      "name": "skdd-claude",
+      "path": "plugins/skdd-claude",
+      "target": "claude-code"
+    }
+  ],
+  "keywords": [
+    "skills-driven-development",
+    "skdd",
+    "agent-skills",
+    "agentskills.io",
+    "skillforge",
+    "skill-colony",
+    "claude-code",
+    "codex",
+    "cursor",
+    "copilot"
+  ]
+}
