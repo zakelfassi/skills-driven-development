@@ -1,0 +1,63 @@
+name: RFC — Design proposal
+description: Propose a larger design change to SkDD (new spec fields, new CLI subcommand, new harness integration, methodology shift).
+title: "[rfc] "
+labels: ["rfc", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        RFCs are for changes that are too big for a normal feature request and deserve design review before implementation starts.
+
+        **If you're not sure whether something is RFC-sized, just use the [feature request template](./new?template=feature-request.yml) and we'll ask you to convert if needed.**
+
+        Draft PRs with `[RFC]` in the title are also an acceptable way to propose changes — especially if you have a prototype implementation to anchor the discussion.
+
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: One paragraph that answers "what is this proposing, and why?" A skim-reader should be able to decide whether this RFC is relevant to them from the summary alone.
+    validations:
+      required: true
+
+  - type: textarea
+    id: motivation
+    attributes:
+      label: Motivation
+      description: The problem this RFC solves. Include concrete examples (code, commands, user stories) where possible. If there's prior art in other tools, link it.
+    validations:
+      required: true
+
+  - type: textarea
+    id: design
+    attributes:
+      label: Design sketch
+      description: What do you propose? API surface, file layout, command flags, migration path. Pseudocode is fine. Trade-offs go in the next section.
+    validations:
+      required: true
+
+  - type: textarea
+    id: tradeoffs
+    attributes:
+      label: Tradeoffs & alternatives
+      description: What are the downsides? What did you consider and reject? What's the reversal cost if we ship this and regret it?
+    validations:
+      required: true
+
+  - type: textarea
+    id: compat
+    attributes:
+      label: Compatibility impact
+      description: Does this break existing `.colony.json` files, existing skills, existing CLI invocations, existing CI? How would users migrate?
+
+  - type: textarea
+    id: scope
+    attributes:
+      label: Out of scope
+      description: Things explicitly NOT covered by this RFC. Helps prevent scope creep in the review thread.
+
+  - type: textarea
+    id: plan
+    attributes:
+      label: Implementation plan (optional)
+      description: Rough milestones if you have a sense of them. E.g. "M1 CLI plumbing, M2 docs, M3 migration tool." Fine to leave blank — we can plan later.

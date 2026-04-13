@@ -1,0 +1,81 @@
+name: New skill proposal
+description: Propose a new skill for the skillforge or examples directory — or request one you'd find useful.
+title: "[skill] "
+labels: ["new-skill", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        SkDD's bias is **forge, don't front-load** — skills get created when agents notice real repetition, not upfront. Use this template when:
+
+        - You've already forged a skill in a real project and want to upstream it
+        - You're requesting a skill as a "would be useful" — we'll mark it `help-wanted` for someone to forge
+        - You want feedback on a skill draft before PR'ing it
+
+  - type: dropdown
+    id: status
+    attributes:
+      label: Status
+      options:
+        - I've already forged this skill and want to upstream it
+        - I have a draft I want feedback on
+        - I'm requesting that someone forge this skill
+    validations:
+      required: true
+
+  - type: input
+    id: name
+    attributes:
+      label: Proposed skill name
+      description: Must be kebab-case, 1-64 characters, matching the directory name. See the quality checklist in CONTRIBUTING.md.
+      placeholder: "deploy-preview"
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: The frontmatter `description` field — 1-1024 chars. Should include trigger language like "Use when …" so agents can discover it by matching the prompt.
+      placeholder: "Deploy the current branch to staging and return the preview URL. Use when I say 'push a preview' or 'deploy this branch'."
+    validations:
+      required: true
+
+  - type: textarea
+    id: trigger
+    attributes:
+      label: Trigger phrases
+      description: Specific things a user might say that should activate this skill. Helps calibrate the description.
+      placeholder: |
+        - "Deploy a preview"
+        - "Push this branch to staging"
+        - "Give me a preview URL"
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps (rough)
+      description: What the agent should do, in order. Imperative mood, copy-pasteable. Don't worry about polish.
+      placeholder: |
+        1. git push to preview branch
+        2. Run deploy-preview.sh
+        3. Parse the preview URL from output
+        4. Post URL back to the user
+
+  - type: dropdown
+    id: target
+    attributes:
+      label: Target location
+      options:
+        - skillforge/ (methodology — rarely changes)
+        - examples/webapp-starter/skills/ (reference example)
+        - plugins/skdd-claude/skills/ (Claude Code plugin bundle)
+        - Not sure — need guidance
+    validations:
+      required: true
+
+  - type: textarea
+    id: extra
+    attributes:
+      label: Anything else?
+      description: Scripts the skill needs, dependencies, edge cases you've hit, related skills it composes with.

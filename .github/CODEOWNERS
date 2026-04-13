@@ -1,0 +1,26 @@
+# SkDD code owners — see https://docs.github.com/en/repositories/managing-your-repositories-settings-and-security/customizing-your-repository/about-code-owners
+#
+# Each line is a file pattern followed by one or more owners. The last matching
+# pattern wins, so put specific rules after general ones.
+
+# Default owner for everything in the repo
+*                           @zakelfassi
+
+# Methodology docs — open to any SkDD maintainer once the team grows
+/docs/                      @zakelfassi
+/colony/                    @zakelfassi
+/skillforge/                @zakelfassi
+
+# CLI is the highest-risk surface — always requires @zakelfassi review
+/cli/                       @zakelfassi
+/extensions/vscode/         @zakelfassi
+
+# CI workflows + security-sensitive files — restrict to @zakelfassi
+/.github/workflows/         @zakelfassi
+/.github/CODEOWNERS         @zakelfassi
+/SECURITY.md                @zakelfassi
+/CODE_OF_CONDUCT.md         @zakelfassi
+
+# Manifest + spec files — restrict
+/.colony.json               @zakelfassi
+/docs/spec/                 @zakelfassi
