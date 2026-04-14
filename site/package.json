@@ -5,8 +5,11 @@
   "private": true,
   "description": "Starlight-powered documentation site for Skills-Driven Development.",
   "scripts": {
+    "sync": "node scripts/sync-docs.mjs",
+    "predev": "pnpm sync",
     "dev": "astro dev",
     "start": "astro dev",
+    "prebuild": "pnpm sync",
     "build": "astro build",
     "preview": "astro preview",
     "astro": "astro"

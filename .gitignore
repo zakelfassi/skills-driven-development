@@ -14,6 +14,17 @@ build/
 *.tsbuildinfo
 .astro/
 
+# Starlight generated content (authored copies live in docs/ and colony/)
+site/src/content/docs/why-skdd.md
+site/src/content/docs/configuration.md
+site/src/content/docs/skill-colony.md
+site/src/content/docs/forging-skills.md
+site/src/content/docs/specification-alignment.md
+site/src/content/docs/schemastore-submission.md
+site/src/content/docs/colony/
+site/src/content/docs/integrations/
+site/src/content/docs/spec/
+
 # Environment & secrets
 .env
 .env.*
