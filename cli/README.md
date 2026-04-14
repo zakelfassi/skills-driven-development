@@ -5,11 +5,11 @@
 ## Install
 
 ```bash
-pnpm add -D skdd
+pnpm add -D @zakelfassi/skdd
 # or globally
-pnpm add -g skdd
+pnpm add -g @zakelfassi/skdd
 # or one-shot
-pnpm dlx skdd init --harness=claude
+pnpm dlx @zakelfassi/skdd init --harness=claude
 ```
 
 This repo uses pnpm exclusively — do not use npm or yarn.

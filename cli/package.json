@@ -1,6 +1,9 @@
 {
-  "name": "skdd",
+  "name": "@zakelfassi/skdd",
   "version": "0.3.0",
+  "publishConfig": {
+    "access": "public"
+  },
   "description": "Skills-Driven Development CLI — validate, init, forge, list, link, doctor, import, and sync SkDD skill colonies. Manages the canonical skills/ + harness mirror pattern and consolidates duplicate skills across harness mirrors.",
   "type": "module",
   "bin": {

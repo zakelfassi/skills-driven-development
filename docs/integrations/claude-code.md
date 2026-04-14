@@ -7,7 +7,7 @@
 Run `skdd init` from the root of **your own project** (not the SkDD repo):
 
 ```bash
-pnpm dlx skdd init --harness=claude
+pnpm dlx @zakelfassi/skdd init --harness=claude
 ```
 
 That single command:

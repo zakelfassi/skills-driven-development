@@ -88,7 +88,7 @@ body:
       description: Minimal steps, starting from a clean directory if possible.
       placeholder: |
         1. mkdir /tmp/repro && cd /tmp/repro
-        2. pnpm dlx skdd init --harness=claude
+        2. pnpm dlx @zakelfassi/skdd init --harness=claude
         3. ...
       render: shell
     validations:

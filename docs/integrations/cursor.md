@@ -5,7 +5,7 @@
 ## Install
 
 ```bash
-pnpm dlx skdd init --harness=cursor
+pnpm dlx @zakelfassi/skdd init --harness=cursor
 ```
 
 Creates `skills/skillforge/SKILL.md` (canonical) + `.skills-registry.md` + `.cursor/rules/skills.mdc` with the rules block + `.cursor/skills → ../skills` symlink + `.skdd-sync.json` state.

@@ -51,7 +51,7 @@ If you only use one harness, the mirror is invisible — you'll never notice it.
 
 ```bash
 # With the CLI (recommended; pnpm required per repo policy)
-pnpm dlx skdd init --harness=claude      # or codex / cursor / copilot / gemini / opencode / goose / amp / auto
+pnpm dlx @zakelfassi/skdd init --harness=claude      # or codex / cursor / copilot / gemini / opencode / goose / amp / auto
 ```
 
 That creates `skills/skillforge/SKILL.md`, `.skills-registry.md`, the harness-specific instruction file with a `## Skills` block appended, a `.<harness>/skills` mirror pointing at `../skills`, and a `.skdd-sync.json` state file. Re-run `skdd link` any time to reconcile drift or add mirrors for additional harnesses.
@@ -80,7 +80,7 @@ Every section below tells you **which instruction file to edit**, **what to past
 - **Mirror**: `.claude/skills/` → `../skills`
 - **Scopes**: personal (`~/.claude/skills/`), project (`.claude/skills/` — SkDD uses this), plugin, enterprise
 
-Install: `pnpm dlx skdd init --harness=claude`
+Install: `pnpm dlx @zakelfassi/skdd init --harness=claude`
 
 Skills block (auto-written by `skdd init`):
 
@@ -110,7 +110,7 @@ See [`docs/integrations/claude-code.md`](integrations/claude-code.md) for the fu
 - **Mirror**: `.codex/skills/` → `../skills`
 - **Scopes**: user (`~/.codex/skills/`), project (`.codex/skills/`)
 
-Install: `pnpm dlx skdd init --harness=codex`
+Install: `pnpm dlx @zakelfassi/skdd init --harness=codex`
 
 Paste the same skills block as Claude Code, but swap `.claude/skills` → `.codex/skills` in the text.
 
@@ -123,7 +123,7 @@ Verify with the three-question check (`What skills do we have?` → `Forge …` 
 - **Instruction file**: `.cursor/rules/skills.mdc` (Cursor's agent-mode rules format)
 - **Mirror**: `.cursor/skills/` → `../skills`
 
-Install: `pnpm dlx skdd init --harness=cursor`
+Install: `pnpm dlx @zakelfassi/skdd init --harness=cursor`
 
 Skills block (the rules file needs `alwaysApply: true` frontmatter so every agent conversation picks it up):
 
@@ -146,7 +146,7 @@ Verify in Cursor's agent chat. Full details at [`docs/integrations/cursor.md`](i
 - **Mirror**: `.github/skills/` → `../skills`
 - **Applies to**: Copilot agent surfaces (Chat, Workspace, Coding Agent). Inline ghost-text completions don't see skills.
 
-Install: `pnpm dlx skdd init --harness=copilot`
+Install: `pnpm dlx @zakelfassi/skdd init --harness=copilot`
 
 Verify in Copilot Chat with `@workspace what skills are registered?`. Full details at [`docs/integrations/github-copilot.md`](integrations/github-copilot.md).
 
@@ -157,7 +157,7 @@ Verify in Copilot Chat with `@workspace what skills are registered?`. Full detai
 - **Instruction file**: `AGENTS.md`
 - **Mirror**: `.gemini/skills/` → `../skills`
 
-Install: `pnpm dlx skdd init --harness=gemini`. See [geminicli.com/docs/cli/skills/](https://geminicli.com/docs/cli/skills/) and [`docs/integrations/gemini-cli.md`](integrations/gemini-cli.md).
+Install: `pnpm dlx @zakelfassi/skdd init --harness=gemini`. See [geminicli.com/docs/cli/skills/](https://geminicli.com/docs/cli/skills/) and [`docs/integrations/gemini-cli.md`](integrations/gemini-cli.md).
 
 ---
 
@@ -166,7 +166,7 @@ Install: `pnpm dlx skdd init --harness=gemini`. See [geminicli.com/docs/cli/skil
 - **Instruction file**: `AGENTS.md`
 - **Mirror**: `.opencode/skills/` → `../skills`
 
-Install: `pnpm dlx skdd init --harness=opencode`. See [opencode.ai/docs/skills/](https://opencode.ai/docs/skills/) and [`docs/integrations/opencode.md`](integrations/opencode.md).
+Install: `pnpm dlx @zakelfassi/skdd init --harness=opencode`. See [opencode.ai/docs/skills/](https://opencode.ai/docs/skills/) and [`docs/integrations/opencode.md`](integrations/opencode.md).
 
 ---
 
@@ -175,7 +175,7 @@ Install: `pnpm dlx skdd init --harness=opencode`. See [opencode.ai/docs/skills/]
 - **Instruction file**: `AGENTS.md` (or `.goose/config.yaml` for Goose-specific settings)
 - **Mirror**: `.goose/skills/` → `../skills`
 
-Install: `pnpm dlx skdd init --harness=goose`. See [block.github.io/goose/docs/guides/context-engineering/using-skills/](https://block.github.io/goose/docs/guides/context-engineering/using-skills/) and [`docs/integrations/goose.md`](integrations/goose.md).
+Install: `pnpm dlx @zakelfassi/skdd init --harness=goose`. See [block.github.io/goose/docs/guides/context-engineering/using-skills/](https://block.github.io/goose/docs/guides/context-engineering/using-skills/) and [`docs/integrations/goose.md`](integrations/goose.md).
 
 ---
 
@@ -184,7 +184,7 @@ Install: `pnpm dlx skdd init --harness=goose`. See [block.github.io/goose/docs/g
 - **Instruction file**: `AGENTS.md`
 - **Mirror**: `.amp/skills/` → `../skills`
 
-Install: `pnpm dlx skdd init --harness=amp`. See [ampcode.com/manual#agent-skills](https://ampcode.com/manual#agent-skills) and [`docs/integrations/amp.md`](integrations/amp.md).
+Install: `pnpm dlx @zakelfassi/skdd init --harness=amp`. See [ampcode.com/manual#agent-skills](https://ampcode.com/manual#agent-skills) and [`docs/integrations/amp.md`](integrations/amp.md).
 
 ---
 

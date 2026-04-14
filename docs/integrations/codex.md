@@ -5,7 +5,7 @@
 ## Install
 
 ```bash
-pnpm dlx skdd init --harness=codex
+pnpm dlx @zakelfassi/skdd init --harness=codex
 ```
 
 Creates `skills/skillforge/SKILL.md` (canonical) + `.skills-registry.md` + `AGENTS.md` with the skills block + `.codex/skills → ../skills` symlink + `.skdd-sync.json` state.

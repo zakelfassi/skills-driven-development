@@ -89,7 +89,7 @@ Each step has a concrete file and a concrete command:
 ```bash
 # Fresh project
 cd my-project
-pnpm dlx skdd init --harness=claude
+pnpm dlx @zakelfassi/skdd init --harness=claude
 
 # Now ask Claude Code:
 #   "Forge a skill for scaffolding a new GraphQL resolver."
@@ -97,13 +97,13 @@ pnpm dlx skdd init --harness=claude
 #  appends a registry row, and skdd link refreshes the .claude/skills symlink)
 
 # Health-check the result:
-pnpm dlx skdd doctor
+pnpm dlx @zakelfassi/skdd doctor
 
 # Coming to a new harness? Add it without touching your canonical dir:
-pnpm dlx skdd link --harness=codex,cursor
+pnpm dlx @zakelfassi/skdd link --harness=codex,cursor
 
 # Already have skills scattered across .claude/skills + .cursor/skills from a pre-SkDD workflow?
-pnpm dlx skdd import --apply        # consolidates into canonical + symlinks the rest
+pnpm dlx @zakelfassi/skdd import --apply        # consolidates into canonical + symlinks the rest
 ```
 
 That's the whole surface. The rest of this repo is:

@@ -18,7 +18,7 @@ Snippets, validation hints, and command-palette actions for [Skills-Driven Devel
 ## Requirements
 
 - [Node.js ≥ 20](https://nodejs.org/)
-- The [`skdd` CLI](https://www.npmjs.com/package/skdd) on `PATH` (`pnpm add -g skdd` or invoke via `pnpm dlx skdd`)
+- The [`skdd` CLI](https://www.npmjs.com/package/@zakelfassi/skdd) on `PATH` (`pnpm add -g @zakelfassi/skdd` or invoke via `pnpm dlx @zakelfassi/skdd`)
 
 If `skdd` is not on `PATH`, set `skdd.cliPath` in settings to an absolute path.
 

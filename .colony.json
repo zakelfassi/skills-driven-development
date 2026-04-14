@@ -40,7 +40,7 @@
     }
   ],
   "cli": {
-    "package": "skdd",
+    "package": "@zakelfassi/skdd",
     "path": "cli"
   },
   "plugins": [

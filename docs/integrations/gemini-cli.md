@@ -5,7 +5,7 @@
 ## Quick install
 
 ```bash
-pnpm dlx skdd init --harness=gemini
+pnpm dlx @zakelfassi/skdd init --harness=gemini
 ```
 
 That writes `skills/skillforge/SKILL.md` as the canonical source, `.gemini/skills → ../skills` as the mirror Gemini CLI actually reads, `.skills-registry.md`, and the skills block in `AGENTS.md`.

@@ -5,8 +5,8 @@
 </p>
 
 <p align="center">
-  <a href="https://www.npmjs.com/package/skdd"><img alt="npm version" src="https://img.shields.io/npm/v/skdd?color=0ea5e9&label=skdd&logo=npm"></a>
-  <a href="https://www.npmjs.com/package/skdd"><img alt="downloads" src="https://img.shields.io/npm/dw/skdd?color=0ea5e9&label=downloads&logo=npm"></a>
+  <a href="https://www.npmjs.com/package/@zakelfassi/skdd"><img alt="npm version" src="https://img.shields.io/npm/v/@zakelfassi/skdd?color=0ea5e9&label=%40zakelfassi%2Fskdd&logo=npm"></a>
+  <a href="https://www.npmjs.com/package/@zakelfassi/skdd"><img alt="downloads" src="https://img.shields.io/npm/dw/@zakelfassi/skdd?color=0ea5e9&label=downloads&logo=npm"></a>
   <a href="https://github.com/zakelfassi/skills-driven-development/actions"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/zakelfassi/skills-driven-development/validate-skills.yml?branch=main&label=CI&logo=github"></a>
   <a href="./LICENSE"><img alt="license" src="https://img.shields.io/badge/license-MIT-0ea5e9"></a>
   <a href="https://github.com/zakelfassi/skills-driven-development/stargazers"><img alt="stars" src="https://img.shields.io/github/stars/zakelfassi/skills-driven-development?color=f59e0b&label=stars&logo=github"></a>
@@ -80,7 +80,7 @@ Run this from the root of **your own project** (not this repo):
 
 ```bash
 # With the CLI (recommended)
-pnpm dlx skdd init --harness=claude
+pnpm dlx @zakelfassi/skdd init --harness=claude
 ```
 
 That one command creates `skills/skillforge/SKILL.md` (a stub of the meta-skill), `.skills-registry.md` at the project root, a `## Skills` block appended to `CLAUDE.md`, and a `.claude/skills` symlink → `../skills` so Claude Code discovers the colony at its conventional path. A `.skdd-sync.json` state file tracks the mirror so `skdd link` can reconcile drift later.

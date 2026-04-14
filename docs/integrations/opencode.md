@@ -5,7 +5,7 @@
 ## Quick install
 
 ```bash
-pnpm dlx skdd init --harness=opencode
+pnpm dlx @zakelfassi/skdd init --harness=opencode
 ```
 
 Scaffolds `skills/skillforge/SKILL.md` (canonical), `.skills-registry.md`, the `AGENTS.md` skills block, and `.opencode/skills → ../skills` as the mirror OpenCode reads.

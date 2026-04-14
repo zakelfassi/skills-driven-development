@@ -5,7 +5,7 @@
 ## Quick install
 
 ```bash
-pnpm dlx skdd init --harness=amp
+pnpm dlx @zakelfassi/skdd init --harness=amp
 ```
 
 Creates `skills/skillforge/SKILL.md` (canonical), `.skills-registry.md`, the `AGENTS.md` skills block, and `.amp/skills → ../skills` as the mirror Amp reads.

@@ -5,7 +5,7 @@
 ## Quick install (project scope)
 
 ```bash
-pnpm dlx skdd init --harness=goose
+pnpm dlx @zakelfassi/skdd init --harness=goose
 ```
 
 Creates `skills/skillforge/SKILL.md` (canonical), `.skills-registry.md`, the `AGENTS.md` skills block, and `.goose/skills → ../skills` as the mirror Goose reads.

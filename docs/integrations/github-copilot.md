@@ -5,7 +5,7 @@
 ## Install
 
 ```bash
-pnpm dlx skdd init --harness=copilot
+pnpm dlx @zakelfassi/skdd init --harness=copilot
 ```
 
 Creates `skills/skillforge/SKILL.md` (canonical) + `.skills-registry.md` + `.github/copilot-instructions.md` with the skills block + `.github/skills → ../skills` symlink + `.skdd-sync.json` state.

@@ -25,7 +25,7 @@ A **skill** is a reusable, discoverable playbook — a markdown file plus option
 ## Quick start
 
 ```bash
-pnpm dlx skdd init --harness=claude       # or codex, cursor, copilot, gemini, opencode, goose, amp
+pnpm dlx @zakelfassi/skdd init --harness=claude       # or codex, cursor, copilot, gemini, opencode, goose, amp
 ```
 
 That one command scaffolds a canonical `skills/` directory, writes `.skills-registry.md`, appends a Skills block to your harness instruction file, and materializes a `.claude/skills` symlink → `../skills` so the harness finds the colony at its conventional path. See [Configuration](./configuration/) for details.
