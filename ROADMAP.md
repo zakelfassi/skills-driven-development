@@ -12,7 +12,7 @@ SkDD is being built in named tranches (P0 → P5). Each tranche ships as a batch
 
 | Tranche | Scope | Status |
 |---|---|---|
-| **P0 — Correctness bugs** | SDD→SkDD rename holes, broken README steps, missing `.gitignore`, broken anchors, missing scripts in examples | ✅ Shipped (v0.1.0) |
+| **P0 — Correctness bugs** | legacy-handle rename holes, broken README steps, missing `.gitignore`, broken anchors, missing scripts in examples | ✅ Shipped (v0.1.0) |
 | **P1 — Onboarding UX** | `docs/configuration.md`, quick-start rewrite, `CONTRIBUTING.md`, terminology glossary, examples polish | ✅ Shipped (v0.1.0) |
 | **P2 — Tooling** | `skdd` CLI (init/validate/forge/list/sync), registry JSON format, inter-skill composition spec, vendored spec snapshot, CI, pre-commit | ✅ Shipped (v0.1.0) |
 | **P3 — Platform integrations** | `.colony.json` manifest, 11 harness integration docs, Claude Code plugin scaffold | ✅ Shipped (v0.1.0) |
