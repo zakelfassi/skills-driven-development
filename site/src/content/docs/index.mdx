@@ -11,12 +11,21 @@ hero:
       link: /skills-driven-development/why-skdd/
       icon: right-arrow
       variant: primary
+    - text: Quick start
+      link: /skills-driven-development/configuration/
+      icon: rocket
+      variant: secondary
     - text: GitHub
       link: https://github.com/zakelfassi/skills-driven-development
       icon: external
+      variant: minimal
 ---
 
-import { Card, CardGrid } from "@astrojs/starlight/components";
+import { Card, CardGrid, LinkCard } from "@astrojs/starlight/components";
+
+export const base = import.meta.env.BASE_URL.endsWith("/")
+  ? import.meta.env.BASE_URL
+  : `${import.meta.env.BASE_URL}/`;
 
 ## The one-minute pitch
 
@@ -33,18 +42,36 @@ That one command scaffolds a canonical `skills/` directory, writes `.skills-regi
 ## Explore
 
 <CardGrid>
-  <Card title="Why SkDD?" icon="star">
-    The pitch, the lifecycle diagram, and who it's for. Start here if you want the narrative.
-  </Card>
-  <Card title="Configuration" icon="setting">
-    Per-harness wiring: Claude Code, Codex, Cursor, Copilot, Gemini CLI, OpenCode, Goose, Amp.
-  </Card>
-  <Card title="Skill colony concept" icon="puzzle">
-    What a colony is, how it differs from a static library, and the architecture diagram.
-  </Card>
-  <Card title="Forging skills" icon="seti:python">
-    The `skillforge` meta-skill checklist and what the agent actually does when you say "forge this."
-  </Card>
+  <LinkCard
+    title="Why SkDD?"
+    href={`${base}why-skdd/`}
+    description="The pitch, the lifecycle diagram, and who it's for. Start here if you want the narrative."
+  />
+  <LinkCard
+    title="Configuration"
+    href={`${base}configuration/`}
+    description="Per-harness wiring: Claude Code, Codex, Cursor, Copilot, Gemini CLI, OpenCode, Goose, Amp."
+  />
+  <LinkCard
+    title="Skill colony concept"
+    href={`${base}skill-colony/`}
+    description="What a colony is, how it differs from a static library, and the architecture diagram."
+  />
+  <LinkCard
+    title="Forging skills"
+    href={`${base}forging-skills/`}
+    description="The skillforge meta-skill checklist and what the agent actually does when you say 'forge this.'"
+  />
+  <LinkCard
+    title="Specification alignment"
+    href={`${base}specification-alignment/`}
+    description="How SkDD maps onto the agentskills.io v1 spec — what's spec-native vs SkDD-added."
+  />
+  <LinkCard
+    title="Harness integrations"
+    href={`${base}integrations/claude-code/`}
+    description="Dedicated guides for 11 harnesses: Claude Code, Codex, Cursor, Copilot, Gemini CLI, OpenCode, Goose, Amp, VS Code, Junie, Roo Code."
+  />
 </CardGrid>
 
 ## Principles
