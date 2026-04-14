@@ -12,6 +12,7 @@ yarn-error.log*
 dist/
 build/
 *.tsbuildinfo
+.astro/
 
 # Environment & secrets
 .env
