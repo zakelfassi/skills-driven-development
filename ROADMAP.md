@@ -27,7 +27,7 @@ SkDD is being built in named tranches (P0 → P5). Each tranche ships as a batch
 
 These have to be flipped in the repo Settings UI. Checked as they land:
 
-- [ ] **Social preview image** — upload `assets/logo.svg` (converted to a 1280×640 PNG) at Settings → Social preview
+- [ ] **Social preview image** — upload `.github/social-preview.png` (1280×640) via GitHub Settings → Social preview
 - [ ] **GitHub Discussions** — enable at Settings → Features → Discussions, then pin a "Welcome / RFC" post
 - [ ] **Repo topics** — add `agent-skills`, `claude-code`, `codex`, `cursor`, `agentskills-io`, `skills-driven-development`, `ai-agents`, `cli`, `typescript`, `skill-colony`
 - [ ] **GitHub Pages** — Settings → Pages → Source = "GitHub Actions" (enables the `deploy-docs.yml` workflow output)

@@ -1,5 +1,7 @@
 # SkDD for Visual Studio Code
 
+> **Status: scaffold.** This directory is the reference implementation for a future SkDD VS Code extension. It is not yet packaged, signed, or published to the VS Code Marketplace. If you want to experiment locally, run `code --install-extension <folded-vsix>` after running `vsce package` yourself.
+
 Snippets, validation hints, and command-palette actions for [Skills-Driven Development](https://github.com/zakelfassi/skills-driven-development).
 
 ## What it does
