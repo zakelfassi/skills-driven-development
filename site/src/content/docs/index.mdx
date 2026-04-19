@@ -39,6 +39,23 @@ pnpm dlx @zakelfassi/skdd init --harness=claude       # or codex, cursor, copilo
 
 That one command scaffolds a canonical `skills/` directory, writes `.skills-registry.md`, appends a Skills block to your harness instruction file, and materializes a `.claude/skills` symlink → `../skills` so the harness finds the colony at its conventional path. See [Configuration](./configuration/) for details.
 
+## One canonical colony, many harness mirrors
+
+SkDD keeps a single source of truth — the `skills/` directory at your repo root — and fans it out to each harness's conventional path via symlinks. Edit in one place; every agent sees the change.
+
+```mermaid
+flowchart LR
+  canonical["skills/ (canonical)"]
+  claude[".claude/skills → ../skills"]
+  codex[".codex/skills → ../skills"]
+  cursor[".cursor/skills → ../skills"]
+  copilot[".github/skills → ../skills"]
+  canonical -- symlink --> claude
+  canonical -- symlink --> codex
+  canonical -- symlink --> cursor
+  canonical -- symlink --> copilot
+```
+
 ## Explore
 
 <CardGrid>

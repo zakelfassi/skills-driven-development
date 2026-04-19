@@ -22,5 +22,9 @@
   "packageManager": "pnpm@9.0.0",
   "engines": {
     "node": ">=20"
+  },
+  "devDependencies": {
+    "playwright": "^1.59.1",
+    "rehype-mermaid": "^3.0.0"
   }
 }

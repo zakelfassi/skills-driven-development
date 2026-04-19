@@ -41,6 +41,8 @@ const mappings = [
   { src: "docs/integrations/vscode.md", dest: "integrations/vscode.md" },
   { src: "docs/integrations/junie.md", dest: "integrations/junie.md" },
   { src: "docs/integrations/roo-code.md", dest: "integrations/roo-code.md" },
+  // Project-level docs sourced from the repo root.
+  { src: "CHANGELOG.md", dest: "changelog.md" },
 ];
 
 function extractTitle(body) {

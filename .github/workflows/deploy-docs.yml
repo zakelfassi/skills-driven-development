@@ -42,6 +42,10 @@ jobs:
         working-directory: site
         run: pnpm install --frozen-lockfile=false
 
+      - name: Install Playwright Chromium (for rehype-mermaid SVG rendering)
+        working-directory: site
+        run: pnpm exec playwright install --with-deps chromium
+
       - name: Build with Astro
         working-directory: site
         run: pnpm build

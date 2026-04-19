@@ -1,0 +1,108 @@
+---
+// Override of Starlight's default EditLink component.
+//
+// Why: canonical docs live at repo-root `docs/**/*.md` and `colony/**/*.md`.
+// `site/scripts/sync-docs.mjs` copies them into `site/src/content/docs/` at
+// build time, and that generated directory is .gitignored. The default edit
+// link baseUrl yielded a href pointing at the generated copy, so any user PR
+// would get clobbered on the next build. Instead, map each page's slug back
+// to its canonical source path.
+//
+// Special case: `index.mdx` is hand-written directly in the content
+// collection, so it links to the real source under `site/src/`.
+
+import type { Props } from "@astrojs/starlight/props";
+
+const { entry } = Astro.props;
+const { id, slug } = entry;
+
+const repoEditBase =
+  "https://github.com/zakelfassi/skills-driven-development/edit/main/";
+
+// Keep this table in sync with the INVERSE of site/scripts/sync-docs.mjs.
+// Given a Starlight slug, return the canonical repo path to the source file.
+const slugToCanonical: Record<string, string> = {
+  "why-skdd": "docs/why-skdd.md",
+  configuration: "docs/configuration.md",
+  "skill-colony": "docs/skill-colony.md",
+  "forging-skills": "docs/forging-skills.md",
+  "specification-alignment": "docs/specification-alignment.md",
+  "schemastore-submission": "docs/schemastore-submission.md",
+  changelog: "CHANGELOG.md",
+  "colony/discovery": "colony/discovery.md",
+  "colony/evolution": "colony/evolution.md",
+  "spec/agent-skills-v1": "docs/spec/agent-skills-v1.md",
+  // The colony-v1 schema page is generated from a JSON schema — point the
+  // edit link at the schema so edits land in the right place.
+  "spec/colony-v1": "docs/spec/colony-v1.json",
+  "integrations/claude-code": "docs/integrations/claude-code.md",
+  "integrations/codex": "docs/integrations/codex.md",
+  "integrations/cursor": "docs/integrations/cursor.md",
+  "integrations/github-copilot": "docs/integrations/github-copilot.md",
+  "integrations/gemini-cli": "docs/integrations/gemini-cli.md",
+  "integrations/opencode": "docs/integrations/opencode.md",
+  "integrations/goose": "docs/integrations/goose.md",
+  "integrations/amp": "docs/integrations/amp.md",
+  "integrations/vscode": "docs/integrations/vscode.md",
+  "integrations/junie": "docs/integrations/junie.md",
+  "integrations/roo-code": "docs/integrations/roo-code.md",
+};
+
+function resolveEditUrl(): string | undefined {
+  // Normalize: Astro collections sometimes report slug as "" for the index.
+  const key = (slug ?? "").replace(/\/$/, "");
+
+  if (!key || key === "index") {
+    // The home page is hand-written in the content collection.
+    return `${repoEditBase}site/src/content/docs/index.mdx`;
+  }
+
+  const mapped = slugToCanonical[key];
+  if (mapped) return `${repoEditBase}${mapped}`;
+
+  // Fallback: if we somehow don't have a mapping, link to the generated
+  // file's path under docs/ (best guess) so the link at least resolves.
+  const guess = id ? id.replace(/\.(md|mdx)$/, ".md") : `${key}.md`;
+  return `${repoEditBase}docs/${guess}`;
+}
+
+const editUrl = resolveEditUrl();
+
+// Fetch the localized label the same way Starlight does.
+const label = Astro.locals.t("page.editLink");
+---
+
+{
+  editUrl && (
+    <a href={editUrl} class="sl-flex">
+      <svg
+        xmlns="http://www.w3.org/2000/svg"
+        width="1.2em"
+        height="1.2em"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        aria-hidden="true"
+      >
+        <path d="M12 20h9" />
+        <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
+      </svg>
+      {label}
+    </a>
+  )
+}
+
+<style>
+  a {
+    gap: 0.5rem;
+    align-items: center;
+    text-decoration: none;
+    color: var(--sl-color-gray-3);
+  }
+  a:hover {
+    color: var(--sl-color-white);
+  }
+</style>
