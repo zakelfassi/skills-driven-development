@@ -3,6 +3,7 @@ import { runInit } from "./commands/init.js";
 import { runValidate } from "./commands/validate.js";
 import { runForge } from "./commands/forge.js";
 import { runList } from "./commands/list.js";
+import { runShow } from "./commands/show.js";
 import { runSync } from "./commands/sync.js";
 import { runLink } from "./commands/link.js";
 import { runDoctor } from "./commands/doctor.js";
@@ -11,14 +12,14 @@ import { logger } from "./lib/logger.js";
 import type { Harness } from "./lib/harness.js";
 import type { LinkMode } from "./lib/fs-link.js";
 
-const VERSION = "0.3.0";
+const VERSION = "0.4.0";
 
 const program = new Command();
 
 program
   .name("skdd")
   .description(
-    "Skills-Driven Development CLI — validate, init, forge, list, link, doctor, import, and sync skill colonies.",
+    "Skills-Driven Development CLI — validate, init, forge, list, show, link, doctor, import, and sync skill colonies.",
   )
   .version(VERSION);
 
@@ -125,6 +126,16 @@ program
   .option("-f, --format <fmt>", "Output format: table|json", "table")
   .action(async (opts: { format: "table" | "json" }) => {
     const code = await runList({ format: opts.format });
+    process.exit(code);
+  });
+
+program
+  .command("show")
+  .description("Print a skill's full SKILL.md body")
+  .argument("<name>", "Skill name (kebab-case)")
+  .option("-f, --format <fmt>", "Output format: raw (default) — only raw is implemented today", "raw")
+  .action(async (name: string, opts: { format: "raw" | "rendered" }) => {
+    const code = await runShow(name, { format: opts.format });
     process.exit(code);
   });
 

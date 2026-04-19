@@ -2,6 +2,8 @@
 
 > How agents create skills on the fly — and when they should.
 
+> **Note — two different "forges":** `skdd forge <name>` is the CLI command that scaffolds a SKILL.md skeleton for you. The `skillforge` meta-skill (this document's subject) is the playbook an *agent* reads to decide when and how to create a new skill mid-session. You reach for the CLI; the agent reaches for the meta-skill.
+
 ## The Forge Trigger
 
 An agent should forge a new skill when it notices **repeated friction** — the same pattern appearing 2-3 times in the same session or across sessions.

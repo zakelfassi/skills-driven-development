@@ -7,6 +7,7 @@ Entries are retroactively reconstructed from git history for versions before thi
 ## [Unreleased]
 
 ### Added
+- `skdd show <name>` prints a skill's full SKILL.md body. Resolves via canonical `skills/` first, then registry.
 - Community scaffolding: `SECURITY.md`, `CODE_OF_CONDUCT.md` (link-based Contributor Covenant 2.1), `.github/CODEOWNERS`, `.github/FUNDING.yml`, `.github/ISSUE_TEMPLATE/*.yml` (bug / feature / new-skill / rfc), `.github/PULL_REQUEST_TEMPLATE.md`, `ROADMAP.md`.
 
 ## [0.3.0] — 2026-04-13
