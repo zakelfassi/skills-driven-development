@@ -4,7 +4,6 @@ import { runValidate } from "./commands/validate.js";
 import { runForge } from "./commands/forge.js";
 import { runList } from "./commands/list.js";
 import { runShow } from "./commands/show.js";
-import { runSync } from "./commands/sync.js";
 import { runLink } from "./commands/link.js";
 import { runDoctor } from "./commands/doctor.js";
 import { runImport } from "./commands/import.js";
@@ -19,7 +18,7 @@ const program = new Command();
 program
   .name("skdd")
   .description(
-    "Skills-Driven Development CLI — validate, init, forge, list, show, link, doctor, import, and sync skill colonies.",
+    "Skills-Driven Development CLI — validate, init, forge, list, show, link, doctor, and import skill colonies.",
   )
   .version(VERSION);
 
@@ -178,15 +177,6 @@ program
       process.exit(code);
     },
   );
-
-program
-  .command("sync")
-  .description("Sync skills from a remote colony (not yet implemented)")
-  .argument("[url]", "Remote registry URL")
-  .action(async (url: string | undefined) => {
-    const code = await runSync(url);
-    process.exit(code);
-  });
 
 program.parseAsync(process.argv).catch((err) => {
   logger.error((err as Error).message);
