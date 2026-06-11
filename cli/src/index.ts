@@ -11,7 +11,8 @@ import { logger } from "./lib/logger.js";
 import type { Harness } from "./lib/harness.js";
 import type { LinkMode } from "./lib/fs-link.js";
 
-const VERSION = "0.4.0";
+declare const __SKDD_VERSION__: string;
+const VERSION = typeof __SKDD_VERSION__ !== "undefined" ? __SKDD_VERSION__ : "0.0.0-dev";
 
 const program = new Command();
 
