@@ -50,3 +50,6 @@ coverage/
 # Temp
 *.log
 .tmp/
+
+# Local prompt exports (not checked in)
+prompt-exports/

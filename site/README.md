@@ -11,7 +11,7 @@ Right now this site shows:
 - `/` — homepage with hero, the one-minute pitch, and the five principles
 - Sidebar stubs for future content (Why SkDD, Configuration, Skill colony, Forging, Spec alignment, Harness integrations, Specs & manifests)
 
-All linked sidebar entries **404 until their `src/content/docs/*.mdx` files are written** — that work is tracked in the L-content / L-commit milestone of the P5 roadmap (see `/Users/zakelfassi/.claude/plans/linear-gathering-hamming.md`).
+All linked sidebar entries **404 until their `src/content/docs/*.mdx` files are written** — that work is tracked in the L-content / L-commit milestone of the P5 roadmap.
 
 ## Develop
 
