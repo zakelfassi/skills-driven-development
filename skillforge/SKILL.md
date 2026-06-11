@@ -39,7 +39,7 @@ Create well-formed, spec-compliant skills from observed patterns.
 ### 3. Create the skill directory
 
 ```bash
-mkdir -p .skills/<skill-name>
+mkdir -p skills/<skill-name>
 ```
 
 ### 4. Write SKILL.md
@@ -76,7 +76,7 @@ metadata:
 If the skill involves file generation or automation:
 
 ```
-.skills/<skill-name>/
+skills/<skill-name>/
 ├── SKILL.md
 ├── scripts/
 │   └── run.sh         # Executable automation
@@ -85,7 +85,7 @@ If the skill involves file generation or automation:
 ```
 
 ### 6. Register the skill
-Update `.skills-registry.md` at the **project root** (same level as `.skills/`). Create it if it doesn't exist:
+Update `.skills-registry.md` at the **project root** (same level as `skills/`). Create it if it doesn't exist:
 
 ```markdown
 | <skill-name> | local | <today> | 1 | <description> |
