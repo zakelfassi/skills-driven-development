@@ -25,7 +25,9 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
-    "lint": "tsc --noEmit"
+    "lint": "biome check .",
+    "lint:fix": "biome check --write .",
+    "format": "biome format --write ."
   },
   "dependencies": {
     "@inquirer/prompts": "^7.0.0",
@@ -34,6 +36,7 @@
     "picocolors": "^1.1.0"
   },
   "devDependencies": {
+    "@biomejs/biome": "2.4.16",
     "@types/node": "^20.0.0",
     "tsup": "^8.3.0",
     "typescript": "^5.6.0",
