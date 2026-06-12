@@ -114,11 +114,81 @@ export function validateMcpConfig(raw: unknown): ValidationResult {
 
 // -- Load / Save --
 
+/**
+ * Scan raw JSON text for duplicate keys at the top level of the "servers" object.
+ * Returns the list of duplicated key names (empty if none found).
+ *
+ * Must run BEFORE JSON.parse, which silently collapses duplicate keys by keeping
+ * only the last value, masking configuration errors.
+ */
+function findDuplicateServerNames(rawText: string): string[] {
+  // Locate "servers": { in the raw text
+  const serversKeyRe = /"servers"\s*:\s*\{/;
+  const match = serversKeyRe.exec(rawText);
+  if (!match) return [];
+
+  // The last char of the match is '{' — that is the servers object's opening brace.
+  const openBrace = match.index + match[0].length - 1;
+
+  // Walk character-by-character, collecting string keys at depth 1.
+  const seen = new Map<string, number>();
+  let depth = 0;
+  let i = openBrace;
+
+  while (i < rawText.length) {
+    const ch = rawText[i];
+
+    if (ch === "{") {
+      depth++;
+      i++;
+    } else if (ch === "}") {
+      depth--;
+      if (depth === 0) break;
+      i++;
+    } else if (ch === '"') {
+      // Parse the JSON string starting at i
+      let str = "";
+      let j = i + 1;
+      let esc = false;
+      while (j < rawText.length) {
+        const c = rawText[j];
+        if (esc) {
+          str += c;
+          esc = false;
+        } else if (c === "\\") {
+          esc = true;
+        } else if (c === '"') {
+          j++;
+          break;
+        } else {
+          str += c;
+        }
+        j++;
+      }
+      // j is now past the closing quote
+      if (depth === 1) {
+        // Check if followed by ':' — if so, this string is an object key
+        const rest = rawText.slice(j).trimStart();
+        if (rest.startsWith(":")) {
+          seen.set(str, (seen.get(str) ?? 0) + 1);
+        }
+      }
+      i = j;
+    } else {
+      i++;
+    }
+  }
+
+  return [...seen.entries()].filter(([, count]) => count > 1).map(([key]) => key);
+}
+
 export function loadMcpConfig(dir: string): CanonicalMcpConfig | null {
   const p = join(dir, MCP_CONFIG_FILE);
   if (!existsSync(p)) return null;
   try {
-    const raw = JSON.parse(readFileSync(p, "utf8")) as unknown;
+    const rawText = readFileSync(p, "utf8");
+    if (findDuplicateServerNames(rawText).length > 0) return null;
+    const raw = JSON.parse(rawText) as unknown;
     const result = validateMcpConfig(raw);
     if (!result.ok) return null;
     return result.config;
@@ -128,8 +198,13 @@ export function loadMcpConfig(dir: string): CanonicalMcpConfig | null {
 }
 
 export function saveMcpConfig(dir: string, config: CanonicalMcpConfig): void {
+  const result = validateMcpConfig(config);
+  if (!result.ok) {
+    const msgs = result.errors.map((e) => e.message).join("; ");
+    throw new Error(`Cannot save invalid MCP config: ${msgs}`);
+  }
   const p = join(dir, MCP_CONFIG_FILE);
-  atomicWrite(p, JSON.stringify(config, null, 2) + "\n");
+  atomicWrite(p, `${JSON.stringify(config, null, 2)}\n`);
 }
 
 // -- ${VAR} expansion --

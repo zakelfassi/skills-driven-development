@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -223,5 +223,98 @@ describe("expandEnvPlaceholders", () => {
     // Both occurrences unresolved → two entries (one per occurrence)
     expect(result.unresolved).toHaveLength(2);
     expect(result.unresolved.every((v) => v === "X")).toBe(true);
+  });
+});
+
+// ── duplicate key detection in loadMcpConfig ─────────────────────────────────
+
+describe("loadMcpConfig duplicate server name detection", () => {
+  it("returns null when servers object has a duplicate server name", () => {
+    const rawJson =
+      '{"version":1,"servers":{"my-server":{"command":"cmd1"},"my-server":{"command":"cmd2"}}}';
+    writeFileSync(join(tmp, "mcp.json"), rawJson);
+    expect(loadMcpConfig(tmp)).toBeNull();
+  });
+
+  it("returns null for duplicate name even when nested values differ", () => {
+    const rawJson = `{
+  "version": 1,
+  "servers": {
+    "alpha": { "command": "cmd-a" },
+    "beta":  { "url": "https://beta.example.com" },
+    "alpha": { "command": "cmd-a-override" }
+  }
+}`;
+    writeFileSync(join(tmp, "mcp.json"), rawJson);
+    expect(loadMcpConfig(tmp)).toBeNull();
+  });
+
+  it("accepts a file with unique server names (no false positive)", () => {
+    const rawJson = `{
+  "version": 1,
+  "servers": {
+    "server-a": { "command": "cmd1" },
+    "server-b": { "command": "cmd2" }
+  }
+}`;
+    writeFileSync(join(tmp, "mcp.json"), rawJson);
+    expect(loadMcpConfig(tmp)).not.toBeNull();
+  });
+
+  it("does not flag nested duplicate keys inside a server's own value", () => {
+    // Duplicate key inside env is a JSON quirk but not a duplicate server name
+    const rawJson = `{
+  "version": 1,
+  "servers": {
+    "my-server": { "command": "cmd", "env": { "X": "1", "X": "2" } }
+  }
+}`;
+    writeFileSync(join(tmp, "mcp.json"), rawJson);
+    // No duplicate server names at the top level of servers → should load fine
+    expect(loadMcpConfig(tmp)).not.toBeNull();
+  });
+});
+
+// ── saveMcpConfig validates before writing ────────────────────────────────────
+
+describe("saveMcpConfig rejects invalid configs", () => {
+  it("throws when a server has both command and url", () => {
+    const badConfig = {
+      version: 1 as const,
+      servers: {
+        bad: { command: "cmd", url: "https://example.com" } as never,
+      },
+    };
+    expect(() => saveMcpConfig(tmp, badConfig)).toThrow();
+    expect(existsSync(join(tmp, "mcp.json"))).toBe(false);
+  });
+
+  it("throws when a server has neither command nor url", () => {
+    const badConfig = {
+      version: 1 as const,
+      servers: {
+        bad: { env: { X: "1" } } as never,
+      },
+    };
+    expect(() => saveMcpConfig(tmp, badConfig)).toThrow();
+    expect(existsSync(join(tmp, "mcp.json"))).toBe(false);
+  });
+
+  it("does not overwrite an existing file when config is invalid", () => {
+    // Write a valid file first
+    const validConfig: CanonicalMcpConfig = {
+      version: 1,
+      servers: { good: { command: "cmd" } },
+    };
+    saveMcpConfig(tmp, validConfig);
+    const originalContent = readFileSync(join(tmp, "mcp.json"), "utf8");
+
+    const badConfig = {
+      version: 1 as const,
+      servers: { bad: { command: "c", url: "https://x.com" } as never },
+    };
+    expect(() => saveMcpConfig(tmp, badConfig)).toThrow();
+    // File unchanged
+    expect(readFileSync(join(tmp, "mcp.json"), "utf8")).toBe(originalContent);
   });
 });
