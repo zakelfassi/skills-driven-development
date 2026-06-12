@@ -41,7 +41,7 @@ export function loadState(cwd: string): SyncState | null {
       return null;
     }
     const state: SyncState = {
-      version: raw.version,
+      version: STATE_VERSION,
       canonical: raw.canonical,
       mirrors: raw.mirrors as SyncMirror[],
     };

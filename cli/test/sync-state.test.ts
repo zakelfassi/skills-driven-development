@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -84,6 +84,40 @@ describe("upsertMirror", () => {
     expect(state.mirrors[0]!.mode).toBe("copy");
     expect(state.mirrors[0]!.createdAt).toBe(firstCreatedAt);
     expect(state.mirrors[0]!.updatedAt).toBeTruthy();
+  });
+});
+
+describe("loadState v1→v2 migration", () => {
+  it("migrates a v1 state file to STATE_VERSION on load", () => {
+    const v1: object = {
+      version: 1,
+      canonical: "skills",
+      mirrors: [{ target: ".claude/skills", mode: "symlink", createdAt: "2025-01-01T00:00:00.000Z" }],
+    };
+    writeFileSync(statePath(tmp), JSON.stringify(v1, null, 2) + "\n");
+
+    const loaded = loadState(tmp);
+    expect(loaded).not.toBeNull();
+    expect(loaded!.version).toBe(STATE_VERSION);
+    expect(loaded!.mirrors).toHaveLength(1);
+    expect(loaded!.mirrors[0]!.target).toBe(".claude/skills");
+  });
+
+  it("persists v2 when a migrated state is saved back", () => {
+    const v1: object = {
+      version: 1,
+      canonical: "skills",
+      mirrors: [{ target: ".codex/skills", mode: "symlink", createdAt: "2025-06-01T00:00:00.000Z" }],
+    };
+    writeFileSync(statePath(tmp), JSON.stringify(v1, null, 2) + "\n");
+
+    const loaded = loadState(tmp);
+    expect(loaded).not.toBeNull();
+    saveState(tmp, loaded!);
+
+    const raw = JSON.parse(readFileSync(statePath(tmp), "utf8")) as { version: number; mirrors: { target: string }[] };
+    expect(raw.version).toBe(STATE_VERSION);
+    expect(raw.mirrors[0]!.target).toBe(".codex/skills");
   });
 });
 

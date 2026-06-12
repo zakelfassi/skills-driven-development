@@ -162,9 +162,13 @@ async function runInitGlobal(opts: InitOptions): Promise<number> {
   }
 
   // 3. Run global link to materialize harness mirrors (no instruction file in global mode)
+  // Forward an explicit --harness so `skdd init -g --harness droid` links the right harness
+  // even when the harness global parent dir is absent (explicit overrides auto-detection).
+  const explicitHarnesses =
+    opts.harness && opts.harness !== "auto" ? ([opts.harness] as Harness[]) : undefined;
   console.log("");
   logger.heading("Linking global harness mirrors");
-  const linkCode = await runLink({ global: true, mode: "auto", quiet: false });
+  const linkCode = await runLink({ global: true, mode: "auto", quiet: false, harnesses: explicitHarnesses });
   if (linkCode !== 0) {
     logger.warn(
       "Link step returned non-zero. The global skills/ directory is ready, but some harness mirrors may need attention. Re-run `skdd link -g` to retry.",
