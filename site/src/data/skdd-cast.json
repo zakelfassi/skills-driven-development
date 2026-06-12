@@ -1,5 +1,5 @@
 {
-  "totalMs": 13575,
+  "totalMs": 19185,
   "items": [
     {
       "type": "cmd",
@@ -13,7 +13,7 @@
     },
     {
       "type": "out",
-      "text": "<span class=\"tc-dim\">project: /private/var/folders/6t/_spbbqh57z95vm38jng35tsw0000gn/T/skdd-cast-5xdbcN</span>",
+      "text": "<span class=\"tc-dim\">project: /private/var/folders/6t/_spbbqh57z95vm38jng35tsw0000gn/T/skdd-cast-oGqVqO</span>",
       "delayMs": 2465
     },
     {
@@ -113,118 +113,118 @@
     },
     {
       "type": "cmd",
-      "text": "$ skdd forge release-notes --non-interactive",
+      "text": "$ skdd forge release-notes --non-interactive --from-description \"Summarise merged PRs and generate a user-facing CHANGELOG entry for each release\"",
       "delayMs": 4865
     },
     {
       "type": "out",
       "text": "<span class=\"tc-green\">✓</span> forged skills/release-notes/SKILL.md",
-      "delayMs": 7635
+      "delayMs": 13245
     },
     {
       "type": "out",
       "text": "<span class=\"tc-green\">✓</span> registered release-notes in .skills-registry.md",
-      "delayMs": 7710
+      "delayMs": 13320
     },
     {
       "type": "out",
       "text": "<span class=\"tc-dim\">refreshed .claude/skills mirror</span>",
-      "delayMs": 7785
+      "delayMs": 13395
     },
     {
       "type": "cmd",
       "text": "$ skdd doctor",
-      "delayMs": 8760
+      "delayMs": 14370
     },
     {
       "type": "out",
       "text": "<b>skdd doctor</b>",
-      "delayMs": 9825
+      "delayMs": 15435
     },
     {
       "type": "out",
-      "text": "<span class=\"tc-dim\">project:   /private/var/folders/6t/_spbbqh57z95vm38jng35tsw0000gn/T/skdd-cast-5xdbcN</span>",
-      "delayMs": 9900
+      "text": "<span class=\"tc-dim\">project:   /private/var/folders/6t/_spbbqh57z95vm38jng35tsw0000gn/T/skdd-cast-oGqVqO</span>",
+      "delayMs": 15510
     },
     {
       "type": "out",
       "text": "<span class=\"tc-dim\">canonical: skills/</span>",
-      "delayMs": 9975
+      "delayMs": 15585
     },
     {
       "type": "out",
       "text": "<b>Colony</b>",
-      "delayMs": 10050
+      "delayMs": 15660
     },
     {
       "type": "out",
       "text": "  <span class=\"tc-yellow\">!</span> no .colony.json manifest",
-      "delayMs": 10125
+      "delayMs": 15735
     },
     {
       "type": "out",
       "text": "    <span class=\"tc-dim\">→ Hand-write .colony.json (schema: docs/spec/colony-v1.json) to make the colony discoverable by marketplaces.</span>",
-      "delayMs": 10200
+      "delayMs": 15810
     },
     {
       "type": "out",
       "text": "<b>Skills</b>",
-      "delayMs": 10275
+      "delayMs": 15885
     },
     {
       "type": "out",
       "text": "  <span class=\"tc-green\">✓</span> 2 skill(s) found in skills/",
-      "delayMs": 10350
+      "delayMs": 15960
     },
     {
       "type": "out",
       "text": "<b>Validation</b>",
-      "delayMs": 10425
+      "delayMs": 16035
     },
     {
       "type": "out",
       "text": "  <span class=\"tc-yellow\">!</span> 1 spec warning(s) across 2 skill(s)",
-      "delayMs": 10500
+      "delayMs": 16110
     },
     {
       "type": "out",
       "text": "    <span class=\"tc-dim\">→ Run 'skdd validate' for per-skill details.</span>",
-      "delayMs": 10575
+      "delayMs": 16185
     },
     {
       "type": "out",
       "text": "<b>Registry</b>",
-      "delayMs": 10650
+      "delayMs": 16260
     },
     {
       "type": "out",
       "text": "  <span class=\"tc-yellow\">!</span> 1 skill(s) on disk missing from registry: skillforge",
-      "delayMs": 10725
+      "delayMs": 16335
     },
     {
       "type": "out",
       "text": "    <span class=\"tc-dim\">→ Re-run 'skdd forge' for each, or add them to .skills-registry.md by hand.</span>",
-      "delayMs": 10800
+      "delayMs": 16410
     },
     {
       "type": "out",
       "text": "<b>Mirrors</b>",
-      "delayMs": 10875
+      "delayMs": 16485
     },
     {
       "type": "out",
       "text": "  <span class=\"tc-green\">✓</span> 1 mirror(s) in sync (.claude/skills)",
-      "delayMs": 10950
+      "delayMs": 16560
     },
     {
       "type": "out",
       "text": "<b>Instructions</b>",
-      "delayMs": 11025
+      "delayMs": 16635
     },
     {
       "type": "out",
       "text": "  <span class=\"tc-green\">✓</span> 1 instruction file(s) reference the skills registry: CLAUDE.md",
-      "delayMs": 11100
+      "delayMs": 16710
     }
   ]
 }

@@ -121,7 +121,7 @@ try {
   const commands = [
     { label: 'init --harness=claude', output: initOut.trim() },
     {
-      label: 'forge release-notes --non-interactive',
+      label: 'forge release-notes --non-interactive --from-description "Summarise merged PRs and generate a user-facing CHANGELOG entry for each release"',
       output: forgeOut.trim(),
     },
     { label: 'doctor', output: doctorOut.trim() },

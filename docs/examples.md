@@ -2,7 +2,7 @@
 
 Three reference colonies that show SkDD working across different project types. Each colony ships with real structure, a lived-in registry, and at least one executable script — so you can see the loop in action before adapting it to your own project.
 
-All three colonies are validated in CI:
+Every example passes `skdd validate` and `skdd doctor`:
 
 ```bash
 node cli/dist/index.js validate \

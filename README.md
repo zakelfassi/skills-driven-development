@@ -94,7 +94,7 @@ skdd init --global
 # See everything at a glance: skills, mirrors, MCP servers, doctor status
 skdd hub
 
-# Sync MCP server configs from ~/.skdd/mcp.json to all 9 harnesses at once
+# Sync MCP server configs from ~/.skdd/mcp.json to all supported MCP hosts (7)
 skdd mcp sync
 
 # List skills across project + global colony
@@ -157,7 +157,7 @@ Use `skdd init --harness=<name>` for a single harness, or `skdd link --harness=c
 |---|---|
 | [`cli/`](cli/) | `@zakelfassi/skdd` — TypeScript ESM CLI (init, forge, list, show, link, doctor, import, validate, mcp, hub) |
 | [`skillforge/`](skillforge/) | The meta-skill: agents use this to create new skills |
-| [`examples/`](examples/) | Three reference colonies (webapp-starter, cli-tool, data-pipeline) — CI-validated |
+| [`examples/`](examples/) | Three reference colonies (webapp-starter, cli-tool, data-pipeline) — every example passes `skdd validate` and `skdd doctor` |
 | [`docs/`](docs/) | Methodology: skill colony concept, forging mechanics, specification alignment, harness integration guides |
 | [`colony/`](colony/) | The skill colony pattern: discovery, evolution, sharing |
 | [`plugins/skdd-claude/`](plugins/skdd-claude/) | Claude Code plugin (bundled skillforge, install instructions) |
