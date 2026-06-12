@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { confirm, input } from "@inquirer/prompts";
+import { skddHome } from "../lib/global.js";
 import { type Harness, resolveHarness } from "../lib/harness.js";
 import { logger } from "../lib/logger.js";
 import { addRegistryEntry } from "../lib/registry.js";
@@ -25,10 +26,16 @@ export interface ForgeOptions {
    * mirrors out-of-band).
    */
   skipLink?: boolean;
+  /**
+   * When true, forge the skill into the global colony (~/.skdd/skills/) instead of
+   * the project canonical dir, and run `skdd link --global` to refresh global mirrors.
+   */
+  global?: boolean;
 }
 
 export async function runForge(name: string, opts: ForgeOptions = {}): Promise<number> {
   const cwd = resolve(opts.cwd ?? process.cwd());
+  const globalHome = opts.global ? skddHome() : null;
   const profile = resolveHarness(cwd, opts.harness);
   const canonical = opts.canonical !== false; // default true
 
@@ -39,8 +46,14 @@ export async function runForge(name: string, opts: ForgeOptions = {}): Promise<n
     return 1;
   }
 
-  const skillsRoot = canonical ? "skills" : profile.skillsDir;
-  const skillDir = join(cwd, skillsRoot, name);
+  // In global mode, skills go to ~/.skdd/skills/<name>/
+  const registryRoot = globalHome ?? cwd;
+  const skillsRoot = globalHome
+    ? join(globalHome, "skills")
+    : canonical
+      ? "skills"
+      : profile.skillsDir;
+  const skillDir = globalHome ? join(skillsRoot, name) : join(cwd, skillsRoot, name);
   const skillPath = join(skillDir, "SKILL.md");
 
   if (existsSync(skillPath)) {
@@ -88,9 +101,9 @@ export async function runForge(name: string, opts: ForgeOptions = {}): Promise<n
   writeFileSync(skillPath, body);
   logger.success(`forged ${skillsRoot}/${name}/SKILL.md`);
 
-  // Register in the registry
+  // Register in the registry (global or project)
   try {
-    addRegistryEntry(cwd, {
+    addRegistryEntry(registryRoot, {
       name,
       source: "local",
       path: `${skillsRoot}/${name}/SKILL.md`,
@@ -105,19 +118,30 @@ export async function runForge(name: string, opts: ForgeOptions = {}): Promise<n
   }
 
   // Refresh harness mirrors so the new skill is visible through the conventional path.
-  if (canonical && !opts.skipLink) {
-    const linkCode = await runLink({
-      cwd,
-      harnesses: [profile.id],
-      mode: "auto",
-      quiet: true,
-    });
-    if (linkCode === 0) {
-      logger.dim(`refreshed ${profile.skillsDir} mirror`);
-    } else {
-      logger.warn(
-        `skill written but mirror refresh returned non-zero. Run \`skdd link\` to retry.`,
-      );
+  if (!opts.skipLink) {
+    if (opts.global) {
+      const linkCode = await runLink({ global: true, mode: "auto", quiet: true });
+      if (linkCode === 0) {
+        logger.dim("refreshed global harness mirrors");
+      } else {
+        logger.warn(
+          "skill written but global mirror refresh returned non-zero. Run `skdd link -g` to retry.",
+        );
+      }
+    } else if (canonical) {
+      const linkCode = await runLink({
+        cwd,
+        harnesses: [profile.id],
+        mode: "auto",
+        quiet: true,
+      });
+      if (linkCode === 0) {
+        logger.dim(`refreshed ${profile.skillsDir} mirror`);
+      } else {
+        logger.warn(
+          `skill written but mirror refresh returned non-zero. Run \`skdd link\` to retry.`,
+        );
+      }
     }
   }
 

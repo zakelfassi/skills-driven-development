@@ -2,7 +2,8 @@ import { createHash } from "node:crypto";
 import { cpSync, existsSync, mkdirSync, readFileSync, realpathSync, rmSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
 import matter from "gray-matter";
-import { HARNESSES } from "../lib/harness.js";
+import { globalSkillsDir, skddHome } from "../lib/global.js";
+import { HARNESSES, type Harness } from "../lib/harness.js";
 import { logger, pc } from "../lib/logger.js";
 import { findSkills } from "../lib/skill.js";
 import { runLink } from "./link.js";
@@ -13,6 +14,7 @@ export interface ImportOptions {
   apply?: boolean;
   canonical?: string;
   skipLink?: boolean;
+  global?: boolean;
 }
 
 interface ImportEntry {
@@ -54,7 +56,7 @@ export async function runImport(
   opts: ImportOptions = {},
 ): Promise<number> {
   const cwd = resolve(opts.cwd ?? process.cwd());
-  const root = target ? resolve(cwd, target) : cwd;
+  const root = opts.global ? skddHome() : target ? resolve(cwd, target) : cwd;
 
   if (!existsSync(root)) {
     logger.error(`Target directory does not exist: ${target ?? root}`);
@@ -62,7 +64,7 @@ export async function runImport(
   }
 
   const canonical = opts.canonical ?? detectCanonicalFromColony(root) ?? "skills";
-  const report = scanForSkills(root, canonical);
+  const report = scanForSkills(root, canonical, opts.global ?? false);
 
   if (opts.json) {
     console.log(JSON.stringify(report, null, 2));
@@ -88,7 +90,7 @@ function detectCanonicalFromColony(root: string): string | null {
   return null;
 }
 
-function scanForSkills(root: string, canonical: string): ImportReport {
+function scanForSkills(root: string, canonical: string, globalMode = false): ImportReport {
   const dirsToScan: Array<{ dir: string; origin: string }> = [];
   const seenRealpaths = new Set<string>();
 
@@ -107,8 +109,15 @@ function scanForSkills(root: string, canonical: string): ImportReport {
 
   // Canonical first so it wins realpath dedup over any symlinked mirror.
   add(join(root, canonical), "canonical");
-  for (const profile of Object.values(HARNESSES)) {
-    add(join(root, profile.skillsDir), profile.id);
+  if (globalMode) {
+    // In global mode scan harness global dirs (absolute paths)
+    for (const harness of Object.keys(HARNESSES) as Harness[]) {
+      add(globalSkillsDir(harness), harness);
+    }
+  } else {
+    for (const profile of Object.values(HARNESSES)) {
+      add(join(root, profile.skillsDir), profile.id);
+    }
   }
 
   const entries: ImportEntry[] = [];
@@ -264,7 +273,7 @@ async function applyConsolidation(
 
   // Re-walk to get the flat entry list. The JSON report only carries duplicates + collisions,
   // so we re-scan to pick up single-source skills that still need migration into canonical.
-  const entries = rescanForApply(root, report.canonical);
+  const entries = rescanForApply(root, report.canonical, opts.global ?? false);
   const byName = new Map<string, ImportEntry[]>();
   for (const e of entries) {
     if (!e.skillName) continue;
@@ -335,11 +344,13 @@ async function applyConsolidation(
   if (!opts.json) logger.dim("Running 'skdd link --force' to refresh harness mirrors…");
   // --force is safe here: we just consolidated every skill out of the harness dirs,
   // so whatever's left is either empty or non-skill cruft that the user can recreate.
-  const linkCode = await runLink({ cwd: root, quiet: opts.json ?? false, force: true });
+  const linkCode = opts.global
+    ? await runLink({ global: true, quiet: opts.json ?? false, force: true })
+    : await runLink({ cwd: root, quiet: opts.json ?? false, force: true });
   return linkCode;
 }
 
-function rescanForApply(root: string, canonical: string): ImportEntry[] {
+function rescanForApply(root: string, canonical: string, globalMode = false): ImportEntry[] {
   // Re-walk the directories and return a flat ImportEntry list.
   // Kept separate from scanForSkills so the JSON report stays small.
   const entries: ImportEntry[] = [];
@@ -374,8 +385,14 @@ function rescanForApply(root: string, canonical: string): ImportEntry[] {
     }
   };
   add(join(root, canonical), "canonical");
-  for (const profile of Object.values(HARNESSES)) {
-    add(join(root, profile.skillsDir), profile.id);
+  if (globalMode) {
+    for (const harness of Object.keys(HARNESSES) as Harness[]) {
+      add(globalSkillsDir(harness), harness);
+    }
+  } else {
+    for (const profile of Object.values(HARNESSES)) {
+      add(join(root, profile.skillsDir), profile.id);
+    }
   }
   return entries;
 }

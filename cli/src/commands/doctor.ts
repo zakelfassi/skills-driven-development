@@ -1,5 +1,6 @@
 import { existsSync, lstatSync, readFileSync, readlinkSync } from "node:fs";
-import { dirname, join, relative, resolve } from "node:path";
+import { dirname, isAbsolute, join, relative, resolve } from "node:path";
+import { skddHome } from "../lib/global.js";
 import { detectAllHarnesses } from "../lib/harness.js";
 import { logger, pc } from "../lib/logger.js";
 import { loadRegistry, type Registry, registryExists } from "../lib/registry.js";
@@ -19,6 +20,7 @@ export interface DoctorCheck {
 export interface DoctorOptions {
   cwd?: string;
   json?: boolean;
+  global?: boolean;
 }
 
 interface ColonyManifest {
@@ -35,21 +37,24 @@ const INSTRUCTION_FILES = [
 ] as const;
 
 export async function runDoctor(opts: DoctorOptions = {}): Promise<number> {
-  const cwd = resolve(opts.cwd ?? process.cwd());
+  const root = opts.global ? skddHome() : resolve(opts.cwd ?? process.cwd());
   const checks: DoctorCheck[] = [];
 
-  const canonical = checkColony(cwd, checks);
-  const canonicalPath = join(cwd, canonical);
-  const parsedSkills = checkSkillsDir(cwd, canonical, canonicalPath, checks);
+  const canonical = checkColony(root, checks);
+  const canonicalPath = join(root, canonical);
+  const parsedSkills = checkSkillsDir(root, canonical, canonicalPath, checks);
   checkValidation(parsedSkills, checks);
-  checkRegistry(cwd, parsedSkills, canonical, checks);
-  checkMirrors(cwd, canonicalPath, checks);
-  checkInstructions(cwd, checks);
+  checkRegistry(root, parsedSkills, canonical, checks);
+  checkMirrors(root, canonicalPath, checks);
+  // Skip instruction file checks in global mode (no project instruction file)
+  if (!opts.global) {
+    checkInstructions(root, checks);
+  }
 
   if (opts.json) {
-    emitJson(cwd, canonical, checks);
+    emitJson(root, canonical, checks);
   } else {
-    emitHuman(cwd, canonical, checks);
+    emitHuman(root, canonical, checks);
   }
 
   return checks.some((c) => c.status === "error") ? 1 : 0;
@@ -277,7 +282,9 @@ function checkMirrors(cwd: string, canonicalPath: string, checks: DoctorCheck[])
   let okCount = 0;
   let driftCount = 0;
   for (const mirror of state!.mirrors) {
-    const target = join(cwd, mirror.target);
+    // Mirror targets in global scope are stored as absolute paths; project scope uses
+    // relative paths. isAbsolute guard handles both correctly on all platforms.
+    const target = isAbsolute(mirror.target) ? mirror.target : join(cwd, mirror.target);
     const result = verifyMirror(target, mirror.mode, canonicalPath);
     if (result.ok) {
       okCount++;

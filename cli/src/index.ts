@@ -36,14 +36,26 @@ program
     "--no-canonical",
     "Use the flat per-harness layout instead of canonical skills/ + symlink mirror",
   )
-  .action(async (opts: { harness: Harness | "auto"; force: boolean; canonical: boolean }) => {
-    const code = await runInit({
-      harness: opts.harness,
-      force: opts.force,
-      canonical: opts.canonical,
-    });
-    process.exit(code);
-  });
+  .option(
+    "-g, --global",
+    "Initialize the global colony at ~/.skdd/ (links to all found harness dirs)",
+  )
+  .action(
+    async (opts: {
+      harness: Harness | "auto";
+      force: boolean;
+      canonical: boolean;
+      global: boolean;
+    }) => {
+      const code = await runInit({
+        harness: opts.harness,
+        force: opts.force,
+        canonical: opts.canonical,
+        global: opts.global,
+      });
+      process.exit(code);
+    },
+  );
 
 program
   .command("validate")
@@ -71,6 +83,7 @@ program
   .option("--forged-by <id>", "Attribution for metadata.forged-by", "skdd-cli")
   .option("--no-canonical", "Write to the harness-specific dir instead of canonical skills/")
   .option("--skip-link", "Skip the post-forge mirror refresh (canonical mode only)", false)
+  .option("-g, --global", "Forge into the global colony (~/.skdd/skills/) instead of the project")
   .action(
     async (
       name: string,
@@ -81,6 +94,7 @@ program
         forgedBy: string;
         canonical: boolean;
         skipLink: boolean;
+        global: boolean;
       },
     ) => {
       const code = await runForge(name, {
@@ -90,6 +104,7 @@ program
         forgedBy: opts.forgedBy,
         canonical: opts.canonical,
         skipLink: opts.skipLink,
+        global: opts.global,
       });
       process.exit(code);
     },
@@ -105,7 +120,7 @@ program
   )
   .option(
     "-H, --harness <list>",
-    "Comma-separated harness list; defaults to every harness detected in the project",
+    "Comma-separated harness list: claude|codex|cursor|copilot|gemini|opencode|goose|amp|droid; defaults to detected",
   )
   .option(
     "-f, --force",
@@ -113,25 +128,36 @@ program
     false,
   )
   .option("-q, --quiet", "Suppress per-mirror progress output", false)
-  .action(async (opts: { mode: LinkMode; harness?: string; force: boolean; quiet: boolean }) => {
-    const harnesses = opts.harness
-      ? (opts.harness.split(",").map((s) => s.trim()) as Harness[])
-      : undefined;
-    const code = await runLink({
-      mode: opts.mode,
-      harnesses,
-      force: opts.force,
-      quiet: opts.quiet,
-    });
-    process.exit(code);
-  });
+  .option("-g, --global", "Link global colony (~/.skdd/skills/) into harness global dirs")
+  .action(
+    async (opts: {
+      mode: LinkMode;
+      harness?: string;
+      force: boolean;
+      quiet: boolean;
+      global: boolean;
+    }) => {
+      const harnesses = opts.harness
+        ? (opts.harness.split(",").map((s) => s.trim()) as Harness[])
+        : undefined;
+      const code = await runLink({
+        mode: opts.mode,
+        harnesses,
+        force: opts.force,
+        quiet: opts.quiet,
+        global: opts.global,
+      });
+      process.exit(code);
+    },
+  );
 
 program
   .command("list")
   .description("List skills in the current colony")
   .option("-f, --format <fmt>", "Output format: table|json", "table")
-  .action(async (opts: { format: "table" | "json" }) => {
-    const code = await runList({ format: opts.format });
+  .option("-g, --global", "List skills in the global colony (~/.skdd/)", false)
+  .action(async (opts: { format: "table" | "json"; global: boolean }) => {
+    const code = await runList({ format: opts.format, global: opts.global });
     process.exit(code);
   });
 
@@ -155,8 +181,13 @@ program
     "Health check: canonical skills/, registry, mirror drift, instruction blocks, .colony.json",
   )
   .option("-j, --json", "Emit a machine-readable JSON report instead of the human layout", false)
-  .action(async (opts: { json: boolean }) => {
-    const code = await runDoctor({ json: opts.json });
+  .option(
+    "-g, --global",
+    "Check the global colony (~/.skdd/) instead of the current project",
+    false,
+  )
+  .action(async (opts: { json: boolean; global: boolean }) => {
+    const code = await runDoctor({ json: opts.json, global: opts.global });
     process.exit(code);
   });
 
@@ -177,16 +208,28 @@ program
     "Override the canonical skills directory (default: 'skills' or .colony.json's canonicalSkillsDir)",
   )
   .option("--skip-link", "Skip the post-consolidation 'skdd link' step (requires --apply)", false)
+  .option(
+    "-g, --global",
+    "Import into the global colony (~/.skdd/), scanning harness global dirs",
+    false,
+  )
   .action(
     async (
       target: string | undefined,
-      opts: { json: boolean; apply: boolean; canonical?: string; skipLink: boolean },
+      opts: {
+        json: boolean;
+        apply: boolean;
+        canonical?: string;
+        skipLink: boolean;
+        global: boolean;
+      },
     ) => {
       const code = await runImport(target, {
         json: opts.json,
         apply: opts.apply,
         canonical: opts.canonical,
         skipLink: opts.skipLink,
+        global: opts.global,
       });
       process.exit(code);
     },

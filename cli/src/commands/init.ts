@@ -1,5 +1,6 @@
 import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
+import { ensureGlobalColony, skddHome } from "../lib/global.js";
 import { type Harness, resolveHarness } from "../lib/harness.js";
 import { logger } from "../lib/logger.js";
 import {
@@ -20,9 +21,18 @@ export interface InitOptions {
    * explicitly don't want symlinks or the canonical source-of-truth.
    */
   canonical?: boolean;
+  /**
+   * When true, initialize the global colony at ~/.skdd/ instead of the project root.
+   * Skips instruction file scaffolding (no project instruction file in global mode).
+   */
+  global?: boolean;
 }
 
 export async function runInit(opts: InitOptions = {}): Promise<number> {
+  if (opts.global) {
+    return runInitGlobal(opts);
+  }
+
   const cwd = resolve(opts.cwd ?? process.cwd());
   const profile = resolveHarness(cwd, opts.harness);
   const canonical = opts.canonical !== false; // default true
@@ -120,6 +130,56 @@ export async function runInit(opts: InitOptions = {}): Promise<number> {
   logger.info(`2. Open this project with ${profile.label} and ask: "What skills are available?"`);
   logger.info(`3. Forge your first skill: "Forge a skill for <your repeated task>."`);
   logger.info(`4. See docs/configuration.md for per-harness details.`);
+
+  return 0;
+}
+
+async function runInitGlobal(opts: InitOptions): Promise<number> {
+  const home = skddHome();
+
+  logger.heading("skdd init --global");
+  logger.dim(`global colony: ${home}`);
+  console.log("");
+
+  // 1. Ensure ~/.skdd/ structure exists (skills/, .skills-registry.md)
+  ensureGlobalColony();
+  logger.success(`global colony ready at ${home}`);
+
+  // 2. Seed skillforge stub in global skills/
+  const skillforgeDir = join(home, "skills", "skillforge");
+  const skillforgePath = join(skillforgeDir, "SKILL.md");
+  if (!existsSync(skillforgeDir)) {
+    mkdirSync(skillforgeDir, { recursive: true });
+    logger.success("created skills/skillforge/");
+  } else {
+    logger.dim("exists: skills/skillforge/");
+  }
+  if (!existsSync(skillforgePath) || opts.force) {
+    writeFileSync(skillforgePath, SKILLFORGE_STUB);
+    logger.success("wrote skills/skillforge/SKILL.md (stub)");
+  } else {
+    logger.dim("exists: skills/skillforge/SKILL.md (pass --force to overwrite)");
+  }
+
+  // 3. Run global link to materialize harness mirrors (no instruction file in global mode)
+  console.log("");
+  logger.heading("Linking global harness mirrors");
+  const linkCode = await runLink({ global: true, mode: "auto", quiet: false });
+  if (linkCode !== 0) {
+    logger.warn(
+      "Link step returned non-zero. The global skills/ directory is ready, but some harness mirrors may need attention. Re-run `skdd link -g` to retry.",
+    );
+  }
+
+  console.log("");
+  logger.heading("Next steps");
+  logger.info("1. Pull the full skillforge instead of the stub:");
+  logger.dim(
+    `   curl -fsSL https://raw.githubusercontent.com/zakelfassi/skills-driven-development/main/skillforge/SKILL.md -o ${home}/skills/skillforge/SKILL.md`,
+  );
+  logger.info("2. Forge a global skill: skdd forge -g <name>");
+  logger.info("3. Check global health: skdd doctor -g");
+  logger.info("4. See docs/global-colony.md for per-harness global path details.");
 
   return 0;
 }
