@@ -1,13 +1,13 @@
 import { existsSync } from "node:fs";
 import { relative, resolve } from "node:path";
-import { logger, pc } from "../lib/logger.js";
-import { detectAllHarnesses, HARNESSES, type Harness } from "../lib/harness.js";
 import {
-  ensureMirror,
-  resolveLinkMode,
   type EnsureMirrorResult,
+  ensureMirror,
   type LinkMode,
+  resolveLinkMode,
 } from "../lib/fs-link.js";
+import { detectAllHarnesses, HARNESSES, type Harness } from "../lib/harness.js";
+import { logger, pc } from "../lib/logger.js";
 import { emptyState, loadState, saveState, upsertMirror } from "../lib/sync-state.js";
 
 export interface LinkOptions {
@@ -81,7 +81,9 @@ export async function runLink(opts: LinkOptions = {}): Promise<number> {
         break;
       case "repaired":
         if (!quiet) {
-          logger.warn(`${label} → ${rel} (repaired drift${result.reason ? ": " + result.reason : ""})`);
+          logger.warn(
+            `${label} → ${rel} (repaired drift${result.reason ? ": " + result.reason : ""})`,
+          );
         }
         upsertMirror(state, profile.skillsDir, result.mode);
         break;

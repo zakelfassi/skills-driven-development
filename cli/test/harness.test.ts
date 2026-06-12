@@ -1,8 +1,13 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { detectHarness, detectAllHarnesses, resolveHarness, HARNESSES } from "../src/lib/harness.js";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import {
+  detectAllHarnesses,
+  detectHarness,
+  HARNESSES,
+  resolveHarness,
+} from "../src/lib/harness.js";
 
 let tmp: string;
 

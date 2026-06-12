@@ -4,10 +4,11 @@
  * The sync command was a never-implemented stub (always exited 2).
  * This test ensures it cannot be silently re-introduced.
  */
-import { describe, it, expect } from "vitest";
+
 import { existsSync, readFileSync } from "node:fs";
-import { resolve, dirname } from "node:path";
+import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { describe, expect, it } from "vitest";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, "..");

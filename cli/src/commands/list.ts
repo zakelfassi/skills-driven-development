@@ -51,7 +51,11 @@ export async function runList(opts: ListOptions = {}): Promise<number> {
 
   if (registry.archived.length > 0) {
     logger.heading(`Archived skills (${registry.archived.length})`);
-    const rows = registry.archived.map((s) => [s.name, s.lastUsed ?? "—", truncate(s.description, 60)]);
+    const rows = registry.archived.map((s) => [
+      s.name,
+      s.lastUsed ?? "—",
+      truncate(s.description, 60),
+    ]);
     printTable(["Skill", "Archived", "Reason"], rows);
   }
 

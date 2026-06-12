@@ -1,18 +1,18 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import {
-  mkdtempSync,
-  rmSync,
-  mkdirSync,
-  writeFileSync,
   existsSync,
   lstatSync,
-  readlinkSync,
+  mkdirSync,
+  mkdtempSync,
   readFileSync,
-  unlinkSync,
+  readlinkSync,
+  rmSync,
   symlinkSync,
+  unlinkSync,
+  writeFileSync,
 } from "node:fs";
-import { tmpdir, platform } from "node:os";
+import { platform, tmpdir } from "node:os";
 import { join } from "node:path";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { runLink } from "../src/commands/link.js";
 import { loadState } from "../src/lib/sync-state.js";
 
@@ -71,10 +71,7 @@ describe("runLink", () => {
     expect(state).not.toBeNull();
     expect(state!.canonical).toBe("skills");
     expect(state!.mirrors).toHaveLength(2);
-    expect(state!.mirrors.map((m) => m.target).sort()).toEqual([
-      ".claude/skills",
-      ".codex/skills",
-    ]);
+    expect(state!.mirrors.map((m) => m.target).sort()).toEqual([".claude/skills", ".codex/skills"]);
     expect(state!.mirrors.every((m) => m.mode === "symlink")).toBe(true);
   });
 

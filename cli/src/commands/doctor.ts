@@ -1,10 +1,10 @@
 import { existsSync, lstatSync, readFileSync, readlinkSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
-import { logger, pc } from "../lib/logger.js";
 import { detectAllHarnesses } from "../lib/harness.js";
+import { logger, pc } from "../lib/logger.js";
+import { loadRegistry, type Registry, registryExists } from "../lib/registry.js";
+import { findSkills, type ParsedSkill, parseSkill } from "../lib/skill.js";
 import { loadState } from "../lib/sync-state.js";
-import { loadRegistry, registryExists } from "../lib/registry.js";
-import { findSkills, parseSkill, type ParsedSkill } from "../lib/skill.js";
 import { validateSkill } from "./validate.js";
 
 export type CheckStatus = "ok" | "warn" | "error";
@@ -194,7 +194,7 @@ function checkRegistry(
     return;
   }
 
-  let registry;
+  let registry: Registry | undefined;
   try {
     registry = loadRegistry(cwd);
   } catch (err) {

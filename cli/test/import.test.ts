@@ -1,16 +1,16 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import {
-  mkdtempSync,
-  rmSync,
-  mkdirSync,
-  writeFileSync,
   existsSync,
   lstatSync,
-  symlinkSync,
+  mkdirSync,
+  mkdtempSync,
   readlinkSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
 } from "node:fs";
-import { tmpdir, platform } from "node:os";
+import { platform, tmpdir } from "node:os";
 import { join } from "node:path";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { runImport } from "../src/commands/import.js";
 
 const skipOnWindows = platform() === "win32";

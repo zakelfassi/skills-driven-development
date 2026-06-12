@@ -1,12 +1,12 @@
-import { existsSync, mkdirSync, writeFileSync, appendFileSync, readFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
+import { type Harness, resolveHarness } from "../lib/harness.js";
 import { logger } from "../lib/logger.js";
-import { resolveHarness, type Harness } from "../lib/harness.js";
 import {
   EMPTY_REGISTRY_MD,
-  SKILLFORGE_STUB,
   renderCanonicalInstructionBlock,
   renderHarnessInstructionBlock,
+  SKILLFORGE_STUB,
 } from "../lib/templates.js";
 import { runLink } from "./link.js";
 
@@ -51,7 +51,9 @@ export async function runInit(opts: InitOptions = {}): Promise<number> {
   }
   if (!existsSync(skillforgePath) || opts.force) {
     writeFileSync(skillforgePath, SKILLFORGE_STUB);
-    logger.success(`wrote ${skillsDir}/skillforge/SKILL.md (stub — replace with the full version when ready)`);
+    logger.success(
+      `wrote ${skillsDir}/skillforge/SKILL.md (stub — replace with the full version when ready)`,
+    );
   } else {
     logger.dim(`exists: ${skillsDir}/skillforge/SKILL.md (pass --force to overwrite)`);
   }
@@ -68,7 +70,12 @@ export async function runInit(opts: InitOptions = {}): Promise<number> {
   // 3. Ensure instruction file has the skills block
   const instructionPath = join(cwd, profile.instructionFile);
   const block = canonical
-    ? renderCanonicalInstructionBlock("skills", profile.skillsDir, ".skills-registry.md", profile.label)
+    ? renderCanonicalInstructionBlock(
+        "skills",
+        profile.skillsDir,
+        ".skills-registry.md",
+        profile.label,
+      )
     : renderHarnessInstructionBlock(profile.skillsDir, ".skills-registry.md");
   const instructionDir = dirname(instructionPath);
   if (!existsSync(instructionDir)) {

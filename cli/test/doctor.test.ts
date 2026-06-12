@@ -1,14 +1,7 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import {
-  mkdtempSync,
-  rmSync,
-  mkdirSync,
-  writeFileSync,
-  symlinkSync,
-  unlinkSync,
-} from "node:fs";
-import { tmpdir, platform } from "node:os";
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync, unlinkSync, writeFileSync } from "node:fs";
+import { platform, tmpdir } from "node:os";
 import { join } from "node:path";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { runDoctor } from "../src/commands/doctor.js";
 
 const skipOnWindows = platform() === "win32";
@@ -184,8 +177,7 @@ describe("runDoctor", () => {
     expect(code).toBe(1);
     const payload = JSON.parse(logs[0]!);
     const mirrorError = payload.checks.find(
-      (c: { section: string; status: string }) =>
-        c.section === "Mirrors" && c.status === "error",
+      (c: { section: string; status: string }) => c.section === "Mirrors" && c.status === "error",
     );
     expect(mirrorError).toBeDefined();
     expect(mirrorError.message).toContain("symlink points at");
@@ -214,8 +206,7 @@ describe("runDoctor", () => {
     expect(code).toBe(1);
     const payload = JSON.parse(logs[0]!);
     const mirrorError = payload.checks.find(
-      (c: { section: string; status: string }) =>
-        c.section === "Mirrors" && c.status === "error",
+      (c: { section: string; status: string }) => c.section === "Mirrors" && c.status === "error",
     );
     expect(mirrorError).toBeDefined();
     expect(mirrorError.message).toMatch(/does not exist/);
@@ -247,10 +238,8 @@ describe("runDoctor", () => {
     expect(code).toBe(1);
     const payload = JSON.parse(logs[0]!);
     const colonyErr = payload.checks.find(
-      (c: { section: string; status: string }) =>
-        c.section === "Colony" && c.status === "error",
+      (c: { section: string; status: string }) => c.section === "Colony" && c.status === "error",
     );
     expect(colonyErr).toBeDefined();
   });
-
 });

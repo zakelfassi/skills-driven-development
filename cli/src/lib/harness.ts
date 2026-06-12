@@ -115,7 +115,10 @@ export function detectAllHarnesses(cwd: string): Harness[] {
   return found;
 }
 
-export function resolveHarness(cwd: string, explicit: Harness | "auto" | undefined): HarnessProfile {
+export function resolveHarness(
+  cwd: string,
+  explicit: Harness | "auto" | undefined,
+): HarnessProfile {
   if (explicit && explicit !== "auto") {
     return HARNESSES[explicit];
   }

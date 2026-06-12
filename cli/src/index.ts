@@ -1,15 +1,15 @@
 import { Command } from "commander";
-import { runInit } from "./commands/init.js";
-import { runValidate } from "./commands/validate.js";
+import { runDoctor } from "./commands/doctor.js";
 import { runForge } from "./commands/forge.js";
+import { runImport } from "./commands/import.js";
+import { runInit } from "./commands/init.js";
+import { runLink } from "./commands/link.js";
 import { runList } from "./commands/list.js";
 import { runShow } from "./commands/show.js";
-import { runLink } from "./commands/link.js";
-import { runDoctor } from "./commands/doctor.js";
-import { runImport } from "./commands/import.js";
-import { logger } from "./lib/logger.js";
-import type { Harness } from "./lib/harness.js";
+import { runValidate } from "./commands/validate.js";
 import type { LinkMode } from "./lib/fs-link.js";
+import type { Harness } from "./lib/harness.js";
+import { logger } from "./lib/logger.js";
 
 declare const __SKDD_VERSION__: string;
 const VERSION = typeof __SKDD_VERSION__ !== "undefined" ? __SKDD_VERSION__ : "0.0.0-dev";
@@ -36,16 +36,14 @@ program
     "--no-canonical",
     "Use the flat per-harness layout instead of canonical skills/ + symlink mirror",
   )
-  .action(
-    async (opts: { harness: Harness | "auto"; force: boolean; canonical: boolean }) => {
-      const code = await runInit({
-        harness: opts.harness,
-        force: opts.force,
-        canonical: opts.canonical,
-      });
-      process.exit(code);
-    },
-  );
+  .action(async (opts: { harness: Harness | "auto"; force: boolean; canonical: boolean }) => {
+    const code = await runInit({
+      harness: opts.harness,
+      force: opts.force,
+      canonical: opts.canonical,
+    });
+    process.exit(code);
+  });
 
 program
   .command("validate")
@@ -59,7 +57,9 @@ program
 
 program
   .command("forge")
-  .description("Forge a new skill: write a SKILL.md skeleton in skills/, register it, refresh mirrors")
+  .description(
+    "Forge a new skill: write a SKILL.md skeleton in skills/, register it, refresh mirrors",
+  )
   .argument("<name>", "Skill name (kebab-case, ≤64 chars)")
   .option("-d, --from-description <text>", "Skill description (required in non-interactive mode)")
   .option("-n, --non-interactive", "Skip interactive prompts (CI / agent-driven use)", false)
@@ -98,27 +98,33 @@ program
 program
   .command("link")
   .description("Sync canonical skills/ into harness-specific mirrors (.claude/skills, etc.)")
-  .option("-m, --mode <mode>", "Link mode: symlink|copy|auto (default: auto — symlink on Unix, copy on Windows)", "auto")
+  .option(
+    "-m, --mode <mode>",
+    "Link mode: symlink|copy|auto (default: auto — symlink on Unix, copy on Windows)",
+    "auto",
+  )
   .option(
     "-H, --harness <list>",
     "Comma-separated harness list; defaults to every harness detected in the project",
   )
-  .option("-f, --force", "Overwrite existing non-matching targets (e.g., a populated directory)", false)
+  .option(
+    "-f, --force",
+    "Overwrite existing non-matching targets (e.g., a populated directory)",
+    false,
+  )
   .option("-q, --quiet", "Suppress per-mirror progress output", false)
-  .action(
-    async (opts: { mode: LinkMode; harness?: string; force: boolean; quiet: boolean }) => {
-      const harnesses = opts.harness
-        ? (opts.harness.split(",").map((s) => s.trim()) as Harness[])
-        : undefined;
-      const code = await runLink({
-        mode: opts.mode,
-        harnesses,
-        force: opts.force,
-        quiet: opts.quiet,
-      });
-      process.exit(code);
-    },
-  );
+  .action(async (opts: { mode: LinkMode; harness?: string; force: boolean; quiet: boolean }) => {
+    const harnesses = opts.harness
+      ? (opts.harness.split(",").map((s) => s.trim()) as Harness[])
+      : undefined;
+    const code = await runLink({
+      mode: opts.mode,
+      harnesses,
+      force: opts.force,
+      quiet: opts.quiet,
+    });
+    process.exit(code);
+  });
 
 program
   .command("list")
@@ -133,7 +139,11 @@ program
   .command("show")
   .description("Print a skill's full SKILL.md body")
   .argument("<name>", "Skill name (kebab-case)")
-  .option("-f, --format <fmt>", "Output format: raw (default) — only raw is implemented today", "raw")
+  .option(
+    "-f, --format <fmt>",
+    "Output format: raw (default) — only raw is implemented today",
+    "raw",
+  )
   .action(async (name: string, opts: { format: "raw" | "rendered" }) => {
     const code = await runShow(name, { format: opts.format });
     process.exit(code);
@@ -162,7 +172,10 @@ program
     "Consolidate duplicates/single-source skills into canonical skills/ and refresh mirrors via 'skdd link --force'",
     false,
   )
-  .option("--canonical <dir>", "Override the canonical skills directory (default: 'skills' or .colony.json's canonicalSkillsDir)")
+  .option(
+    "--canonical <dir>",
+    "Override the canonical skills directory (default: 'skills' or .colony.json's canonicalSkillsDir)",
+  )
   .option("--skip-link", "Skip the post-consolidation 'skdd link' step (requires --apply)", false)
   .action(
     async (

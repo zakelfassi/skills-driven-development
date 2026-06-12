@@ -1,5 +1,5 @@
-import { readdirSync, readFileSync, statSync, existsSync } from "node:fs";
-import { join, resolve, basename, dirname } from "node:path";
+import { existsSync, readdirSync, readFileSync, type Stats, statSync } from "node:fs";
+import { basename, dirname, join, resolve } from "node:path";
 import matter from "gray-matter";
 
 export interface SkillFrontmatter {
@@ -70,7 +70,15 @@ export function findSkills(root: string): string[] {
   return results;
 }
 
-const IGNORED_DIRS = new Set(["node_modules", "dist", ".git", ".turbo", "build", "coverage", ".next"]);
+const IGNORED_DIRS = new Set([
+  "node_modules",
+  "dist",
+  ".git",
+  ".turbo",
+  "build",
+  "coverage",
+  ".next",
+]);
 
 function walk(dir: string, out: string[]): void {
   let entries: string[];
@@ -83,7 +91,7 @@ function walk(dir: string, out: string[]): void {
   for (const entry of entries) {
     if (IGNORED_DIRS.has(entry)) continue;
     const full = join(dir, entry);
-    let s;
+    let s: Stats;
     try {
       s = statSync(full);
     } catch {

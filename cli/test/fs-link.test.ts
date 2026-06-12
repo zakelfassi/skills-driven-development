@@ -1,17 +1,17 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import {
-  mkdtempSync,
-  rmSync,
-  mkdirSync,
-  writeFileSync,
-  readFileSync,
-  lstatSync,
-  readlinkSync,
   existsSync,
+  lstatSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  readlinkSync,
+  rmSync,
   symlinkSync,
+  writeFileSync,
 } from "node:fs";
-import { tmpdir, platform } from "node:os";
+import { platform, tmpdir } from "node:os";
 import { join } from "node:path";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { ensureMirror, resolveLinkMode } from "../src/lib/fs-link.js";
 
 let tmp: string;
@@ -20,7 +20,10 @@ beforeEach(() => {
   tmp = mkdtempSync(join(tmpdir(), "skdd-fs-link-"));
   // Canonical dir with one skill so we have something to mirror
   mkdirSync(join(tmp, "skills/demo"), { recursive: true });
-  writeFileSync(join(tmp, "skills/demo/SKILL.md"), "---\nname: demo\ndescription: d. Use when.\n---\n\n# Demo\n");
+  writeFileSync(
+    join(tmp, "skills/demo/SKILL.md"),
+    "---\nname: demo\ndescription: d. Use when.\n---\n\n# Demo\n",
+  );
 });
 
 afterEach(() => {
@@ -83,7 +86,9 @@ describe("ensureMirror — symlink mode", () => {
     expect(result.action).toBe("blocked");
     expect(result.driftDetected).toBe(true);
     // File should still be there
-    expect(readFileSync(join(tmp, ".claude/skills/orphan/SKILL.md"), "utf8")).toBe("existing content");
+    expect(readFileSync(join(tmp, ".claude/skills/orphan/SKILL.md"), "utf8")).toBe(
+      "existing content",
+    );
   });
 
   run("replaces a non-empty directory when --force is passed", () => {

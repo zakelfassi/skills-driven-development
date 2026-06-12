@@ -1,16 +1,9 @@
 import { createHash } from "node:crypto";
-import {
-  cpSync,
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  realpathSync,
-  rmSync,
-} from "node:fs";
+import { cpSync, existsSync, mkdirSync, readFileSync, realpathSync, rmSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
 import matter from "gray-matter";
-import { logger, pc } from "../lib/logger.js";
 import { HARNESSES } from "../lib/harness.js";
+import { logger, pc } from "../lib/logger.js";
 import { findSkills } from "../lib/skill.js";
 import { runLink } from "./link.js";
 
@@ -307,7 +300,10 @@ async function applyConsolidation(
       } else {
         cpSync(sourceSkillDir, destSkillDir, { recursive: true });
         moved++;
-        if (!opts.json) logger.success(`  ${name} → ${report.canonical}/${name}/ (migrated from ${source.origin})`);
+        if (!opts.json)
+          logger.success(
+            `  ${name} → ${report.canonical}/${name}/ (migrated from ${source.origin})`,
+          );
       }
     }
 

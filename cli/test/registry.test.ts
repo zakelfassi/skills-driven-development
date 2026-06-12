@@ -1,15 +1,15 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { mkdtempSync, rmSync, writeFileSync, readFileSync, existsSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
-  parseMarkdownRegistry,
-  writeMarkdownRegistry,
-  parseJsonRegistry,
-  writeJsonRegistry,
   addRegistryEntry,
   loadRegistry,
+  parseJsonRegistry,
+  parseMarkdownRegistry,
   resolveRegistryPath,
+  writeJsonRegistry,
+  writeMarkdownRegistry,
 } from "../src/lib/registry.js";
 
 let tmp: string;

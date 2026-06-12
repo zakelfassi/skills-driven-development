@@ -1,14 +1,14 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   emptyState,
   loadState,
-  saveState,
-  upsertMirror,
-  statePath,
   STATE_VERSION,
+  saveState,
+  statePath,
+  upsertMirror,
 } from "../src/lib/sync-state.js";
 
 let tmp: string;

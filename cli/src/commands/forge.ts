@@ -1,11 +1,11 @@
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
-import { input, confirm } from "@inquirer/prompts";
+import { confirm, input } from "@inquirer/prompts";
+import { type Harness, resolveHarness } from "../lib/harness.js";
 import { logger } from "../lib/logger.js";
+import { addRegistryEntry } from "../lib/registry.js";
 import { NAME_MAX_LENGTH, NAME_REGEX } from "../lib/spec.js";
 import { renderSkillSkeleton } from "../lib/templates.js";
-import { addRegistryEntry } from "../lib/registry.js";
-import { resolveHarness, type Harness } from "../lib/harness.js";
 import { runLink } from "./link.js";
 
 export interface ForgeOptions {

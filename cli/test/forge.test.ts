@@ -1,10 +1,10 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { mkdtempSync, rmSync, readFileSync, existsSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import matter from "gray-matter";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { runForge } from "../src/commands/forge.js";
 import { loadRegistry } from "../src/lib/registry.js";
-import matter from "gray-matter";
 
 let tmp: string;
 
