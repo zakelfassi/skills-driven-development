@@ -81,6 +81,7 @@ export default defineConfig({
           label: "Start here",
           items: [
             { label: "Why SkDD?", link: "/why-skdd/" },
+            { label: "Examples gallery", link: "/examples/" },
             { label: "Configuration", link: "/configuration/" },
             { label: "Skill colony concept", link: "/skill-colony/" },
             { label: "Forging skills", link: "/forging-skills/" },
