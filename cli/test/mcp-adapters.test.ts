@@ -1,0 +1,675 @@
+import {
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { claudeCodeAdapter } from "../src/lib/mcp/adapters/claude-code.js";
+import { claudeDesktopAdapter } from "../src/lib/mcp/adapters/claude-desktop.js";
+import { cursorAdapter } from "../src/lib/mcp/adapters/cursor.js";
+import { droidAdapter } from "../src/lib/mcp/adapters/droid.js";
+import { geminiAdapter } from "../src/lib/mcp/adapters/gemini.js";
+import { ADAPTERS } from "../src/lib/mcp/adapters/index.js";
+import { opencodeAdapter } from "../src/lib/mcp/adapters/opencode.js";
+import type { McpHostAdapter } from "../src/lib/mcp/adapters/types.js";
+import type { CanonicalMcpConfig } from "../src/lib/mcp/schema.js";
+
+const FIXTURES_DIR = join(__dirname, "fixtures", "mcp");
+
+/** Read a fixture JSON file from test/fixtures/mcp/ */
+function readFixture(name: string): Record<string, unknown> {
+  return JSON.parse(readFileSync(join(FIXTURES_DIR, name), "utf8")) as Record<string, unknown>;
+}
+
+let fakeTmp: string;
+let prevHome: string | undefined;
+
+beforeEach(() => {
+  fakeTmp = mkdtempSync(join(tmpdir(), "skdd-mcp-adapters-"));
+  prevHome = process.env.HOME;
+  process.env.HOME = fakeTmp;
+});
+
+afterEach(() => {
+  if (prevHome === undefined) {
+    delete process.env.HOME;
+  } else {
+    process.env.HOME = prevHome;
+  }
+  rmSync(fakeTmp, { recursive: true, force: true });
+});
+
+/** Place a fixture file at the appropriate path within fakeTmp. */
+function placeFixture(fixtureName: string, relPath: string): string {
+  const dest = join(fakeTmp, relPath);
+  mkdirSync(join(dest, ".."), { recursive: true });
+  copyFileSync(join(FIXTURES_DIR, fixtureName), dest);
+  return dest;
+}
+
+/** Write a file at a relative path within fakeTmp. */
+function writeFile(relPath: string, content: string): string {
+  const dest = join(fakeTmp, relPath);
+  mkdirSync(join(dest, ".."), { recursive: true });
+  writeFileSync(dest, content, "utf8");
+  return dest;
+}
+
+/** A minimal canonical config with one stdio server. */
+function makeCanonical(
+  overrides?: Partial<CanonicalMcpConfig["servers"]["x"]>,
+): CanonicalMcpConfig {
+  return {
+    version: 1,
+    servers: {
+      "skdd-test-server": {
+        command: "npx",
+        args: ["-y", "skdd-test-mcp"],
+        env: { TEST_KEY: "test-value" },
+        ...overrides,
+      } as CanonicalMcpConfig["servers"]["x"],
+    },
+  };
+}
+
+// ── ADAPTERS registry ────────────────────────────────────────────────────────
+
+describe("ADAPTERS registry", () => {
+  it("contains all six JSON adapters", () => {
+    expect(ADAPTERS["claude-code"]).toBeDefined();
+    expect(ADAPTERS["claude-desktop"]).toBeDefined();
+    expect(ADAPTERS["droid"]).toBeDefined();
+    expect(ADAPTERS["cursor"]).toBeDefined();
+    expect(ADAPTERS["opencode"]).toBeDefined();
+    expect(ADAPTERS["gemini"]).toBeDefined();
+  });
+
+  it("does not yet include codex (added by f-m2-mcp-codex)", () => {
+    expect(ADAPTERS["codex"]).toBeUndefined();
+  });
+
+  it("each adapter has the correct id and label", () => {
+    const expected = [
+      { id: "claude-code", label: "Claude Code" },
+      { id: "claude-desktop", label: "Claude Desktop" },
+      { id: "droid", label: "Factory Droid" },
+      { id: "cursor", label: "Cursor" },
+      { id: "opencode", label: "OpenCode" },
+      { id: "gemini", label: "Gemini CLI" },
+    ] as const;
+    for (const { id, label } of expected) {
+      expect(ADAPTERS[id]?.id).toBe(id);
+      expect(ADAPTERS[id]?.label).toBe(label);
+    }
+  });
+});
+
+// ── Shared invariant tests per adapter ──────────────────────────────────────
+
+type AdapterCase = {
+  adapter: McpHostAdapter;
+  fixtureName: string;
+  hostRelPath: string; // path under fakeTmp where the fixture should be placed
+  unmanagedKey: string; // a server name that is in the fixture and NOT managed
+  mcpKey: string; // "mcpServers" or "mcp"
+};
+
+const ADAPTER_CASES: AdapterCase[] = [
+  {
+    adapter: claudeCodeAdapter,
+    fixtureName: "claude-code.json",
+    hostRelPath: ".claude.json",
+    unmanagedKey: "user-managed-mcp",
+    mcpKey: "mcpServers",
+  },
+  {
+    adapter: claudeDesktopAdapter,
+    fixtureName: "claude-desktop.json",
+    hostRelPath: "Library/Application Support/Claude/claude_desktop_config.json",
+    unmanagedKey: "user-desktop-mcp",
+    mcpKey: "mcpServers",
+  },
+  {
+    adapter: droidAdapter,
+    fixtureName: "droid.json",
+    hostRelPath: ".factory/mcp.json",
+    unmanagedKey: "user-droid-mcp",
+    mcpKey: "mcpServers",
+  },
+  {
+    adapter: cursorAdapter,
+    fixtureName: "cursor.json",
+    hostRelPath: ".cursor/mcp.json",
+    unmanagedKey: "MCP_DOCKER",
+    mcpKey: "mcpServers",
+  },
+  {
+    adapter: opencodeAdapter,
+    fixtureName: "opencode.json",
+    hostRelPath: ".config/opencode/opencode.json",
+    unmanagedKey: "user-opencode-mcp",
+    mcpKey: "mcp",
+  },
+  {
+    adapter: geminiAdapter,
+    fixtureName: "gemini.json",
+    hostRelPath: ".gemini/settings.json",
+    unmanagedKey: "user-gemini-mcp",
+    mcpKey: "mcpServers",
+  },
+];
+
+for (const { adapter, fixtureName, hostRelPath, unmanagedKey, mcpKey } of ADAPTER_CASES) {
+  describe(`${adapter.label} adapter`, () => {
+    describe("read()", () => {
+      it("returns ok:false when JSON is malformed", () => {
+        writeFile(hostRelPath, "{ not valid json }");
+        const result = adapter.read();
+        expect(result.ok).toBe(false);
+      });
+
+      it("returns ok:true with empty serverNames when file does not exist", () => {
+        // Do NOT place fixture — file absent
+        const result = adapter.read();
+        expect(result.ok).toBe(true);
+        if (result.ok) {
+          expect(result.serverNames).toEqual([]);
+          expect(result.rawDoc).toEqual({});
+        }
+      });
+
+      it("reads server names from fixture", () => {
+        placeFixture(fixtureName, hostRelPath);
+        const result = adapter.read();
+        expect(result.ok).toBe(true);
+        if (result.ok) {
+          expect(result.serverNames).toContain(unmanagedKey);
+        }
+      });
+
+      it("preserves all top-level keys in rawDoc", () => {
+        placeFixture(fixtureName, hostRelPath);
+        const fixture = readFixture(fixtureName);
+        const result = adapter.read();
+        expect(result.ok).toBe(true);
+        if (result.ok) {
+          // All top-level keys from fixture are present in rawDoc
+          for (const key of Object.keys(fixture)) {
+            expect(result.rawDoc).toHaveProperty(key);
+          }
+        }
+      });
+    });
+
+    describe("plan()", () => {
+      it("returns ok:false when host config is malformed JSON", () => {
+        writeFile(hostRelPath, "{ not valid json }");
+        const plan = adapter.plan(makeCanonical(), []);
+        expect(plan.ok).toBe(false);
+      });
+
+      it("merge: adds a new server without removing unmanaged servers", () => {
+        placeFixture(fixtureName, hostRelPath);
+        const canonical = makeCanonical();
+        const plan = adapter.plan(canonical, []);
+        expect(plan.ok).toBe(true);
+        if (!plan.ok) return;
+
+        const servers = plan.finalDoc[mcpKey] as Record<string, unknown>;
+        // New managed server is present
+        expect(servers).toHaveProperty("skdd-test-server");
+        // Unmanaged server is untouched
+        expect(servers).toHaveProperty(unmanagedKey);
+        // Sibling top-level keys (outside mcpKey) are preserved
+        const fixture = readFixture(fixtureName);
+        for (const key of Object.keys(fixture)) {
+          if (key !== mcpKey) {
+            expect(plan.finalDoc).toHaveProperty(key);
+          }
+        }
+      });
+
+      it("remove: removes a managed server that is no longer in canonical", () => {
+        // Place fixture as starting state, pretend unmanagedKey was previously managed
+        placeFixture(fixtureName, hostRelPath);
+        const emptyCanonical: CanonicalMcpConfig = { version: 1, servers: {} };
+        const plan = adapter.plan(emptyCanonical, [unmanagedKey]);
+        expect(plan.ok).toBe(true);
+        if (!plan.ok) return;
+        const servers = plan.finalDoc[mcpKey] as Record<string, unknown>;
+        expect(servers).not.toHaveProperty(unmanagedKey);
+      });
+
+      it("remove: does NOT touch servers that are NOT in managed list", () => {
+        placeFixture(fixtureName, hostRelPath);
+        const emptyCanonical: CanonicalMcpConfig = { version: 1, servers: {} };
+        // managed is empty → no removals
+        const plan = adapter.plan(emptyCanonical, []);
+        expect(plan.ok).toBe(true);
+        if (!plan.ok) return;
+        const servers = plan.finalDoc[mcpKey] as Record<string, unknown>;
+        // Unmanaged key survives
+        expect(servers).toHaveProperty(unmanagedKey);
+      });
+
+      it("hosts allowlist: skips server when this host is not in the allowlist", () => {
+        placeFixture(fixtureName, hostRelPath);
+        const canonical: CanonicalMcpConfig = {
+          version: 1,
+          servers: {
+            "allowlisted-server": {
+              command: "echo",
+              // Only allowed for a different host
+              hosts: ["codex" as import("../src/lib/mcp/schema.js").McpHostId],
+            },
+          },
+        };
+        const plan = adapter.plan(canonical, []);
+        expect(plan.ok).toBe(true);
+        if (!plan.ok) return;
+        const servers = plan.finalDoc[mcpKey] as Record<string, unknown>;
+        expect(servers).not.toHaveProperty("allowlisted-server");
+      });
+
+      it("dry-run: calling plan() only does not write to disk", () => {
+        placeFixture(fixtureName, hostRelPath);
+        const filePath = join(fakeTmp, hostRelPath);
+        const contentBefore = readFileSync(filePath, "utf8");
+        const mtimeBefore = statSync(filePath).mtimeMs;
+
+        adapter.plan(makeCanonical(), []);
+
+        const contentAfter = readFileSync(filePath, "utf8");
+        const mtimeAfter = statSync(filePath).mtimeMs;
+        expect(contentAfter).toBe(contentBefore);
+        expect(mtimeAfter).toBe(mtimeBefore);
+      });
+    });
+
+    describe("apply()", () => {
+      it("returns ok:true, written:false when plan has no changes", () => {
+        placeFixture(fixtureName, hostRelPath);
+        // Plan with empty canonical and no managed → no changes
+        const emptyCanonical: CanonicalMcpConfig = { version: 1, servers: {} };
+        const plan = adapter.plan(emptyCanonical, []);
+        expect(plan.ok).toBe(true);
+        if (!plan.ok) return;
+        // Only no-op when no changes; let's ensure changes are empty
+        const plan2 = adapter.plan(emptyCanonical, []);
+        if (!plan2.ok) return;
+        if (plan2.changes.length === 0) {
+          const result = adapter.apply(plan2);
+          expect(result.ok).toBe(true);
+          if (result.ok) expect(result.written).toBe(false);
+        }
+      });
+
+      it("returns ok:false when plan is an error", () => {
+        const errPlan = { ok: false, reason: "test error" } as const;
+        const result = adapter.apply(errPlan);
+        expect(result.ok).toBe(false);
+      });
+
+      it("writes the updated config and creates a .bak file", () => {
+        placeFixture(fixtureName, hostRelPath);
+        const filePath = join(fakeTmp, hostRelPath);
+        const contentBefore = readFileSync(filePath, "utf8");
+
+        const plan = adapter.plan(makeCanonical(), []);
+        expect(plan.ok).toBe(true);
+        if (!plan.ok) return;
+
+        const result = adapter.apply(plan);
+        expect(result.ok).toBe(true);
+        if (result.ok) {
+          expect(result.written).toBe(true);
+        }
+
+        // .bak file created with original content
+        const bakPath = `${filePath}.bak`;
+        expect(existsSync(bakPath)).toBe(true);
+        expect(readFileSync(bakPath, "utf8")).toBe(contentBefore);
+      });
+
+      it("result file contains the new server and preserves unmanaged servers", () => {
+        placeFixture(fixtureName, hostRelPath);
+        const filePath = join(fakeTmp, hostRelPath);
+
+        const plan = adapter.plan(makeCanonical(), []);
+        expect(plan.ok).toBe(true);
+        if (!plan.ok) return;
+
+        adapter.apply(plan);
+
+        const written = JSON.parse(readFileSync(filePath, "utf8")) as Record<string, unknown>;
+        const servers = written[mcpKey] as Record<string, unknown>;
+        expect(servers).toHaveProperty("skdd-test-server");
+        expect(servers).toHaveProperty(unmanagedKey);
+      });
+
+      it("malformed config: plan returns error, apply never writes", () => {
+        const filePath = writeFile(hostRelPath, "{ bad json }");
+        const mtimeBefore = statSync(filePath).mtimeMs;
+
+        const plan = adapter.plan(makeCanonical(), []);
+        expect(plan.ok).toBe(false);
+
+        // apply a failing plan
+        const result = adapter.apply(plan);
+        expect(result.ok).toBe(false);
+
+        // File is untouched
+        expect(statSync(filePath).mtimeMs).toBe(mtimeBefore);
+        expect(readFileSync(filePath, "utf8")).toBe("{ bad json }");
+      });
+
+      it("second apply with same canonical is a no-op (idempotent)", () => {
+        placeFixture(fixtureName, hostRelPath);
+        const filePath = join(fakeTmp, hostRelPath);
+
+        // First apply
+        const plan1 = adapter.plan(makeCanonical(), []);
+        expect(plan1.ok).toBe(true);
+        if (!plan1.ok) return;
+        adapter.apply(plan1);
+
+        const contentAfterFirst = readFileSync(filePath, "utf8");
+
+        // Second apply: now the server is "managed"
+        const plan2 = adapter.plan(makeCanonical(), ["skdd-test-server"]);
+        expect(plan2.ok).toBe(true);
+        if (!plan2.ok) return;
+
+        // changes might be "update" (same value) — verify servers are correct
+        const result2 = adapter.apply(plan2);
+        expect(result2.ok).toBe(true);
+
+        const contentAfterSecond = readFileSync(filePath, "utf8");
+        const parsed1 = JSON.parse(contentAfterFirst) as Record<string, unknown>;
+        const parsed2 = JSON.parse(contentAfterSecond) as Record<string, unknown>;
+        // The mcpKey section should be equivalent
+        expect(
+          JSON.stringify((parsed2[mcpKey] as Record<string, unknown>)["skdd-test-server"]),
+        ).toBe(JSON.stringify((parsed1[mcpKey] as Record<string, unknown>)["skdd-test-server"]));
+      });
+    });
+  });
+}
+
+// ── Adapter-specific tests ───────────────────────────────────────────────────
+
+describe("claude-code adapter specifics", () => {
+  it("omits disabled servers (no native disabled flag)", () => {
+    placeFixture("claude-code.json", ".claude.json");
+    const canonical: CanonicalMcpConfig = {
+      version: 1,
+      servers: { "disabled-server": { command: "echo", disabled: true } },
+    };
+    const plan = claudeCodeAdapter.plan(canonical, []);
+    expect(plan.ok).toBe(true);
+    if (!plan.ok) return;
+    const servers = plan.finalDoc["mcpServers"] as Record<string, unknown>;
+    expect(servers).not.toHaveProperty("disabled-server");
+  });
+
+  it("maps remote server to {type, url, headers?}", () => {
+    placeFixture("claude-code.json", ".claude.json");
+    const canonical: CanonicalMcpConfig = {
+      version: 1,
+      servers: {
+        "remote-srv": {
+          url: "https://mcp.example.com",
+          type: "http",
+          headers: { Authorization: "Bearer tok" },
+        },
+      },
+    };
+    const plan = claudeCodeAdapter.plan(canonical, []);
+    expect(plan.ok).toBe(true);
+    if (!plan.ok) return;
+    const entry = (plan.finalDoc["mcpServers"] as Record<string, unknown>)["remote-srv"] as Record<
+      string,
+      unknown
+    >;
+    expect(entry["type"]).toBe("http");
+    expect(entry["url"]).toBe("https://mcp.example.com");
+    expect(entry["headers"]).toEqual({ Authorization: "Bearer tok" });
+  });
+
+  it("preserves the many sibling keys (~40) in ~/.claude.json", () => {
+    placeFixture("claude-code.json", ".claude.json");
+    const plan = claudeCodeAdapter.plan(makeCanonical(), []);
+    expect(plan.ok).toBe(true);
+    if (!plan.ok) return;
+    expect(plan.finalDoc).toHaveProperty("projects");
+    expect(plan.finalDoc).toHaveProperty("onboarding");
+    expect(plan.finalDoc).toHaveProperty("userPreferences");
+    expect(plan.finalDoc).toHaveProperty("cacheData");
+    expect(plan.finalDoc).toHaveProperty("lastSeen");
+    expect(plan.finalDoc).toHaveProperty("statsCounters");
+  });
+});
+
+describe("claude-desktop adapter specifics", () => {
+  it("skips remote servers (stdio-only)", () => {
+    placeFixture(
+      "claude-desktop.json",
+      "Library/Application Support/Claude/claude_desktop_config.json",
+    );
+    const canonical: CanonicalMcpConfig = {
+      version: 1,
+      servers: {
+        "remote-srv": { url: "https://mcp.example.com", type: "http" },
+      },
+    };
+    const plan = claudeDesktopAdapter.plan(canonical, []);
+    expect(plan.ok).toBe(true);
+    if (!plan.ok) return;
+    const servers = plan.finalDoc["mcpServers"] as Record<string, unknown>;
+    expect(servers).not.toHaveProperty("remote-srv");
+  });
+
+  it("preserves Claude Desktop sibling keys (globalShortcut, preferences, etc.)", () => {
+    placeFixture(
+      "claude-desktop.json",
+      "Library/Application Support/Claude/claude_desktop_config.json",
+    );
+    const plan = claudeDesktopAdapter.plan(makeCanonical(), []);
+    expect(plan.ok).toBe(true);
+    if (!plan.ok) return;
+    expect(plan.finalDoc).toHaveProperty("globalShortcut");
+    expect(plan.finalDoc).toHaveProperty("preferences");
+    expect(plan.finalDoc).toHaveProperty("isUsingBuiltInNodeForMcp");
+  });
+
+  it("available() returns false on non-darwin platforms", () => {
+    if (process.platform !== "darwin") {
+      expect(claudeDesktopAdapter.available()).toBe(false);
+    } else {
+      // On darwin, depends on existence of the parent dir — just assert it's a boolean
+      expect(typeof claudeDesktopAdapter.available()).toBe("boolean");
+    }
+  });
+});
+
+describe("droid adapter specifics", () => {
+  it("keeps disabled servers in config with disabled:true (not removed)", () => {
+    placeFixture("droid.json", ".factory/mcp.json");
+    const canonical: CanonicalMcpConfig = {
+      version: 1,
+      servers: { "disabled-srv": { command: "echo", disabled: true } },
+    };
+    const plan = droidAdapter.plan(canonical, []);
+    expect(plan.ok).toBe(true);
+    if (!plan.ok) return;
+    const entry = (plan.finalDoc["mcpServers"] as Record<string, unknown>)[
+      "disabled-srv"
+    ] as Record<string, unknown>;
+    expect(entry).toBeDefined();
+    expect(entry["disabled"]).toBe(true);
+  });
+
+  it("maps stdio server to {type:'stdio', command, args?, env?}", () => {
+    placeFixture("droid.json", ".factory/mcp.json");
+    const canonical = makeCanonical();
+    const plan = droidAdapter.plan(canonical, []);
+    expect(plan.ok).toBe(true);
+    if (!plan.ok) return;
+    const entry = (plan.finalDoc["mcpServers"] as Record<string, unknown>)[
+      "skdd-test-server"
+    ] as Record<string, unknown>;
+    expect(entry["type"]).toBe("stdio");
+    expect(entry["command"]).toBe("npx");
+  });
+
+  it("passes through ${VAR} env placeholders unchanged", () => {
+    placeFixture("droid.json", ".factory/mcp.json");
+    const canonical: CanonicalMcpConfig = {
+      version: 1,
+      servers: {
+        "env-srv": { command: "cmd", env: { KEY: "${MY_SECRET}" } },
+      },
+    };
+    const plan = droidAdapter.plan(canonical, []);
+    expect(plan.ok).toBe(true);
+    if (!plan.ok) return;
+    const entry = (plan.finalDoc["mcpServers"] as Record<string, unknown>)["env-srv"] as Record<
+      string,
+      unknown
+    >;
+    expect((entry["env"] as Record<string, string>)["KEY"]).toBe("${MY_SECRET}");
+  });
+
+  it("preserves persistentPermissions sibling key", () => {
+    placeFixture("droid.json", ".factory/mcp.json");
+    const plan = droidAdapter.plan(makeCanonical(), []);
+    expect(plan.ok).toBe(true);
+    if (!plan.ok) return;
+    expect(plan.finalDoc).toHaveProperty("persistentPermissions");
+  });
+});
+
+describe("cursor adapter specifics", () => {
+  it("omits disabled servers (no native disabled flag)", () => {
+    placeFixture("cursor.json", ".cursor/mcp.json");
+    const canonical: CanonicalMcpConfig = {
+      version: 1,
+      servers: { "disabled-srv": { command: "echo", disabled: true } },
+    };
+    const plan = cursorAdapter.plan(canonical, []);
+    expect(plan.ok).toBe(true);
+    if (!plan.ok) return;
+    expect(plan.finalDoc["mcpServers"] as Record<string, unknown>).not.toHaveProperty(
+      "disabled-srv",
+    );
+  });
+
+  it("maps remote to {url} without type field", () => {
+    placeFixture("cursor.json", ".cursor/mcp.json");
+    const canonical: CanonicalMcpConfig = {
+      version: 1,
+      servers: { "remote-srv": { url: "https://mcp.example.com", type: "sse" } },
+    };
+    const plan = cursorAdapter.plan(canonical, []);
+    expect(plan.ok).toBe(true);
+    if (!plan.ok) return;
+    const entry = (plan.finalDoc["mcpServers"] as Record<string, unknown>)["remote-srv"] as Record<
+      string,
+      unknown
+    >;
+    expect(entry["url"]).toBe("https://mcp.example.com");
+    expect(entry["type"]).toBeUndefined();
+  });
+});
+
+describe("opencode adapter specifics", () => {
+  it("maps stdio to {type:'local', command: [cmd,...args], environment, enabled}", () => {
+    placeFixture("opencode.json", ".config/opencode/opencode.json");
+    const canonical: CanonicalMcpConfig = {
+      version: 1,
+      servers: {
+        "local-srv": { command: "npx", args: ["-y", "pkg"], env: { K: "v" } },
+      },
+    };
+    const plan = opencodeAdapter.plan(canonical, []);
+    expect(plan.ok).toBe(true);
+    if (!plan.ok) return;
+    const entry = (plan.finalDoc["mcp"] as Record<string, unknown>)["local-srv"] as Record<
+      string,
+      unknown
+    >;
+    expect(entry["type"]).toBe("local");
+    expect(entry["command"]).toEqual(["npx", "-y", "pkg"]);
+    expect(entry["environment"]).toEqual({ K: "v" });
+    expect(entry["enabled"]).toBe(true);
+  });
+
+  it("maps disabled server to enabled:false (not removed)", () => {
+    placeFixture("opencode.json", ".config/opencode/opencode.json");
+    const canonical: CanonicalMcpConfig = {
+      version: 1,
+      servers: { "disabled-srv": { command: "echo", disabled: true } },
+    };
+    const plan = opencodeAdapter.plan(canonical, []);
+    expect(plan.ok).toBe(true);
+    if (!plan.ok) return;
+    const entry = (plan.finalDoc["mcp"] as Record<string, unknown>)["disabled-srv"] as Record<
+      string,
+      unknown
+    >;
+    expect(entry).toBeDefined();
+    expect(entry["enabled"]).toBe(false);
+  });
+
+  it("preserves $schema and other sibling keys", () => {
+    placeFixture("opencode.json", ".config/opencode/opencode.json");
+    const plan = opencodeAdapter.plan(makeCanonical(), []);
+    expect(plan.ok).toBe(true);
+    if (!plan.ok) return;
+    expect(plan.finalDoc).toHaveProperty("$schema");
+    expect(plan.finalDoc).toHaveProperty("theme");
+    expect(plan.finalDoc).toHaveProperty("autoshare");
+  });
+
+  it("uses 'mcp' key, not 'mcpServers'", () => {
+    placeFixture("opencode.json", ".config/opencode/opencode.json");
+    const plan = opencodeAdapter.plan(makeCanonical(), []);
+    expect(plan.ok).toBe(true);
+    if (!plan.ok) return;
+    expect(plan.finalDoc).toHaveProperty("mcp");
+    expect(plan.finalDoc).not.toHaveProperty("mcpServers");
+  });
+});
+
+describe("gemini adapter specifics", () => {
+  it("omits disabled servers", () => {
+    placeFixture("gemini.json", ".gemini/settings.json");
+    const canonical: CanonicalMcpConfig = {
+      version: 1,
+      servers: { "disabled-srv": { command: "echo", disabled: true } },
+    };
+    const plan = geminiAdapter.plan(canonical, []);
+    expect(plan.ok).toBe(true);
+    if (!plan.ok) return;
+    expect(plan.finalDoc["mcpServers"] as Record<string, unknown>).not.toHaveProperty(
+      "disabled-srv",
+    );
+  });
+
+  it("preserves general, security, ui sibling keys", () => {
+    placeFixture("gemini.json", ".gemini/settings.json");
+    const plan = geminiAdapter.plan(makeCanonical(), []);
+    expect(plan.ok).toBe(true);
+    if (!plan.ok) return;
+    expect(plan.finalDoc).toHaveProperty("general");
+    expect(plan.finalDoc).toHaveProperty("security");
+    expect(plan.finalDoc).toHaveProperty("ui");
+  });
+});

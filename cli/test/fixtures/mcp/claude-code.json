@@ -1,0 +1,28 @@
+{
+  "projects": {
+    "/home/user/my-project": {
+      "hasShownOnboarding": true
+    }
+  },
+  "onboarding": {
+    "completed": true,
+    "version": 3
+  },
+  "userPreferences": {
+    "theme": "dark",
+    "fontSize": 14
+  },
+  "hasCompletedProjectSetup": true,
+  "lastOnboardingVersion": 3,
+  "mcpServers": {
+    "user-managed-mcp": {
+      "command": "npx",
+      "args": ["-y", "@user/existing-server"]
+    }
+  },
+  "cacheData": null,
+  "lastSeen": "2026-06-11T00:00:00Z",
+  "statsCounters": {
+    "totalMessages": 42
+  }
+}

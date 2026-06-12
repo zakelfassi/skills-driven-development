@@ -1,0 +1,14 @@
+{
+  "globalShortcut": "Cmd+Shift+A",
+  "preferences": {
+    "theme": "dark",
+    "launchAtStartup": false
+  },
+  "isUsingBuiltInNodeForMcp": true,
+  "mcpServers": {
+    "user-desktop-mcp": {
+      "command": "node",
+      "args": ["/path/to/server.js"]
+    }
+  }
+}

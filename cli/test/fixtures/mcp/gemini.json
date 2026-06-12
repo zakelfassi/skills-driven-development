@@ -1,0 +1,19 @@
+{
+  "general": {
+    "language": "en",
+    "region": "us"
+  },
+  "security": {
+    "sandbox": true
+  },
+  "ui": {
+    "theme": "dark",
+    "fontSize": 14
+  },
+  "mcpServers": {
+    "user-gemini-mcp": {
+      "command": "npx",
+      "args": ["-y", "gemini-mcp-server"]
+    }
+  }
+}
