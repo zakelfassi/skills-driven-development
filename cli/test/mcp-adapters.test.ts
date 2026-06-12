@@ -778,7 +778,10 @@ describe("JSON adapter — allowlist narrowing removal (fix-3)", () => {
     const canonical: CanonicalMcpConfig = {
       version: 1,
       servers: {
-        "narrowing-srv": { command: "cmd", hosts: ["droid"] as import("../src/lib/mcp/schema.js").McpHostId[] },
+        "narrowing-srv": {
+          command: "cmd",
+          hosts: ["droid"] as import("../src/lib/mcp/schema.js").McpHostId[],
+        },
       },
     };
     const plan = claudeCodeAdapter.plan(canonical, ["narrowing-srv"]);
@@ -798,7 +801,10 @@ describe("JSON adapter — allowlist narrowing removal (fix-3)", () => {
     const canonical: CanonicalMcpConfig = {
       version: 1,
       servers: {
-        "user-srv": { command: "user-cmd", hosts: ["droid"] as import("../src/lib/mcp/schema.js").McpHostId[] },
+        "user-srv": {
+          command: "user-cmd",
+          hosts: ["droid"] as import("../src/lib/mcp/schema.js").McpHostId[],
+        },
       },
     };
     // managed list is empty — "user-srv" was never managed by skdd

@@ -617,9 +617,7 @@ describe("codexAdapter — allowlist narrowing removal (fix-3)", () => {
     expect(plan.ok).toBe(true);
     if (!plan.ok) throw new Error();
     // Should produce a remove op
-    expect(plan.changes.some((c) => c.op === "remove" && c.name === "existing_managed")).toBe(
-      true,
-    );
+    expect(plan.changes.some((c) => c.op === "remove" && c.name === "existing_managed")).toBe(true);
     // Apply and verify the block is gone
     codexAdapter.apply(plan);
     const written = readFileSync(dest, "utf8");
@@ -668,9 +666,7 @@ describe("codexAdapter — same-name unmanaged safety (fix-4)", () => {
     expect(plan.ok).toBe(true);
     if (!plan.ok) throw new Error();
     expect(plan.warnings.some((w) => w.includes("existing_managed"))).toBe(false);
-    expect(plan.changes.some((c) => c.op === "update" && c.name === "existing_managed")).toBe(
-      true,
-    );
+    expect(plan.changes.some((c) => c.op === "update" && c.name === "existing_managed")).toBe(true);
   });
 });
 
