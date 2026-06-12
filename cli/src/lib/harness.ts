@@ -9,7 +9,8 @@ export type Harness =
   | "gemini"
   | "opencode"
   | "goose"
-  | "amp";
+  | "amp"
+  | "droid";
 
 export interface HarnessProfile {
   id: Harness;
@@ -76,6 +77,13 @@ export const HARNESSES: Record<Harness, HarnessProfile> = {
     instructionFile: "AGENTS.md",
     instructionHint: "Add a `## Skills` section pointing at `.skills-registry.md`",
   },
+  droid: {
+    id: "droid",
+    label: "Factory Droid",
+    skillsDir: ".factory/skills",
+    instructionFile: "AGENTS.md",
+    instructionHint: "Add a `## Skills` section pointing at `.skills-registry.md`",
+  },
 };
 
 const HARNESS_MARKERS: Array<[Harness, string[]]> = [
@@ -87,6 +95,7 @@ const HARNESS_MARKERS: Array<[Harness, string[]]> = [
   ["opencode", [".opencode/skills", ".opencode"]],
   ["goose", [".goose/skills", ".goose"]],
   ["amp", [".amp/skills", ".amp"]],
+  ["droid", [".factory/skills", ".factory"]],
 ];
 
 export function detectHarness(cwd: string): Harness | null {

@@ -28,7 +28,7 @@ program
   .description("Scaffold a SkDD colony in the current project (canonical skills/ + harness mirror)")
   .option(
     "-H, --harness <name>",
-    "Target harness: claude|codex|cursor|copilot|gemini|opencode|goose|amp|auto",
+    "Target harness: claude|codex|cursor|copilot|gemini|opencode|goose|amp|droid|auto",
     "auto",
   )
   .option("-f, --force", "Overwrite existing skillforge stub", false)
@@ -65,7 +65,7 @@ program
   .option("-n, --non-interactive", "Skip interactive prompts (CI / agent-driven use)", false)
   .option(
     "-H, --harness <name>",
-    "Target harness: claude|codex|cursor|copilot|gemini|opencode|goose|amp|auto",
+    "Target harness: claude|codex|cursor|copilot|gemini|opencode|goose|amp|droid|auto",
     "auto",
   )
   .option("--forged-by <id>", "Attribution for metadata.forged-by", "skdd-cli")
