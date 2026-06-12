@@ -15,7 +15,7 @@ export interface SyncState {
   mirrors: SyncMirror[];
 }
 
-export const STATE_VERSION = 1;
+export const STATE_VERSION = 2;
 const STATE_FILE = ".skdd-sync.json";
 
 export function statePath(cwd: string): string {

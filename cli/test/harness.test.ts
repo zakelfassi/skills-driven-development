@@ -167,7 +167,20 @@ describe("resolveHarness", () => {
       expect(harness.id).toBeTruthy();
       expect(harness.label).toBeTruthy();
       expect(harness.skillsDir).toBeTruthy();
+      expect(harness.globalSkillsDir).toBeTruthy();
       expect(harness.instructionFile).toBeTruthy();
+    }
+  });
+
+  it("every harness globalSkillsDir starts with ~/", () => {
+    for (const harness of Object.values(HARNESSES)) {
+      expect(harness.globalSkillsDir.startsWith("~/")).toBe(true);
+    }
+  });
+
+  it("globalSkillsDir ends with /skills for all harnesses", () => {
+    for (const harness of Object.values(HARNESSES)) {
+      expect(harness.globalSkillsDir.endsWith("/skills")).toBe(true);
     }
   });
 });
