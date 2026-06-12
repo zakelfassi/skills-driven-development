@@ -228,6 +228,81 @@ describe("runMcpSync — second sync is idempotent", () => {
   });
 });
 
+describe("runMcpSync — second sync is a true no-op (mtime)", () => {
+  it("does not write any JSON host files on second sync when content is unchanged", async () => {
+    placeAll();
+    writeCanonical({
+      "noop-test": { command: "npx", args: ["-y", "noop-mcp"] },
+    });
+
+    // First sync: writes all available hosts
+    const code1 = await runMcpSync();
+    expect(code1).toBe(0);
+
+    // Capture mtimes after first sync
+    const mtimes = {
+      claudeCode: mtimeOf(".claude.json"),
+      cursor: mtimeOf(".cursor/mcp.json"),
+      gemini: mtimeOf(".gemini/settings.json"),
+      droid: mtimeOf(".factory/mcp.json"),
+      codex: mtimeOf(".codex/config.toml"),
+    };
+
+    // Add a small sleep so mtime would differ if any file is written
+    await new Promise((r) => setTimeout(r, 20));
+
+    // Second sync: should produce zero changes (no writes)
+    const code2 = await runMcpSync();
+    expect(code2).toBe(0);
+
+    expect(mtimeOf(".claude.json")).toBe(mtimes.claudeCode);
+    expect(mtimeOf(".cursor/mcp.json")).toBe(mtimes.cursor);
+    expect(mtimeOf(".gemini/settings.json")).toBe(mtimes.gemini);
+    expect(mtimeOf(".factory/mcp.json")).toBe(mtimes.droid);
+    expect(mtimeOf(".codex/config.toml")).toBe(mtimes.codex);
+  });
+
+  it("does not create a new .bak on second sync", async () => {
+    placeAll();
+    writeCanonical({ "bak-noop": { command: "bak-cmd" } });
+
+    // First sync creates .bak
+    await runMcpSync();
+    expect(existsSync(join(homeTmp, ".claude.json.bak"))).toBe(true);
+
+    const bakMtime = statSync(join(homeTmp, ".claude.json.bak")).mtimeMs;
+
+    await new Promise((r) => setTimeout(r, 20));
+
+    // Second sync should not touch .bak
+    await runMcpSync();
+    expect(statSync(join(homeTmp, ".claude.json.bak")).mtimeMs).toBe(bakMtime);
+  });
+
+  it("reports zero changes per host on second sync", async () => {
+    placeAll();
+    writeCanonical({ "zero-changes": { command: "zc-cmd" } });
+
+    await runMcpSync();
+
+    // Capture console.log output during second sync
+    const messages: string[] = [];
+    const origLog = console.log;
+    console.log = (...args: unknown[]) => {
+      messages.push(String(args[0]));
+    };
+    await runMcpSync();
+    console.log = origLog;
+
+    // No add/update/remove symbols ("+", "~", "-") should appear in host lines
+    const changeSymbols = messages.filter((m) => /\] [+~-] /.test(m));
+    expect(changeSymbols).toHaveLength(0);
+    // At least one "no changes" message should appear
+    const noChanges = messages.filter((m) => m.includes("no changes"));
+    expect(noChanges.length).toBeGreaterThan(0);
+  });
+});
+
 describe("runMcpSync — hosts allowlist", () => {
   it("restricts server to listed hosts only", async () => {
     placeAll();

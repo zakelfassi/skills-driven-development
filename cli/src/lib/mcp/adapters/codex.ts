@@ -260,6 +260,17 @@ export const codexAdapter: McpHostAdapter = {
       return { ok: false, reason: result.reason };
     }
 
+    // Content-equality check: if splice produced identical content, no writes needed
+    if (result.content === originalContent) {
+      return {
+        ok: true,
+        changes: [],
+        filePath: p,
+        finalDoc: { _tomlContent: originalContent },
+        warnings,
+      };
+    }
+
     return {
       ok: true,
       changes,

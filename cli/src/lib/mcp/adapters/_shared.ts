@@ -98,8 +98,15 @@ export function createJsonAdapter(cfg: JsonAdapterConfig): McpHostAdapter {
           continue;
         }
 
-        const op: ServerChange["op"] = name in currentServers ? "update" : "add";
-        changes.push({ op, name });
+        if (name in currentServers) {
+          // Content-equality check: skip unchanged servers to avoid write churn
+          if (JSON.stringify(nativeEntry) === JSON.stringify(currentServers[name])) {
+            continue;
+          }
+          changes.push({ op: "update", name });
+        } else {
+          changes.push({ op: "add", name });
+        }
         nextServers[name] = nativeEntry;
       }
 
