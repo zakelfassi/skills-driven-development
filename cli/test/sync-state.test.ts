@@ -92,7 +92,9 @@ describe("loadState v1→v2 migration", () => {
     const v1: object = {
       version: 1,
       canonical: "skills",
-      mirrors: [{ target: ".claude/skills", mode: "symlink", createdAt: "2025-01-01T00:00:00.000Z" }],
+      mirrors: [
+        { target: ".claude/skills", mode: "symlink", createdAt: "2025-01-01T00:00:00.000Z" },
+      ],
     };
     writeFileSync(statePath(tmp), JSON.stringify(v1, null, 2) + "\n");
 
@@ -107,7 +109,9 @@ describe("loadState v1→v2 migration", () => {
     const v1: object = {
       version: 1,
       canonical: "skills",
-      mirrors: [{ target: ".codex/skills", mode: "symlink", createdAt: "2025-06-01T00:00:00.000Z" }],
+      mirrors: [
+        { target: ".codex/skills", mode: "symlink", createdAt: "2025-06-01T00:00:00.000Z" },
+      ],
     };
     writeFileSync(statePath(tmp), JSON.stringify(v1, null, 2) + "\n");
 
@@ -115,7 +119,10 @@ describe("loadState v1→v2 migration", () => {
     expect(loaded).not.toBeNull();
     saveState(tmp, loaded!);
 
-    const raw = JSON.parse(readFileSync(statePath(tmp), "utf8")) as { version: number; mirrors: { target: string }[] };
+    const raw = JSON.parse(readFileSync(statePath(tmp), "utf8")) as {
+      version: number;
+      mirrors: { target: string }[];
+    };
     expect(raw.version).toBe(STATE_VERSION);
     expect(raw.mirrors[0]!.target).toBe(".codex/skills");
   });

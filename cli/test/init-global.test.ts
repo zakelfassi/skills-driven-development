@@ -55,26 +55,32 @@ describe("runInit --global harness forwarding", () => {
     },
   );
 
-  runUnix("explicit --harness claude links claude even when ~/.claude parent dir is absent", async () => {
-    expect(existsSync(join(fakeTmp, ".claude"))).toBe(false);
+  runUnix(
+    "explicit --harness claude links claude even when ~/.claude parent dir is absent",
+    async () => {
+      expect(existsSync(join(fakeTmp, ".claude"))).toBe(false);
 
-    const code = await runInit({ global: true, harness: "claude" });
-    expect(code).toBe(0);
+      const code = await runInit({ global: true, harness: "claude" });
+      expect(code).toBe(0);
 
-    const claudeSkillsDir = join(fakeTmp, ".claude", "skills");
-    expect(existsSync(claudeSkillsDir)).toBe(true);
-    expect(lstatSync(claudeSkillsDir).isSymbolicLink()).toBe(true);
-  });
+      const claudeSkillsDir = join(fakeTmp, ".claude", "skills");
+      expect(existsSync(claudeSkillsDir)).toBe(true);
+      expect(lstatSync(claudeSkillsDir).isSymbolicLink()).toBe(true);
+    },
+  );
 
-  runUnix("explicit harness is recorded in state even when auto-detection would skip it", async () => {
-    // No parent dirs for any harness exist
-    const code = await runInit({ global: true, harness: "droid" });
-    expect(code).toBe(0);
+  runUnix(
+    "explicit harness is recorded in state even when auto-detection would skip it",
+    async () => {
+      // No parent dirs for any harness exist
+      const code = await runInit({ global: true, harness: "droid" });
+      expect(code).toBe(0);
 
-    const state = loadState(skddHome());
-    expect(state).not.toBeNull();
-    expect(state!.mirrors.some((m) => m.target.includes(".factory/skills"))).toBe(true);
-  });
+      const state = loadState(skddHome());
+      expect(state).not.toBeNull();
+      expect(state!.mirrors.some((m) => m.target.includes(".factory/skills"))).toBe(true);
+    },
+  );
 
   it("global init without explicit harness runs without error (auto mode)", async () => {
     // No harness parent dirs → link step finds nothing but still returns 0

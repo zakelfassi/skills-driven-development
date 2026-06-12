@@ -168,7 +168,12 @@ async function runInitGlobal(opts: InitOptions): Promise<number> {
     opts.harness && opts.harness !== "auto" ? ([opts.harness] as Harness[]) : undefined;
   console.log("");
   logger.heading("Linking global harness mirrors");
-  const linkCode = await runLink({ global: true, mode: "auto", quiet: false, harnesses: explicitHarnesses });
+  const linkCode = await runLink({
+    global: true,
+    mode: "auto",
+    quiet: false,
+    harnesses: explicitHarnesses,
+  });
   if (linkCode !== 0) {
     logger.warn(
       "Link step returned non-zero. The global skills/ directory is ready, but some harness mirrors may need attention. Re-run `skdd link -g` to retry.",
