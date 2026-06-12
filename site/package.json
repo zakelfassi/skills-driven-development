@@ -6,6 +6,7 @@
   "description": "Starlight-powered documentation site for Skills-Driven Development.",
   "scripts": {
     "sync": "node scripts/sync-docs.mjs",
+    "record-cast": "node scripts/record-cast.mjs",
     "predev": "pnpm sync",
     "dev": "astro dev",
     "start": "astro dev",

@@ -1,0 +1,230 @@
+{
+  "totalMs": 13575,
+  "items": [
+    {
+      "type": "cmd",
+      "text": "$ skdd init --harness=claude",
+      "delayMs": 500
+    },
+    {
+      "type": "out",
+      "text": "<b>skdd init — Claude Code (canonical)</b>",
+      "delayMs": 2390
+    },
+    {
+      "type": "out",
+      "text": "<span class=\"tc-dim\">project: /private/var/folders/6t/_spbbqh57z95vm38jng35tsw0000gn/T/skdd-cast-G4XTQV</span>",
+      "delayMs": 2465
+    },
+    {
+      "type": "out",
+      "text": "<span class=\"tc-dim\">canonical: skills/</span>",
+      "delayMs": 2540
+    },
+    {
+      "type": "out",
+      "text": "<span class=\"tc-dim\">mirror:    .claude/skills</span>",
+      "delayMs": 2615
+    },
+    {
+      "type": "out",
+      "text": "<span class=\"tc-dim\">instruction file: CLAUDE.md</span>",
+      "delayMs": 2690
+    },
+    {
+      "type": "out",
+      "text": "<span class=\"tc-green\">✓</span> created skills/skillforge/",
+      "delayMs": 2765
+    },
+    {
+      "type": "out",
+      "text": "<span class=\"tc-green\">✓</span> wrote skills/skillforge/SKILL.md (stub — replace with the full version when ready)",
+      "delayMs": 2840
+    },
+    {
+      "type": "out",
+      "text": "<span class=\"tc-green\">✓</span> created .skills-registry.md",
+      "delayMs": 2915
+    },
+    {
+      "type": "out",
+      "text": "<span class=\"tc-green\">✓</span> created CLAUDE.md with skills block",
+      "delayMs": 2990
+    },
+    {
+      "type": "out",
+      "text": "<b>Linking harness mirror</b>",
+      "delayMs": 3065
+    },
+    {
+      "type": "out",
+      "text": "<b>skdd link — symlink mode</b>",
+      "delayMs": 3140
+    },
+    {
+      "type": "out",
+      "text": "<span class=\"tc-dim\">canonical: skills/</span>",
+      "delayMs": 3215
+    },
+    {
+      "type": "out",
+      "text": "<span class=\"tc-dim\">mirrors:   .claude/skills</span>",
+      "delayMs": 3290
+    },
+    {
+      "type": "out",
+      "text": "<span class=\"tc-green\">✓</span> .claude/skills → skills (created symlink)",
+      "delayMs": 3365
+    },
+    {
+      "type": "out",
+      "text": "<span class=\"tc-green\">✓</span> State written to <b>.skdd-sync.json</b>",
+      "delayMs": 3440
+    },
+    {
+      "type": "out",
+      "text": "<b>Next steps</b>",
+      "delayMs": 3515
+    },
+    {
+      "type": "out",
+      "text": "1. Pull the full skillforge instead of the stub:",
+      "delayMs": 3590
+    },
+    {
+      "type": "out",
+      "text": "<span class=\"tc-dim\">   curl -fsSL https://raw.githubusercontent.com/zakelfassi/skills-driven-development/main/skillforge/SKILL.md -o skills/skillforge/SKILL.md</span>",
+      "delayMs": 3665
+    },
+    {
+      "type": "out",
+      "text": "2. Open this project with Claude Code and ask: \"What skills are available?\"",
+      "delayMs": 3740
+    },
+    {
+      "type": "out",
+      "text": "3. Forge your first skill: \"Forge a skill for <your repeated task>.\"",
+      "delayMs": 3815
+    },
+    {
+      "type": "out",
+      "text": "4. See docs/configuration.md for per-harness details.",
+      "delayMs": 3890
+    },
+    {
+      "type": "cmd",
+      "text": "$ skdd forge release-notes --non-interactive",
+      "delayMs": 4865
+    },
+    {
+      "type": "out",
+      "text": "<span class=\"tc-green\">✓</span> forged skills/release-notes/SKILL.md",
+      "delayMs": 7635
+    },
+    {
+      "type": "out",
+      "text": "<span class=\"tc-green\">✓</span> registered release-notes in .skills-registry.md",
+      "delayMs": 7710
+    },
+    {
+      "type": "out",
+      "text": "<span class=\"tc-dim\">refreshed .claude/skills mirror</span>",
+      "delayMs": 7785
+    },
+    {
+      "type": "cmd",
+      "text": "$ skdd doctor",
+      "delayMs": 8760
+    },
+    {
+      "type": "out",
+      "text": "<b>skdd doctor</b>",
+      "delayMs": 9825
+    },
+    {
+      "type": "out",
+      "text": "<span class=\"tc-dim\">project:   /private/var/folders/6t/_spbbqh57z95vm38jng35tsw0000gn/T/skdd-cast-G4XTQV</span>",
+      "delayMs": 9900
+    },
+    {
+      "type": "out",
+      "text": "<span class=\"tc-dim\">canonical: skills/</span>",
+      "delayMs": 9975
+    },
+    {
+      "type": "out",
+      "text": "<b>Colony</b>",
+      "delayMs": 10050
+    },
+    {
+      "type": "out",
+      "text": "  <span class=\"tc-yellow\">!</span> no .colony.json manifest",
+      "delayMs": 10125
+    },
+    {
+      "type": "out",
+      "text": "    <span class=\"tc-dim\">→ Hand-write .colony.json (schema: docs/spec/colony-v1.json) to make the colony discoverable by marketplaces.</span>",
+      "delayMs": 10200
+    },
+    {
+      "type": "out",
+      "text": "<b>Skills</b>",
+      "delayMs": 10275
+    },
+    {
+      "type": "out",
+      "text": "  <span class=\"tc-green\">✓</span> 2 skill(s) found in skills/",
+      "delayMs": 10350
+    },
+    {
+      "type": "out",
+      "text": "<b>Validation</b>",
+      "delayMs": 10425
+    },
+    {
+      "type": "out",
+      "text": "  <span class=\"tc-yellow\">!</span> 1 spec warning(s) across 2 skill(s)",
+      "delayMs": 10500
+    },
+    {
+      "type": "out",
+      "text": "    <span class=\"tc-dim\">→ Run 'skdd validate' for per-skill details.</span>",
+      "delayMs": 10575
+    },
+    {
+      "type": "out",
+      "text": "<b>Registry</b>",
+      "delayMs": 10650
+    },
+    {
+      "type": "out",
+      "text": "  <span class=\"tc-yellow\">!</span> 1 skill(s) on disk missing from registry: skillforge",
+      "delayMs": 10725
+    },
+    {
+      "type": "out",
+      "text": "    <span class=\"tc-dim\">→ Re-run 'skdd forge' for each, or add them to .skills-registry.md by hand.</span>",
+      "delayMs": 10800
+    },
+    {
+      "type": "out",
+      "text": "<b>Mirrors</b>",
+      "delayMs": 10875
+    },
+    {
+      "type": "out",
+      "text": "  <span class=\"tc-green\">✓</span> 1 mirror(s) in sync (.claude/skills)",
+      "delayMs": 10950
+    },
+    {
+      "type": "out",
+      "text": "<b>Instructions</b>",
+      "delayMs": 11025
+    },
+    {
+      "type": "out",
+      "text": "  <span class=\"tc-green\">✓</span> 1 instruction file(s) reference the skills registry: CLAUDE.md",
+      "delayMs": 11100
+    }
+  ]
+}
