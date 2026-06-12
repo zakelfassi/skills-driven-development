@@ -1,8 +1,12 @@
 import { ensureGlobalColony, skddHome } from "../lib/global.js";
 import { logger } from "../lib/logger.js";
+import { ADAPTERS } from "../lib/mcp/adapters/index.js";
 import {
   type CanonicalMcpConfig,
+  expandEnvPlaceholders,
+  isStdio,
   loadMcpConfig,
+  MCP_HOST_IDS,
   type McpHostId,
   type McpServer,
   type McpServerRemote,
@@ -10,6 +14,8 @@ import {
   saveMcpConfig,
   validateMcpConfig,
 } from "../lib/mcp/schema.js";
+import { getMcpManagedNames, setMcpManagedNames } from "../lib/mcp/state.js";
+import { emptyState, loadState, saveState } from "../lib/sync-state.js";
 
 export interface McpListOptions {
   format?: "table" | "json";
@@ -149,4 +155,167 @@ export async function runMcpRemove(name: string, opts: McpRemoveOptions = {}): P
   saveMcpConfig(home, updated);
   logger.info(`Removed MCP server "${name}".`);
   return 0;
+}
+
+// -- Sync helpers -------------------------------------------------------------
+
+/**
+ * Expand `${VAR}` placeholders in an MCP server's env, url, and headers.
+ * Returns the resolved server and any variable names that could not be resolved.
+ * Does NOT mutate the original server.
+ */
+function expandServerVars(server: McpServer): { resolved: McpServer; unresolved: string[] } {
+  const allUnresolved: string[] = [];
+
+  if (isStdio(server)) {
+    const resolved: McpServerStdio = { command: server.command };
+    if (server.args?.length) resolved.args = server.args;
+    if (server.env && Object.keys(server.env).length > 0) {
+      const expandedEnv: Record<string, string> = {};
+      for (const [k, v] of Object.entries(server.env)) {
+        const { value, unresolved } = expandEnvPlaceholders(v);
+        expandedEnv[k] = value;
+        allUnresolved.push(...unresolved);
+      }
+      resolved.env = expandedEnv;
+    }
+    if (server.hosts?.length) resolved.hosts = server.hosts;
+    if (server.disabled !== undefined) resolved.disabled = server.disabled;
+    return { resolved, unresolved: allUnresolved };
+  }
+
+  // Remote server
+  const { value: expandedUrl, unresolved: urlUnresolved } = expandEnvPlaceholders(server.url);
+  allUnresolved.push(...urlUnresolved);
+  const resolved: McpServerRemote = { url: expandedUrl };
+  if (server.type) resolved.type = server.type;
+  if (server.headers && Object.keys(server.headers).length > 0) {
+    const expandedHeaders: Record<string, string> = {};
+    for (const [k, v] of Object.entries(server.headers)) {
+      const { value, unresolved } = expandEnvPlaceholders(v);
+      expandedHeaders[k] = value;
+      allUnresolved.push(...unresolved);
+    }
+    resolved.headers = expandedHeaders;
+  }
+  if (server.hosts?.length) resolved.hosts = server.hosts;
+  if (server.disabled !== undefined) resolved.disabled = server.disabled;
+  return { resolved, unresolved: allUnresolved };
+}
+
+// -- runMcpSync ---------------------------------------------------------------
+
+export interface McpSyncOptions {
+  dryRun?: boolean;
+}
+
+/**
+ * Orchestrate syncing the canonical mcp.json to all available host adapters.
+ *
+ * For each available host:
+ *   1. Expand ${VAR} in env/url/headers (skip server + warn if unresolved,
+ *      except for droid which handles ${VAR} natively and receives as-is).
+ *   2. Call adapter.plan() with the resolved canonical + current managed names.
+ *      If the host config is malformed → log error, set exit 1, continue.
+ *   3. If --dry-run: print plan, no writes.
+ *   4. Otherwise: call adapter.apply(); update managed names in sync-state.
+ *
+ * Canonical file is never modified; secrets never copied back from host files.
+ * Exits 1 if any host was blocked (malformed config), 0 otherwise.
+ */
+export async function runMcpSync(opts: McpSyncOptions = {}): Promise<number> {
+  ensureGlobalColony();
+  const home = skddHome();
+  const config = loadMcpConfig(home);
+
+  if (!config || Object.keys(config.servers).length === 0) {
+    logger.info("No MCP servers configured. Use `skdd mcp add <name>` to add one.");
+    return 0;
+  }
+
+  let exitCode = 0;
+  // Load state once; we accumulate mcp host updates in memory then save once.
+  let state = loadState(home) ?? emptyState();
+
+  for (const hostId of MCP_HOST_IDS) {
+    const adapter = ADAPTERS[hostId];
+    if (!adapter) continue;
+
+    if (!adapter.available()) {
+      logger.info(`[${hostId}] skipped (host not available)`);
+      continue;
+    }
+
+    const managed = getMcpManagedNames(state, hostId);
+    const isDroid = hostId === "droid";
+
+    // Build the canonical config for this host, expanding vars where needed.
+    const resolvedServers: Record<string, McpServer> = {};
+    for (const [name, server] of Object.entries(config.servers)) {
+      if (isDroid) {
+        // Droid natively supports ${VAR} — write placeholders through as-is.
+        resolvedServers[name] = server;
+      } else {
+        const { resolved, unresolved } = expandServerVars(server);
+        if (unresolved.length > 0) {
+          logger.warn(
+            `[${hostId}] Skipping "${name}": unresolved env vars: ${unresolved.join(", ")}`,
+          );
+          continue;
+        }
+        resolvedServers[name] = resolved;
+      }
+    }
+
+    const resolvedConfig: CanonicalMcpConfig = { version: 1, servers: resolvedServers };
+    const plan = adapter.plan(resolvedConfig, managed);
+
+    if (!plan.ok) {
+      logger.error(`[${hostId}] blocked: ${plan.reason}`);
+      exitCode = 1;
+      continue;
+    }
+
+    // Print the plan changes.
+    if (plan.changes.length === 0) {
+      logger.info(`[${hostId}] no changes`);
+    } else {
+      for (const c of plan.changes) {
+        const sym = c.op === "add" ? "+" : c.op === "remove" ? "-" : "~";
+        logger.info(`[${hostId}] ${sym} ${c.name}`);
+      }
+    }
+    for (const w of plan.warnings) {
+      logger.warn(`[${hostId}] ${w}`);
+    }
+
+    if (opts.dryRun) continue;
+
+    const applyResult = adapter.apply(plan);
+    if (!applyResult.ok) {
+      logger.error(`[${hostId}] apply failed: ${applyResult.reason}`);
+      exitCode = 1;
+      continue;
+    }
+
+    // Update managed names in the in-memory state.
+    if (plan.changes.length > 0) {
+      const removed = new Set(plan.changes.filter((c) => c.op === "remove").map((c) => c.name));
+      const addedOrUpdated = plan.changes
+        .filter((c) => c.op === "add" || c.op === "update")
+        .map((c) => c.name);
+      const newManaged = [
+        ...managed.filter((m) => !removed.has(m)),
+        ...addedOrUpdated.filter((n) => !managed.includes(n)),
+      ];
+      state = setMcpManagedNames(state, hostId, newManaged);
+    }
+  }
+
+  // Persist the updated state once (no-op on dry-run).
+  if (!opts.dryRun) {
+    saveState(home, state);
+  }
+
+  return exitCode;
 }

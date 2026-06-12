@@ -5,7 +5,7 @@ import { runImport } from "./commands/import.js";
 import { runInit } from "./commands/init.js";
 import { runLink } from "./commands/link.js";
 import { runList } from "./commands/list.js";
-import { runMcpAdd, runMcpList, runMcpRemove } from "./commands/mcp.js";
+import { runMcpAdd, runMcpList, runMcpRemove, runMcpSync } from "./commands/mcp.js";
 import { runShow } from "./commands/show.js";
 import { runValidate } from "./commands/validate.js";
 import type { LinkMode } from "./lib/fs-link.js";
@@ -320,6 +320,14 @@ mcp
   .option("-f, --force", "Exit 0 even when the server does not exist", false)
   .action(async (name: string, opts: { force: boolean }) => {
     const code = await runMcpRemove(name, { force: opts.force });
+    process.exit(code);
+  });
+mcp
+  .command("sync")
+  .description("Sync the canonical MCP registry (~/.skdd/mcp.json) to all available host configs")
+  .option("-n, --dry-run", "Print planned changes without writing any files", false)
+  .action(async (opts: { dryRun: boolean }) => {
+    const code = await runMcpSync({ dryRun: opts.dryRun });
     process.exit(code);
   });
 

@@ -24,9 +24,11 @@ describe("skdd sync removal", () => {
     expect(indexSrc).not.toMatch(/runSync/);
   });
 
-  it("index.ts does not register a sync command", () => {
+  it("index.ts does not register a top-level sync command", () => {
     const indexSrc = readFileSync(resolve(ROOT, "src/index.ts"), "utf8");
-    expect(indexSrc).not.toMatch(/\.command\(["']sync["']\)/);
+    // Guard only against the top-level `program.command("sync")` stub being re-introduced.
+    // Sub-commands like `mcp.command("sync")` are intentional and allowed.
+    expect(indexSrc).not.toMatch(/program\.command\(["']sync["']\)/);
   });
 
   it("README.md does not reference the sync command or stub", () => {

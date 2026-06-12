@@ -40,11 +40,13 @@ export function loadState(cwd: string): SyncState | null {
     if (typeof raw.version !== "number" || !raw.canonical || !Array.isArray(raw.mirrors)) {
       return null;
     }
-    return {
+    const state: SyncState = {
       version: raw.version,
       canonical: raw.canonical,
       mirrors: raw.mirrors as SyncMirror[],
     };
+    if (raw.mcp !== undefined) state.mcp = raw.mcp as SyncState["mcp"];
+    return state;
   } catch {
     return null;
   }
