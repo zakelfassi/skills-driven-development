@@ -82,23 +82,21 @@ function makeCanonical(
 // ── ADAPTERS registry ────────────────────────────────────────────────────────
 
 describe("ADAPTERS registry", () => {
-  it("contains all six JSON adapters", () => {
+  it("contains all seven adapters (six JSON + codex TOML)", () => {
     expect(ADAPTERS["claude-code"]).toBeDefined();
     expect(ADAPTERS["claude-desktop"]).toBeDefined();
+    expect(ADAPTERS["codex"]).toBeDefined();
     expect(ADAPTERS["droid"]).toBeDefined();
     expect(ADAPTERS["cursor"]).toBeDefined();
     expect(ADAPTERS["opencode"]).toBeDefined();
     expect(ADAPTERS["gemini"]).toBeDefined();
   });
 
-  it("does not yet include codex (added by f-m2-mcp-codex)", () => {
-    expect(ADAPTERS["codex"]).toBeUndefined();
-  });
-
   it("each adapter has the correct id and label", () => {
     const expected = [
       { id: "claude-code", label: "Claude Code" },
       { id: "claude-desktop", label: "Claude Desktop" },
+      { id: "codex", label: "Codex CLI" },
       { id: "droid", label: "Factory Droid" },
       { id: "cursor", label: "Cursor" },
       { id: "opencode", label: "OpenCode" },

@@ -1,6 +1,7 @@
 import type { McpHostId } from "../schema.js";
 import { claudeCodeAdapter } from "./claude-code.js";
 import { claudeDesktopAdapter } from "./claude-desktop.js";
+import { codexAdapter } from "./codex.js";
 import { cursorAdapter } from "./cursor.js";
 import { droidAdapter } from "./droid.js";
 import { geminiAdapter } from "./gemini.js";
@@ -22,15 +23,15 @@ export type {
 } from "./types.js";
 
 /**
- * Registry of available MCP host adapters keyed by host ID.
+ * Registry of all MCP host adapters keyed by host ID.
  *
- * Partial because the codex adapter (TOML-based) is added by a separate
- * feature (f-m2-mcp-codex).  Callers must guard: `ADAPTERS[id] != null`.
+ * Callers should guard: `ADAPTERS[id] != null` since the registry is typed
+ * as Partial to allow future additions.
  */
 export const ADAPTERS: Partial<Record<McpHostId, McpHostAdapter>> = {
   "claude-code": claudeCodeAdapter,
   "claude-desktop": claudeDesktopAdapter,
-  // codex: added in f-m2-mcp-codex (TOML block-splice adapter)
+  codex: codexAdapter,
   droid: droidAdapter,
   cursor: cursorAdapter,
   opencode: opencodeAdapter,
