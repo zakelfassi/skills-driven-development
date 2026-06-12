@@ -4,8 +4,8 @@ import { collectDoctorChecks, type DoctorCheck } from "../commands/doctor.js";
 import { skddHome } from "../lib/global.js";
 import { HARNESSES, type Harness } from "../lib/harness.js";
 import { ADAPTERS, type HostReadResult } from "../lib/mcp/adapters/index.js";
-import { loadMcpManagedNames } from "../lib/mcp/state.js";
 import { loadMcpConfig, type McpHostId } from "../lib/mcp/schema.js";
+import { loadMcpManagedNames } from "../lib/mcp/state.js";
 import { loadRegistry, type Registry } from "../lib/registry.js";
 import { loadState, type SyncMirror } from "../lib/sync-state.js";
 

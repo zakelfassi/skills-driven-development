@@ -1,6 +1,6 @@
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
 import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { render } from "ink-testing-library";
 import React from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -10,7 +10,14 @@ import { DoctorPane } from "../src/hub/panes/doctor.js";
 import { McpPane } from "../src/hub/panes/mcp.js";
 import { MirrorsPane } from "../src/hub/panes/mirrors.js";
 import { SkillsPane } from "../src/hub/panes/skills.js";
-import { buildMcpRows, type HubData, type McpRow, type McpRowAdapter, type MirrorRow, type SkillRow } from "../src/hub/state.js";
+import {
+  buildMcpRows,
+  type HubData,
+  type McpRow,
+  type McpRowAdapter,
+  type MirrorRow,
+  type SkillRow,
+} from "../src/hub/state.js";
 import type { McpHostId } from "../src/lib/mcp/schema.js";
 
 // ── SkillsPane ────────────────────────────────────────────────────────────────
@@ -371,12 +378,7 @@ describe("Hub keypress — mirrors toggle", () => {
     const mockReloader = vi.fn().mockResolvedValue(data);
 
     const { stdin, unmount } = render(
-      <Hub
-        data={data}
-        cwd="/tmp/test"
-        actions={{ unlink: mockUnlink }}
-        reloader={mockReloader}
-      />,
+      <Hub data={data} cwd="/tmp/test" actions={{ unlink: mockUnlink }} reloader={mockReloader} />,
     );
 
     // Switch to mirrors pane
@@ -398,12 +400,7 @@ describe("Hub keypress — mirrors toggle", () => {
     const mockReloader = vi.fn().mockResolvedValue(data);
 
     const { stdin, unmount } = render(
-      <Hub
-        data={data}
-        cwd="/tmp/test"
-        actions={{ unlink: mockUnlink }}
-        reloader={mockReloader}
-      />,
+      <Hub data={data} cwd="/tmp/test" actions={{ unlink: mockUnlink }} reloader={mockReloader} />,
     );
 
     stdin.write("2");
@@ -423,12 +420,7 @@ describe("Hub keypress — mirrors toggle", () => {
     const mockReloader = vi.fn().mockResolvedValue(data);
 
     const { stdin, unmount } = render(
-      <Hub
-        data={data}
-        cwd="/tmp/test"
-        actions={{ link: mockLink }}
-        reloader={mockReloader}
-      />,
+      <Hub data={data} cwd="/tmp/test" actions={{ link: mockLink }} reloader={mockReloader} />,
     );
 
     stdin.write("2");
@@ -448,12 +440,7 @@ describe("Hub keypress — mirrors toggle", () => {
     const mockReloader = vi.fn().mockResolvedValue(data);
 
     const { stdin, unmount } = render(
-      <Hub
-        data={data}
-        cwd="/tmp/test"
-        actions={{ link: mockLink }}
-        reloader={mockReloader}
-      />,
+      <Hub data={data} cwd="/tmp/test" actions={{ link: mockLink }} reloader={mockReloader} />,
     );
 
     stdin.write("2");

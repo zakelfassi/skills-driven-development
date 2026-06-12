@@ -85,12 +85,16 @@ export function Hub({ data: initialData, cwd, actions, reloader }: HubProps) {
     const mirror: MirrorRow | undefined = data.mirrors[selectedIndex];
     if (!mirror) return;
 
-    const doLink = actions?.link ?? (async (o: { harness: Harness; cwd: string }) => {
-      await runLink({ harnesses: [o.harness], cwd: o.cwd, quiet: true });
-    });
-    const doUnlink = actions?.unlink ?? (async (o: { harness: Harness; cwd: string }) => {
-      await runUnlink({ harnesses: [o.harness], cwd: o.cwd, quiet: true });
-    });
+    const doLink =
+      actions?.link ??
+      (async (o: { harness: Harness; cwd: string }) => {
+        await runLink({ harnesses: [o.harness], cwd: o.cwd, quiet: true });
+      });
+    const doUnlink =
+      actions?.unlink ??
+      (async (o: { harness: Harness; cwd: string }) => {
+        await runUnlink({ harnesses: [o.harness], cwd: o.cwd, quiet: true });
+      });
 
     if (mirror.status === "ok" || mirror.status === "drift") {
       setActionMessage(`Unlinking ${mirror.harness}…`);
