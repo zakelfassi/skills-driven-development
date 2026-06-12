@@ -25,7 +25,10 @@
     "rules": {
       "recommended": true,
       "style": { "noNonNullAssertion": "warn", "useTemplate": "warn" },
-      "suspicious": { "noConsole": "off" },
+      "suspicious": {
+        "noConsole": "off",
+        "noTemplateCurlyInString": "off"
+      },
       "complexity": { "noForEach": "off" }
     }
   },
