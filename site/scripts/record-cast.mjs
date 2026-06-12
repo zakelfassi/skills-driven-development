@@ -27,9 +27,16 @@ const OUT_FILE = resolve(__dirname, "../src/data/skdd-cast.json");
 
 // ── Tiny SGR parser ──────────────────────────────────────────────────────────
 // Handles the subset of ANSI codes emitted by picocolors (the CLI's color lib).
+// CONTRACT: HTML-escape plain text FIRST (& < >) before wrapping ANSI runs in
+// spans — so set:html in TerminalCast.astro only ever receives escaped text plus
+// the generator's own <b>/<span> tags.
 function sgrToHtml(raw) {
-  let s = raw;
-  // bold: ESC[1m...ESC[22m
+  // Step 1: escape HTML entities so literal < > & in CLI output are safe
+  let s = raw
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+  // Step 2: apply SGR → span decoration (bold: ESC[1m...ESC[22m)
   s = s.replace(/\x1b\[1m([\s\S]*?)\x1b\[22m/g, '<b>$1</b>');
   // dim: ESC[2m...ESC[22m
   s = s.replace(/\x1b\[2m([\s\S]*?)\x1b\[22m/g, '<span class="tc-dim">$1</span>');

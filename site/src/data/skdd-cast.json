@@ -13,7 +13,7 @@
     },
     {
       "type": "out",
-      "text": "<span class=\"tc-dim\">project: /private/var/folders/6t/_spbbqh57z95vm38jng35tsw0000gn/T/skdd-cast-G4XTQV</span>",
+      "text": "<span class=\"tc-dim\">project: /private/var/folders/6t/_spbbqh57z95vm38jng35tsw0000gn/T/skdd-cast-5xdbcN</span>",
       "delayMs": 2465
     },
     {
@@ -103,7 +103,7 @@
     },
     {
       "type": "out",
-      "text": "3. Forge your first skill: \"Forge a skill for <your repeated task>.\"",
+      "text": "3. Forge your first skill: \"Forge a skill for &lt;your repeated task&gt;.\"",
       "delayMs": 3815
     },
     {
@@ -143,7 +143,7 @@
     },
     {
       "type": "out",
-      "text": "<span class=\"tc-dim\">project:   /private/var/folders/6t/_spbbqh57z95vm38jng35tsw0000gn/T/skdd-cast-G4XTQV</span>",
+      "text": "<span class=\"tc-dim\">project:   /private/var/folders/6t/_spbbqh57z95vm38jng35tsw0000gn/T/skdd-cast-5xdbcN</span>",
       "delayMs": 9900
     },
     {
