@@ -18,6 +18,7 @@ import {
   type MirrorRow,
   type SkillRow,
 } from "../src/hub/state.js";
+import type { ServerChange } from "../src/lib/mcp/adapters/index.js";
 import type { McpHostId } from "../src/lib/mcp/schema.js";
 
 // ── SkillsPane ────────────────────────────────────────────────────────────────
@@ -522,12 +523,23 @@ describe("buildMcpRows", () => {
     rmSync(tmpDir, { recursive: true, force: true });
   });
 
-  const makeAdapter = (available: boolean, serverNames: string[]): McpRowAdapter => ({
+  const makeAdapter = (
+    available: boolean,
+    serverNames: string[],
+    planChanges: ServerChange[] = [],
+  ): McpRowAdapter => ({
     available: () => available,
     read: () =>
       available
         ? { ok: true as const, serverNames, rawDoc: {} }
         : { ok: false as const, reason: "unavailable" },
+    plan: (_canonical, _managed) => ({
+      ok: true as const,
+      changes: planChanges,
+      filePath: "",
+      finalDoc: {},
+      warnings: [],
+    }),
   });
 
   it("returns empty array when no mcp.json exists", () => {
@@ -590,6 +602,7 @@ describe("buildMcpRows", () => {
       "claude-code": {
         available: () => true,
         read: () => ({ ok: false as const, reason: "parse error" }),
+        plan: () => ({ ok: false as const, reason: "parse error" }),
       },
     };
     const rows = buildMcpRows(tmpDir, {
@@ -629,5 +642,37 @@ describe("buildMcpRows", () => {
     });
     expect(rows[0]?.hosts["claude-code"]).toBe("excluded");
     expect(rows[0]?.hosts["droid"]).toBe("synced");
+  });
+
+  it("synced: managed + present + content equal (plan returns no changes)", () => {
+    writeFileSync(
+      join(tmpDir, "mcp.json"),
+      JSON.stringify({ version: 1, servers: { myserver: { command: "npx", args: ["-y", "my"] } } }),
+    );
+    // plan returns no changes → content matches canonical → synced
+    const adapters: Partial<Record<McpHostId, McpRowAdapter>> = {
+      "claude-code": makeAdapter(true, ["myserver"], []),
+    };
+    const rows = buildMcpRows(tmpDir, {
+      adapters,
+      loadManaged: (h) => (h === "claude-code" ? ["myserver"] : []),
+    });
+    expect(rows[0]?.hosts["claude-code"]).toBe("synced");
+  });
+
+  it("drift: managed + present + content differs (plan returns update change)", () => {
+    writeFileSync(
+      join(tmpDir, "mcp.json"),
+      JSON.stringify({ version: 1, servers: { myserver: { command: "npx", args: ["-y", "my"] } } }),
+    );
+    // plan returns an "update" change for myserver → content has drifted
+    const adapters: Partial<Record<McpHostId, McpRowAdapter>> = {
+      "claude-code": makeAdapter(true, ["myserver"], [{ op: "update", name: "myserver" }]),
+    };
+    const rows = buildMcpRows(tmpDir, {
+      adapters,
+      loadManaged: (h) => (h === "claude-code" ? ["myserver"] : []),
+    });
+    expect(rows[0]?.hosts["claude-code"]).toBe("drift");
   });
 });

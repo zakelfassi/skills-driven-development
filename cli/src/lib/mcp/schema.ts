@@ -146,24 +146,35 @@ function findDuplicateServerNames(rawText: string): string[] {
       if (depth === 0) break;
       i++;
     } else if (ch === '"') {
-      // Parse the JSON string starting at i
-      let str = "";
+      // Parse the JSON string starting at i, collecting raw bytes including
+      // escape sequences so we can decode them accurately below.
+      let raw = "";
       let j = i + 1;
-      let esc = false;
       while (j < rawText.length) {
         const c = rawText[j];
-        if (esc) {
-          str += c;
-          esc = false;
-        } else if (c === "\\") {
-          esc = true;
+        if (c === "\\") {
+          // Include backslash + next char verbatim so JSON.parse can decode later.
+          raw += c;
+          j++;
+          if (j < rawText.length) {
+            raw += rawText[j];
+            j++;
+          }
         } else if (c === '"') {
           j++;
           break;
         } else {
-          str += c;
+          raw += c;
+          j++;
         }
-        j++;
+      }
+      // Decode JSON escape sequences (e.g. \u0061 → 'a') so that semantically
+      // identical keys like "\u006d\u0079" and "my" are treated as duplicates.
+      let str: string;
+      try {
+        str = JSON.parse('"' + raw + '"') as string;
+      } catch {
+        str = raw; // fallback: malformed escape sequences won't be valid keys
       }
       // j is now past the closing quote
       if (depth === 1) {

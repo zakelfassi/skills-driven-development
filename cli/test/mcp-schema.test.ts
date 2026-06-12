@@ -273,6 +273,30 @@ describe("loadMcpConfig duplicate server name detection", () => {
     // No duplicate server names at the top level of servers → should load fine
     expect(loadMcpConfig(tmp)).not.toBeNull();
   });
+
+  it("detects duplicate when one key uses unicode escapes that decode to the same name", () => {
+    // \u006d\u0079 decodes to "my" — same as the literal key "my"
+    const rawJson =
+      '{"version":1,"servers":{"\\u006d\\u0079":{"command":"cmd1"},"my":{"command":"cmd2"}}}';
+    writeFileSync(join(tmp, "mcp.json"), rawJson);
+    expect(loadMcpConfig(tmp)).toBeNull();
+  });
+
+  it("detects duplicate when both keys are unicode-escaped forms of the same name", () => {
+    // Both \u0061 entries decode to "a"
+    const rawJson =
+      '{"version":1,"servers":{"\\u0061":{"command":"cmd1"},"\\u0061":{"command":"cmd2"}}}';
+    writeFileSync(join(tmp, "mcp.json"), rawJson);
+    expect(loadMcpConfig(tmp)).toBeNull();
+  });
+
+  it("no false positive for distinct unicode-escaped keys that decode differently", () => {
+    // \u0041 → "A", \u0042 → "B" — different after decode → not a duplicate
+    const rawJson =
+      '{"version":1,"servers":{"\\u0041":{"command":"cmd1"},"\\u0042":{"command":"cmd2"}}}';
+    writeFileSync(join(tmp, "mcp.json"), rawJson);
+    expect(loadMcpConfig(tmp)).not.toBeNull();
+  });
 });
 
 // ── saveMcpConfig validates before writing ────────────────────────────────────

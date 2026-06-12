@@ -3,8 +3,8 @@ import { join } from "node:path";
 import { collectDoctorChecks, type DoctorCheck } from "../commands/doctor.js";
 import { skddHome } from "../lib/global.js";
 import { HARNESSES, type Harness } from "../lib/harness.js";
-import { ADAPTERS, type HostReadResult } from "../lib/mcp/adapters/index.js";
-import { loadMcpConfig, type McpHostId } from "../lib/mcp/schema.js";
+import { ADAPTERS, type HostReadResult, type HostSyncPlan } from "../lib/mcp/adapters/index.js";
+import { type CanonicalMcpConfig, loadMcpConfig, type McpHostId } from "../lib/mcp/schema.js";
 import { loadMcpManagedNames } from "../lib/mcp/state.js";
 import { loadRegistry, type Registry } from "../lib/registry.js";
 import { loadState, type SyncMirror } from "../lib/sync-state.js";
@@ -118,6 +118,7 @@ function checkMirrorStatus(target: string, mirror: SyncMirror): MirrorRow["statu
 export interface McpRowAdapter {
   available(): boolean;
   read(): HostReadResult;
+  plan(canonical: CanonicalMcpConfig, managed: string[]): HostSyncPlan;
 }
 
 export interface BuildMcpRowsOpts {
@@ -162,7 +163,16 @@ export function buildMcpRows(globalRoot: string, opts?: BuildMcpRowsOpts): McpRo
       const isManaged = managed.includes(name);
       const isPresent = readResult.serverNames.includes(name);
 
-      hosts[hostId] = isManaged && isPresent ? "synced" : "drift";
+      if (!isManaged || !isPresent) {
+        hosts[hostId] = "drift";
+        continue;
+      }
+
+      // Content-equality check: synced requires the host entry to match canonical.
+      // Use adapter.plan() — zero changes for this server means content is equal.
+      const syncPlan = adapter.plan(config, managed);
+      hosts[hostId] =
+        syncPlan.ok && !syncPlan.changes.some((c) => c.name === name) ? "synced" : "drift";
     }
 
     return {
