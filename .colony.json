@@ -1,7 +1,7 @@
 {
   "$schema": "./docs/spec/colony-v1.json",
   "name": "skills-driven-development",
-  "version": "0.3.0",
+  "version": "1.0.0",
   "description": "The seed colony for Skills-Driven Development — the skillforge meta-skill, methodology docs, a canonical-skills/ pattern CLI, and three reference example colonies (webapp-starter, cli-tool, data-pipeline).",
   "spec": "agentskills.io/v1",
   "canonicalSkillsDir": "skillforge",
