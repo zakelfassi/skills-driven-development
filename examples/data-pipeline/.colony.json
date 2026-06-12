@@ -1,0 +1,63 @@
+{
+  "$schema": "../../docs/spec/colony-v1.json",
+  "name": "data-pipeline",
+  "version": "0.1.0",
+  "description": "Reference colony for a Python data-engineering and ML project. Demonstrates SkDD skills for dataset onboarding, ETL pipeline scaffolding, experiment logging, data quality gates, and safe historical backfills.",
+  "spec": "agentskills.io/v1",
+  "canonicalSkillsDir": "skills",
+  "harnessMirrors": [],
+  "skills": [
+    {
+      "name": "dataset-onboard",
+      "path": "skills/dataset-onboard/SKILL.md",
+      "description": "Onboard a new raw dataset: schema sniff, profiling notebook, ingestion job, data dictionary entry.",
+      "status": "active"
+    },
+    {
+      "name": "pipeline-stage",
+      "path": "skills/pipeline-stage/SKILL.md",
+      "description": "Scaffold a new transform stage with idempotency, schema contract, and tests.",
+      "status": "active"
+    },
+    {
+      "name": "experiment-log",
+      "path": "skills/experiment-log/SKILL.md",
+      "description": "Record a training run: params, metrics, artifacts; append to experiments ledger.",
+      "status": "active"
+    },
+    {
+      "name": "data-quality-gate",
+      "path": "skills/data-quality-gate/SKILL.md",
+      "description": "Add or extend data validation checks when a pipeline breaks on bad data.",
+      "status": "active"
+    },
+    {
+      "name": "backfill-runbook",
+      "path": "skills/backfill-runbook/SKILL.md",
+      "description": "Safe historical backfill: scope, dry-run, chunked execution, verification queries.",
+      "status": "active"
+    }
+  ],
+  "homepage": "https://github.com/zakelfassi/skills-driven-development/tree/main/examples/data-pipeline",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/zakelfassi/skills-driven-development.git",
+    "directory": "examples/data-pipeline"
+  },
+  "license": "MIT",
+  "maintainers": [
+    {
+      "name": "Zak El Fassi",
+      "github": "zakelfassi"
+    }
+  ],
+  "keywords": [
+    "data-engineering",
+    "etl",
+    "machine-learning",
+    "python",
+    "dbt",
+    "skdd",
+    "skills-driven-development"
+  ]
+}
