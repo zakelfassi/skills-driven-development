@@ -1,4 +1,7 @@
-# Configuration
+---
+title: "Configuration"
+description: "How to wire SkDD into each supported agent harness."
+---
 
 > How to wire SkDD into each supported agent harness.
 
