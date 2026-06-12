@@ -109,22 +109,29 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v5
 
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v5
+        with:
+          version: 9
+
       - name: Setup Node
         uses: actions/setup-node@v5
         with:
           node-version: "20"
+          cache: pnpm
+          cache-dependency-path: extensions/vscode/pnpm-lock.yaml
 
       - name: Install deps
         working-directory: extensions/vscode
-        run: npm install
+        run: pnpm install --frozen-lockfile
 
       - name: Compile
         working-directory: extensions/vscode
-        run: npm run compile
+        run: pnpm run compile
 
       - name: Package extension
         working-directory: extensions/vscode
-        run: npx --yes @vscode/vsce package --no-dependencies
+        run: pnpm dlx @vscode/vsce package --no-dependencies
 
       - name: Upload .vsix artifact
         uses: actions/upload-artifact@v4
