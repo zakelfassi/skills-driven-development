@@ -89,6 +89,13 @@ export default defineConfig({
           ],
         },
         {
+          label: "Hub & global",
+          items: [
+            { label: "Global colony", link: "/global-colony/" },
+            { label: "MCP sync", link: "/mcp-sync/" },
+          ],
+        },
+        {
           label: "Colony lifecycle",
           items: [
             { label: "Discovery", link: "/colony/discovery/" },
