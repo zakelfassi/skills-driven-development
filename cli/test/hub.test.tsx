@@ -1,12 +1,17 @@
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
 import { render } from "ink-testing-library";
 import React from "react";
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { DoctorCheck } from "../src/commands/doctor.js";
+import { Hub } from "../src/hub/app.js";
 import { DoctorPane } from "../src/hub/panes/doctor.js";
 import { McpPane } from "../src/hub/panes/mcp.js";
 import { MirrorsPane } from "../src/hub/panes/mirrors.js";
 import { SkillsPane } from "../src/hub/panes/skills.js";
-import type { McpRow, MirrorRow, SkillRow } from "../src/hub/state.js";
+import { buildMcpRows, type HubData, type McpRow, type McpRowAdapter, type MirrorRow, type SkillRow } from "../src/hub/state.js";
+import type { McpHostId } from "../src/lib/mcp/schema.js";
 
 // ── SkillsPane ────────────────────────────────────────────────────────────────
 
@@ -216,7 +221,7 @@ describe("McpPane", () => {
 
   it("shows dry-run output when provided", () => {
     const { lastFrame, unmount } = render(
-      <McpPane rows={mcpRows} selectedIndex={0} dryRunOutput="Plan: add 2 servers" />,
+      <McpPane rows={mcpRows} selectedIndex={0} dryRunOutput={["Plan: add 2 servers"]} />,
     );
     const frame = lastFrame();
     expect(frame).toContain("Plan: add 2 servers");
@@ -342,5 +347,300 @@ describe("DoctorPane", () => {
     const frame = lastFrame();
     expect(frame).toContain("2 ok");
     unmount();
+  });
+});
+
+// ── Hub keypress — mirrors toggle ─────────────────────────────────────────────
+
+describe("Hub keypress — mirrors toggle", () => {
+  const makeData = (mirrors: MirrorRow[] = []): HubData => ({
+    projectRoot: "/tmp/test",
+    globalRoot: "/tmp/global",
+    projectSkills: [],
+    globalSkills: [],
+    mirrors,
+    mcpRows: [],
+    doctorChecks: [],
+  });
+
+  it("Enter on ok mirror triggers unlink action", async () => {
+    const mockUnlink = vi.fn().mockResolvedValue(undefined);
+    const data = makeData([
+      { harness: "claude", label: "Claude Code", target: ".claude/skills", status: "ok" },
+    ]);
+    const mockReloader = vi.fn().mockResolvedValue(data);
+
+    const { stdin, unmount } = render(
+      <Hub
+        data={data}
+        cwd="/tmp/test"
+        actions={{ unlink: mockUnlink }}
+        reloader={mockReloader}
+      />,
+    );
+
+    // Switch to mirrors pane
+    stdin.write("2");
+    await new Promise((r) => setTimeout(r, 30));
+    // Press Enter — selectedIndex=0 = ok mirror
+    stdin.write("\r");
+    await new Promise((r) => setTimeout(r, 100));
+
+    expect(mockUnlink).toHaveBeenCalledWith({ harness: "claude", cwd: "/tmp/test" });
+    unmount();
+  });
+
+  it("Enter on drift mirror triggers unlink action", async () => {
+    const mockUnlink = vi.fn().mockResolvedValue(undefined);
+    const data = makeData([
+      { harness: "droid", label: "Factory Droid", target: ".factory/skills", status: "drift" },
+    ]);
+    const mockReloader = vi.fn().mockResolvedValue(data);
+
+    const { stdin, unmount } = render(
+      <Hub
+        data={data}
+        cwd="/tmp/test"
+        actions={{ unlink: mockUnlink }}
+        reloader={mockReloader}
+      />,
+    );
+
+    stdin.write("2");
+    await new Promise((r) => setTimeout(r, 30));
+    stdin.write("\r");
+    await new Promise((r) => setTimeout(r, 100));
+
+    expect(mockUnlink).toHaveBeenCalledWith({ harness: "droid", cwd: "/tmp/test" });
+    unmount();
+  });
+
+  it("Enter on unlinked mirror triggers link action", async () => {
+    const mockLink = vi.fn().mockResolvedValue(undefined);
+    const data = makeData([
+      { harness: "codex", label: "OpenAI Codex", target: ".codex/skills", status: "unlinked" },
+    ]);
+    const mockReloader = vi.fn().mockResolvedValue(data);
+
+    const { stdin, unmount } = render(
+      <Hub
+        data={data}
+        cwd="/tmp/test"
+        actions={{ link: mockLink }}
+        reloader={mockReloader}
+      />,
+    );
+
+    stdin.write("2");
+    await new Promise((r) => setTimeout(r, 30));
+    stdin.write("\r");
+    await new Promise((r) => setTimeout(r, 100));
+
+    expect(mockLink).toHaveBeenCalledWith({ harness: "codex", cwd: "/tmp/test" });
+    unmount();
+  });
+
+  it("Enter on missing mirror triggers link action", async () => {
+    const mockLink = vi.fn().mockResolvedValue(undefined);
+    const data = makeData([
+      { harness: "gemini", label: "Gemini CLI", target: ".gemini/skills", status: "missing" },
+    ]);
+    const mockReloader = vi.fn().mockResolvedValue(data);
+
+    const { stdin, unmount } = render(
+      <Hub
+        data={data}
+        cwd="/tmp/test"
+        actions={{ link: mockLink }}
+        reloader={mockReloader}
+      />,
+    );
+
+    stdin.write("2");
+    await new Promise((r) => setTimeout(r, 30));
+    stdin.write("\r");
+    await new Promise((r) => setTimeout(r, 100));
+
+    expect(mockLink).toHaveBeenCalledWith({ harness: "gemini", cwd: "/tmp/test" });
+    unmount();
+  });
+});
+
+// ── Hub keypress — MCP dry-run ────────────────────────────────────────────────
+
+describe("Hub keypress — MCP dry-run", () => {
+  const makeMcpRow = (): McpRow => ({
+    name: "skdd-mcp",
+    kind: "stdio",
+    hosts: {
+      "claude-code": "drift",
+      "claude-desktop": "unavailable",
+      codex: "synced",
+      droid: "unavailable",
+      cursor: "unavailable",
+      opencode: "unavailable",
+      gemini: "unavailable",
+    },
+  });
+
+  const makeData = (mcpRows: McpRow[] = []): HubData => ({
+    projectRoot: "/tmp/test",
+    globalRoot: "/tmp/global",
+    projectSkills: [],
+    globalSkills: [],
+    mirrors: [],
+    mcpRows,
+    doctorChecks: [],
+  });
+
+  it("d keypress renders dry-run plan lines inside MCP pane", async () => {
+    const planLines = ["[claude-code] + skdd-mcp", "[codex] no changes"];
+    const mockDryRun = vi.fn().mockResolvedValue(planLines);
+    const data = makeData([makeMcpRow()]);
+    const mockReloader = vi.fn().mockResolvedValue(data);
+
+    const { stdin, lastFrame, unmount } = render(
+      <Hub
+        data={data}
+        cwd="/tmp/test"
+        actions={{ dryRunPlan: mockDryRun }}
+        reloader={mockReloader}
+      />,
+    );
+
+    // Switch to MCP pane
+    stdin.write("3");
+    await new Promise((r) => setTimeout(r, 30));
+    // Press 'd' for dry-run
+    stdin.write("d");
+    await new Promise((r) => setTimeout(r, 100));
+
+    const frame = lastFrame();
+    expect(frame).toContain("[claude-code] + skdd-mcp");
+    expect(frame).toContain("[codex] no changes");
+    unmount();
+  });
+});
+
+// ── buildMcpRows unit tests ───────────────────────────────────────────────────
+
+describe("buildMcpRows", () => {
+  let tmpDir: string;
+
+  beforeEach(() => {
+    tmpDir = mkdtempSync(join(tmpdir(), "skdd-hub-mcp-"));
+  });
+
+  afterEach(() => {
+    rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  const makeAdapter = (available: boolean, serverNames: string[]): McpRowAdapter => ({
+    available: () => available,
+    read: () =>
+      available
+        ? { ok: true as const, serverNames, rawDoc: {} }
+        : { ok: false as const, reason: "unavailable" },
+  });
+
+  it("returns empty array when no mcp.json exists", () => {
+    const rows = buildMcpRows(tmpDir);
+    expect(rows).toEqual([]);
+  });
+
+  it("synced: server is managed and present in host config", () => {
+    writeFileSync(
+      join(tmpDir, "mcp.json"),
+      JSON.stringify({ version: 1, servers: { myserver: { command: "npx", args: ["-y", "my"] } } }),
+    );
+    const adapters: Partial<Record<McpHostId, McpRowAdapter>> = {
+      "claude-code": makeAdapter(true, ["myserver"]),
+    };
+    const rows = buildMcpRows(tmpDir, {
+      adapters,
+      loadManaged: (h) => (h === "claude-code" ? ["myserver"] : []),
+    });
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.hosts["claude-code"]).toBe("synced");
+  });
+
+  it("drift: server managed but absent from host config", () => {
+    writeFileSync(
+      join(tmpDir, "mcp.json"),
+      JSON.stringify({ version: 1, servers: { myserver: { command: "npx", args: ["-y", "my"] } } }),
+    );
+    const adapters: Partial<Record<McpHostId, McpRowAdapter>> = {
+      "claude-code": makeAdapter(true, []),
+    };
+    const rows = buildMcpRows(tmpDir, {
+      adapters,
+      loadManaged: (h) => (h === "claude-code" ? ["myserver"] : []),
+    });
+    expect(rows[0]?.hosts["claude-code"]).toBe("drift");
+  });
+
+  it("drift: server present in host but not managed by skdd", () => {
+    writeFileSync(
+      join(tmpDir, "mcp.json"),
+      JSON.stringify({ version: 1, servers: { myserver: { command: "npx", args: ["-y", "my"] } } }),
+    );
+    const adapters: Partial<Record<McpHostId, McpRowAdapter>> = {
+      "claude-code": makeAdapter(true, ["myserver"]),
+    };
+    const rows = buildMcpRows(tmpDir, {
+      adapters,
+      loadManaged: () => [],
+    });
+    expect(rows[0]?.hosts["claude-code"]).toBe("drift");
+  });
+
+  it("drift: adapter.read() fails (malformed host config)", () => {
+    writeFileSync(
+      join(tmpDir, "mcp.json"),
+      JSON.stringify({ version: 1, servers: { myserver: { command: "npx", args: ["-y", "my"] } } }),
+    );
+    const adapters: Partial<Record<McpHostId, McpRowAdapter>> = {
+      "claude-code": {
+        available: () => true,
+        read: () => ({ ok: false as const, reason: "parse error" }),
+      },
+    };
+    const rows = buildMcpRows(tmpDir, {
+      adapters,
+      loadManaged: () => ["myserver"],
+    });
+    expect(rows[0]?.hosts["claude-code"]).toBe("drift");
+  });
+
+  it("unavailable: adapter.available() returns false", () => {
+    writeFileSync(
+      join(tmpDir, "mcp.json"),
+      JSON.stringify({ version: 1, servers: { myserver: { command: "npx", args: ["-y", "my"] } } }),
+    );
+    const adapters: Partial<Record<McpHostId, McpRowAdapter>> = {
+      "claude-code": makeAdapter(false, []),
+    };
+    const rows = buildMcpRows(tmpDir, { adapters, loadManaged: () => [] });
+    expect(rows[0]?.hosts["claude-code"]).toBe("unavailable");
+  });
+
+  it("excluded: server hosts allowlist excludes this host", () => {
+    writeFileSync(
+      join(tmpDir, "mcp.json"),
+      JSON.stringify({
+        version: 1,
+        servers: { myserver: { command: "npx", args: ["-y", "my"], hosts: ["droid"] } },
+      }),
+    );
+    const adapters: Partial<Record<McpHostId, McpRowAdapter>> = {
+      "claude-code": makeAdapter(true, ["myserver"]),
+      droid: makeAdapter(true, ["myserver"]),
+    };
+    const rows = buildMcpRows(tmpDir, {
+      adapters,
+      loadManaged: () => ["myserver"],
+    });
+    expect(rows[0]?.hosts["claude-code"]).toBe("excluded");
+    expect(rows[0]?.hosts["droid"]).toBe("synced");
   });
 });

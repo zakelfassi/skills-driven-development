@@ -67,3 +67,8 @@ export function upsertMirror(state: SyncState, target: string, mode: ResolvedLin
   }
   return state;
 }
+
+export function removeMirror(state: SyncState, target: string): SyncState {
+  state.mirrors = state.mirrors.filter((m) => m.target !== target);
+  return state;
+}

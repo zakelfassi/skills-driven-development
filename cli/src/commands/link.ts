@@ -1,4 +1,4 @@
-import { existsSync } from "node:fs";
+import { existsSync, rmSync } from "node:fs";
 import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import {
   type EnsureMirrorResult,
@@ -9,7 +9,7 @@ import {
 import { globalSkillsDir, skddHome } from "../lib/global.js";
 import { detectAllHarnesses, HARNESSES, type Harness } from "../lib/harness.js";
 import { logger, pc } from "../lib/logger.js";
-import { emptyState, loadState, saveState, upsertMirror } from "../lib/sync-state.js";
+import { emptyState, loadState, removeMirror, saveState, upsertMirror } from "../lib/sync-state.js";
 
 export interface LinkOptions {
   cwd?: string;
@@ -207,5 +207,45 @@ async function runLinkGlobal(opts: LinkOptions): Promise<number> {
     return 1;
   }
   if (!quiet) logger.success(`State written to ${pc.bold(join(home, ".skdd-sync.json"))}`);
+  return 0;
+}
+
+// -- runUnlink ----------------------------------------------------------------
+
+export interface UnlinkOptions {
+  cwd?: string;
+  harnesses?: Harness[];
+  quiet?: boolean;
+}
+
+/**
+ * Remove the mirror symlink/directory for the given harnesses and delete
+ * their entries from the sync state. Used by the hub TUI unlink action.
+ */
+export async function runUnlink(opts: UnlinkOptions = {}): Promise<number> {
+  const cwd = resolve(opts.cwd ?? process.cwd());
+  const quiet = opts.quiet ?? false;
+  const harnesses = opts.harnesses ?? [];
+  if (harnesses.length === 0) return 0;
+
+  const state = loadState(cwd) ?? emptyState();
+
+  for (const harness of harnesses) {
+    const profile = HARNESSES[harness];
+    const mirrorAbs = resolve(cwd, profile.skillsDir);
+
+    // Remove from FS (handles symlinks and directories; force = silent if missing)
+    try {
+      rmSync(mirrorAbs, { recursive: true, force: true });
+      if (!quiet) logger.success(`Unlinked ${profile.skillsDir}`);
+    } catch (err) {
+      if (!quiet) logger.warn(`Could not remove ${profile.skillsDir}: ${(err as Error).message}`);
+    }
+
+    // Remove mirror entry from state
+    removeMirror(state, profile.skillsDir);
+  }
+
+  saveState(cwd, state);
   return 0;
 }

@@ -322,3 +322,72 @@ export async function runMcpSync(opts: McpSyncOptions = {}): Promise<number> {
 
   return exitCode;
 }
+
+// -- collectMcpPlanLines -------------------------------------------------------
+
+/**
+ * Compute the MCP dry-run plan and return it as an array of human-readable
+ * lines, without printing anything to stdout/stderr. Used by the hub TUI to
+ * render the plan inside the MCP pane rather than behind the TUI output.
+ */
+export async function collectMcpPlanLines(): Promise<string[]> {
+  ensureGlobalColony();
+  const home = skddHome();
+  const config = loadMcpConfig(home);
+
+  if (!config || Object.keys(config.servers).length === 0) {
+    return ["No MCP servers configured."];
+  }
+
+  const lines: string[] = [];
+  const state = loadState(home) ?? emptyState();
+
+  for (const hostId of MCP_HOST_IDS) {
+    const adapter = ADAPTERS[hostId];
+    if (!adapter) continue;
+
+    if (!adapter.available()) {
+      lines.push(`[${hostId}] skipped (unavailable)`);
+      continue;
+    }
+
+    const managed = getMcpManagedNames(state, hostId);
+    const isDroid = hostId === "droid";
+
+    const resolvedServers: Record<string, McpServer> = {};
+    for (const [name, server] of Object.entries(config.servers)) {
+      if (isDroid) {
+        resolvedServers[name] = server;
+      } else {
+        const { resolved, unresolved } = expandServerVars(server);
+        if (unresolved.length > 0) {
+          lines.push(`[${hostId}] skip "${name}": unresolved ${unresolved.join(", ")}`);
+          continue;
+        }
+        resolvedServers[name] = resolved;
+      }
+    }
+
+    const resolvedConfig: CanonicalMcpConfig = { version: 1, servers: resolvedServers };
+    const plan = adapter.plan(resolvedConfig, managed);
+
+    if (!plan.ok) {
+      lines.push(`[${hostId}] blocked: ${plan.reason}`);
+      continue;
+    }
+
+    if (plan.changes.length === 0) {
+      lines.push(`[${hostId}] no changes`);
+    } else {
+      for (const c of plan.changes) {
+        const sym = c.op === "add" ? "+" : c.op === "remove" ? "-" : "~";
+        lines.push(`[${hostId}] ${sym} ${c.name}`);
+      }
+    }
+    for (const w of plan.warnings) {
+      lines.push(`[${hostId}] warn: ${w}`);
+    }
+  }
+
+  return lines;
+}

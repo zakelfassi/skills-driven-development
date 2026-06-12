@@ -4,7 +4,7 @@ import { ALL_HOST_IDS, type McpCellStatus, type McpRow } from "../state.js";
 interface McpPaneProps {
   rows: McpRow[];
   selectedIndex: number;
-  dryRunOutput?: string;
+  dryRunOutput?: string[];
 }
 
 const CELL: Record<McpCellStatus, { char: string; color: string }> = {
@@ -65,10 +65,15 @@ export function McpPane({ rows, selectedIndex, dryRunOutput }: McpPaneProps) {
           </Box>
         );
       })}
-      {dryRunOutput && (
+      {dryRunOutput && dryRunOutput.length > 0 && (
         <Box marginTop={1} flexDirection="column">
           <Text color="gray">── dry-run plan ──</Text>
-          <Text color="gray">{dryRunOutput}</Text>
+          {dryRunOutput.map((line, i) => (
+            // biome-ignore lint/suspicious/noArrayIndexKey: stable index-keyed static lines
+            <Text key={i} color="gray">
+              {line}
+            </Text>
+          ))}
         </Box>
       )}
       <Box marginTop={1}>

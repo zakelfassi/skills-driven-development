@@ -3,7 +3,8 @@ import { join } from "node:path";
 import { collectDoctorChecks, type DoctorCheck } from "../commands/doctor.js";
 import { skddHome } from "../lib/global.js";
 import { HARNESSES, type Harness } from "../lib/harness.js";
-import { ADAPTERS } from "../lib/mcp/adapters/index.js";
+import { ADAPTERS, type HostReadResult } from "../lib/mcp/adapters/index.js";
+import { loadMcpManagedNames } from "../lib/mcp/state.js";
 import { loadMcpConfig, type McpHostId } from "../lib/mcp/schema.js";
 import { loadRegistry, type Registry } from "../lib/registry.js";
 import { loadState, type SyncMirror } from "../lib/sync-state.js";
@@ -113,9 +114,26 @@ function checkMirrorStatus(target: string, mirror: SyncMirror): MirrorRow["statu
   }
 }
 
-function buildMcpRows(globalRoot: string): McpRow[] {
+/** Minimal adapter surface needed by buildMcpRows — enables injection in tests. */
+export interface McpRowAdapter {
+  available(): boolean;
+  read(): HostReadResult;
+}
+
+export interface BuildMcpRowsOpts {
+  /** Override the adapter registry (default: ADAPTERS from adapters/index). */
+  adapters?: Partial<Record<McpHostId, McpRowAdapter>>;
+  /** Override how managed server names are fetched per host (default: loadMcpManagedNames). */
+  loadManaged?: (hostId: McpHostId) => string[];
+}
+
+export function buildMcpRows(globalRoot: string, opts?: BuildMcpRowsOpts): McpRow[] {
   const config = loadMcpConfig(globalRoot);
   if (!config) return [];
+
+  const adapters = opts?.adapters ?? ADAPTERS;
+  const loadManaged =
+    opts?.loadManaged ?? ((hostId: McpHostId) => loadMcpManagedNames(globalRoot, hostId));
 
   return Object.entries(config.servers).map(([name, server]) => {
     const hosts: Record<McpHostId, McpCellStatus> = {} as Record<McpHostId, McpCellStatus>;
@@ -126,12 +144,25 @@ function buildMcpRows(globalRoot: string): McpRow[] {
         hosts[hostId] = "excluded";
         continue;
       }
-      const adapter = ADAPTERS[hostId];
+      const adapter = adapters[hostId];
       if (!adapter || !adapter.available()) {
         hosts[hostId] = "unavailable";
         continue;
       }
-      hosts[hostId] = "drift"; // default until we check
+
+      const readResult = adapter.read();
+      const managed = loadManaged(hostId);
+
+      if (!readResult.ok) {
+        // Malformed host config — treat as drift
+        hosts[hostId] = "drift";
+        continue;
+      }
+
+      const isManaged = managed.includes(name);
+      const isPresent = readResult.serverNames.includes(name);
+
+      hosts[hostId] = isManaged && isPresent ? "synced" : "drift";
     }
 
     return {

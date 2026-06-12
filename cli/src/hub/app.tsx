@@ -1,8 +1,9 @@
 import { Box, render, Text, useApp, useInput } from "ink";
 import { useCallback, useEffect, useState } from "react";
 import { collectDoctorChecks } from "../commands/doctor.js";
-import { runLink } from "../commands/link.js";
-import { runMcpSync } from "../commands/mcp.js";
+import { runLink, runUnlink } from "../commands/link.js";
+import { collectMcpPlanLines, runMcpSync } from "../commands/mcp.js";
+import type { Harness } from "../lib/harness.js";
 import { DoctorPane } from "./panes/doctor.js";
 import { McpPane } from "./panes/mcp.js";
 import { MirrorsPane } from "./panes/mirrors.js";
@@ -18,19 +19,29 @@ const PANES: { id: PaneId; label: string }[] = [
   { id: "doctor", label: "Doctor" },
 ];
 
+/** Injectable action handlers — defaults are the real implementations. */
+export interface HubActions {
+  link?: (opts: { harness: Harness; cwd: string }) => Promise<void>;
+  unlink?: (opts: { harness: Harness; cwd: string }) => Promise<void>;
+  dryRunPlan?: () => Promise<string[]>;
+}
+
 export interface HubProps {
   data: HubData;
   cwd: string;
+  actions?: HubActions;
+  /** Override data reload — defaults to loadHubData(cwd). */
+  reloader?: (cwd: string) => Promise<HubData>;
 }
 
-function Hub({ data: initialData, cwd }: HubProps) {
+export function Hub({ data: initialData, cwd, actions, reloader }: HubProps) {
   const { exit } = useApp();
   const [activePane, setActivePane] = useState<PaneId>("skills");
   const [data, setData] = useState<HubData>(initialData);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [actionMessage, setActionMessage] = useState<string | undefined>();
   const [doctorLoading, setDoctorLoading] = useState(false);
-  const [dryRunOutput, setDryRunOutput] = useState<string | undefined>();
+  const [dryRunOutput, setDryRunOutput] = useState<string[] | undefined>();
 
   const activePaneIdx = PANES.findIndex((p) => p.id === activePane);
 
@@ -55,9 +66,10 @@ function Hub({ data: initialData, cwd }: HubProps) {
   }, [activePane]);
 
   const reloadData = useCallback(async () => {
-    const fresh = await loadHubData(cwd);
+    const doReload = reloader ?? loadHubData;
+    const fresh = await doReload(cwd);
     setData(fresh);
-  }, [cwd]);
+  }, [cwd, reloader]);
 
   const reRunDoctor = useCallback(async () => {
     setDoctorLoading(true);
@@ -73,15 +85,24 @@ function Hub({ data: initialData, cwd }: HubProps) {
     const mirror: MirrorRow | undefined = data.mirrors[selectedIndex];
     if (!mirror) return;
 
-    if (mirror.status === "unlinked" || mirror.status === "missing") {
-      setActionMessage(`Linking ${mirror.harness}…`);
-      await runLink({ harnesses: [mirror.harness], quiet: true });
-      setActionMessage(`Linked ${mirror.harness}`);
+    const doLink = actions?.link ?? (async (o: { harness: Harness; cwd: string }) => {
+      await runLink({ harnesses: [o.harness], cwd: o.cwd, quiet: true });
+    });
+    const doUnlink = actions?.unlink ?? (async (o: { harness: Harness; cwd: string }) => {
+      await runUnlink({ harnesses: [o.harness], cwd: o.cwd, quiet: true });
+    });
+
+    if (mirror.status === "ok" || mirror.status === "drift") {
+      setActionMessage(`Unlinking ${mirror.harness}…`);
+      await doUnlink({ harness: mirror.harness, cwd });
+      setActionMessage(`Unlinked ${mirror.harness}`);
     } else {
-      setActionMessage(`${mirror.harness} already linked (use skdd link --force to repair)`);
+      setActionMessage(`Linking ${mirror.harness}…`);
+      await doLink({ harness: mirror.harness, cwd });
+      setActionMessage(`Linked ${mirror.harness}`);
     }
     await reloadData();
-  }, [activePane, data.mirrors, selectedIndex, reloadData]);
+  }, [activePane, actions, cwd, data.mirrors, selectedIndex, reloadData]);
 
   const syncMcp = useCallback(async () => {
     if (activePane !== "mcp") return;
@@ -93,11 +114,11 @@ function Hub({ data: initialData, cwd }: HubProps) {
 
   const dryRunMcp = useCallback(async () => {
     if (activePane !== "mcp") return;
-    setDryRunOutput("Computing dry-run plan…");
-    // Capture output via a custom approach — show a message since runMcpSync prints to stdout
-    const code = await runMcpSync({ dryRun: true });
-    setDryRunOutput(`Dry-run complete (exit ${code}). Check terminal output above.`);
-  }, [activePane]);
+    setDryRunOutput(["Computing dry-run plan…"]);
+    const doDryRun = actions?.dryRunPlan ?? collectMcpPlanLines;
+    const lines = await doDryRun();
+    setDryRunOutput(lines);
+  }, [activePane, actions]);
 
   useInput((input, key) => {
     // Global: quit
