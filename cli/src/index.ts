@@ -5,11 +5,13 @@ import { runImport } from "./commands/import.js";
 import { runInit } from "./commands/init.js";
 import { runLink } from "./commands/link.js";
 import { runList } from "./commands/list.js";
+import { runMcpAdd, runMcpList, runMcpRemove } from "./commands/mcp.js";
 import { runShow } from "./commands/show.js";
 import { runValidate } from "./commands/validate.js";
 import type { LinkMode } from "./lib/fs-link.js";
 import type { Harness } from "./lib/harness.js";
 import { logger } from "./lib/logger.js";
+import type { McpHostId } from "./lib/mcp/schema.js";
 
 declare const __SKDD_VERSION__: string;
 const VERSION = typeof __SKDD_VERSION__ !== "undefined" ? __SKDD_VERSION__ : "0.0.0-dev";
@@ -234,6 +236,96 @@ program
       process.exit(code);
     },
   );
+
+// ── mcp subcommand group ─────────────────────────────────────────────────────
+
+const mcp = new Command("mcp").description(
+  "Manage the canonical MCP server registry (~/.skdd/mcp.json)",
+);
+
+mcp
+  .command("list")
+  .description("List all MCP servers in the canonical registry")
+  .option("-f, --format <fmt>", "Output format: table|json", "table")
+  .action(async (opts: { format: "table" | "json" }) => {
+    const code = await runMcpList({ format: opts.format });
+    process.exit(code);
+  });
+
+mcp
+  .command("add <name>")
+  .description("Add or update an MCP server in the canonical registry")
+  .option("-c, --command <cmd>", "Executable to run (stdio server)")
+  .option(
+    "--args <args>",
+    "Space-separated arguments for the command (use quotes for complex args)",
+  )
+  .option(
+    "--env <pairs>",
+    "Comma-separated KEY=VALUE environment variables, e.g. API_KEY=${MY_KEY}",
+  )
+  .option("-u, --url <url>", "URL of the remote MCP server")
+  .option("--type <type>", "Remote server type: http|sse", "http")
+  .option(
+    "--hosts <list>",
+    "Comma-separated host IDs to target, e.g. claude-code,droid (default: all)",
+  )
+  .option("--disabled", "Mark the server as disabled", false)
+  .option("-f, --force", "Overwrite existing server entry", false)
+  .action(
+    async (
+      name: string,
+      opts: {
+        command?: string;
+        args?: string;
+        env?: string;
+        url?: string;
+        type?: string;
+        hosts?: string;
+        disabled: boolean;
+        force: boolean;
+      },
+    ) => {
+      const args = opts.args ? opts.args.split(" ").filter(Boolean) : undefined;
+      const env = opts.env
+        ? Object.fromEntries(
+            opts.env.split(",").map((pair) => {
+              const idx = pair.indexOf("=");
+              return idx === -1
+                ? [pair.trim(), ""]
+                : [pair.slice(0, idx).trim(), pair.slice(idx + 1).trim()];
+            }),
+          )
+        : undefined;
+      const hosts = opts.hosts
+        ? (opts.hosts.split(",").map((h) => h.trim()) as McpHostId[])
+        : undefined;
+      const code = await runMcpAdd(name, {
+        command: opts.command,
+        args,
+        env,
+        url: opts.url,
+        type: opts.type as "http" | "sse" | undefined,
+        hosts,
+        disabled: opts.disabled || undefined,
+        force: opts.force,
+      });
+      process.exit(code);
+    },
+  );
+
+mcp
+  .command("remove <name>")
+  .description("Remove an MCP server from the canonical registry")
+  .option("-f, --force", "Exit 0 even when the server does not exist", false)
+  .action(async (name: string, opts: { force: boolean }) => {
+    const code = await runMcpRemove(name, { force: opts.force });
+    process.exit(code);
+  });
+
+program.addCommand(mcp);
+
+// ── main ─────────────────────────────────────────────────────────────────────
 
 program.parseAsync(process.argv).catch((err) => {
   logger.error((err as Error).message);

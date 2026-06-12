@@ -9,10 +9,16 @@ export interface SyncMirror {
   updatedAt?: string;
 }
 
+export interface McpHostSyncInfo {
+  managed: string[]; // server names managed by skdd for this host
+  lastSync: string; // ISO timestamp
+}
+
 export interface SyncState {
   version: number;
   canonical: string; // path relative to project root
   mirrors: SyncMirror[];
+  mcp?: { hosts: Record<string, McpHostSyncInfo> }; // keyed by McpHostId
 }
 
 export const STATE_VERSION = 2;
