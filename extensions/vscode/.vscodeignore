@@ -8,5 +8,7 @@ vsc-extension-quickstart.md
 **/.eslintrc.json
 **/*.map
 **/*.ts
+*.vsix
+pnpm-lock.yaml
 node_modules/**
 !dist/**
