@@ -11,7 +11,7 @@
 ```bash
 # Add a server to the canonical catalogue
 skdd mcp add my-tool \
-  --command npx --args "-y,@acme/my-tool-mcp" \
+  --command npx --args "-y @acme/my-tool-mcp" \
   --env "API_KEY=\${MY_API_KEY}"
 
 # Preview what sync would do without writing anything

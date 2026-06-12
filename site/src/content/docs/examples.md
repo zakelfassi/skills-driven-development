@@ -5,7 +5,7 @@ description: "Persona: a TypeScript + React/Express team shipping a web applicat
 
 Three reference colonies that show SkDD working across different project types. Each colony ships with real structure, a lived-in registry, and at least one executable script — so you can see the loop in action before adapting it to your own project.
 
-All three colonies are validated in CI:
+All three colonies pass `skdd validate` and `skdd doctor`:
 
 ```bash
 node cli/dist/index.js validate \

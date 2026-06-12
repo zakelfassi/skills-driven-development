@@ -102,11 +102,11 @@ Droid's MCP format:
 
 ```bash
 # Add a server and sync it to Droid (and any other available hosts)
-skdd mcp add my-tool --command npx --args "-y,@acme/my-tool-mcp" --env "API_KEY=\${MY_API_KEY}"
+skdd mcp add my-tool --command npx --args "-y @acme/my-tool-mcp" --env "API_KEY=\${MY_API_KEY}"
 skdd mcp sync
 
 # Sync only to Droid
-skdd mcp add my-tool --command npx --args "-y,@acme/my-tool-mcp" --hosts droid
+skdd mcp add my-tool --command npx --args "-y @acme/my-tool-mcp" --hosts droid
 skdd mcp sync
 ```
 
@@ -152,7 +152,7 @@ If either is present, the project is detected as `droid` harness. Detection is a
 
 **Droid wrote a new skill directly into `.factory/skills/<name>/`.** The AGENTS.md instructions block says "Always write to `skills/`, never to the mirror." Re-prompt with that sentence verbatim, then move the file from the mirror into the canonical dir and re-run `skdd link`.
 
-**Global skills aren't showing up.** Run `skdd doctor -g` to check the global colony state. The most common cause is that `~/.factory/skills` hasn't been linked yet — run `skdd link -g --harness=droid` (or `skdd init -g --harness=droid`). If `~/.factory/skills` was previously a real directory, you'll need to `skdd import -g` first, then `skdd link -g --force`.
+**Global skills aren't showing up.** Run `skdd doctor -g` to check the global colony state. The most common cause is that `~/.factory/skills` hasn't been linked yet — run `skdd link -g --harness=droid` (or `skdd init -g --harness=droid`). If `~/.factory/skills` was previously a real directory, you'll need to `skdd import -g --apply` first, then `skdd link -g --force`.
 
 **`skdd mcp sync` shows Droid as unavailable.** The adapter checks that `~/.factory/mcp.json` (or the `~/.factory/` directory) exists. If Droid isn't installed yet, the adapter reports unavailable and skips — no error. Once you install Factory, re-run `skdd mcp sync`.
 

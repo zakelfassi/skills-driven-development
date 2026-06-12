@@ -58,14 +58,14 @@ The safe migration path is to **import** your existing skills into `~/.skdd/skil
 
 ```bash
 # Pull skills from all reachable harness global dirs into ~/.skdd/skills/
-skdd import -g
+skdd import -g --apply
 
 # Now ~/.skdd/skills/ contains all discovered skills.
 # Back up the originals, then force-link so ~/.claude/skills etc. point at ~/.skdd/skills.
 skdd link -g --force
 ```
 
-`skdd import -g` scans every harness's `globalSkillsDir` (see the table below) and copies any `SKILL.md` it finds into `~/.skdd/skills/<name>/`, preserving the skill names. Existing entries are not overwritten unless you pass `--force`.
+`skdd import -g` (without `--apply`) is scan-only — it reports what it found but makes no changes. Add `--apply` to consolidate: it copies any `SKILL.md` it finds into `~/.skdd/skills/<name>/`, preserving the skill names. Existing entries are not overwritten unless you also pass `--force`.
 
 ---
 
@@ -80,7 +80,7 @@ All six commands that accept `-g`:
 | `skdd doctor` | Checks colony in cwd | Checks `~/.skdd/` (skills dir, registry, mirrors, MCP drift); skips instruction-file checks |
 | `skdd list` | Lists skills in cwd registry | Lists skills in `~/.skdd/.skills-registry.md` |
 | `skdd forge` | Forges skill into `skills/` and registers in cwd | Forges skill into `~/.skdd/skills/` and registers globally; calls `link -g` post-forge |
-| `skdd import` | Imports skills from harness project dirs into `skills/` | Imports from all harness *global* dirs into `~/.skdd/skills/` |
+| `skdd import` | Scans harness project dirs for skills (reports duplicates); add `--apply` to consolidate into `skills/` | Scans all harness *global* dirs; add `--apply` to consolidate into `~/.skdd/skills/` |
 
 `skdd mcp` commands always operate on `~/.skdd/mcp.json` regardless of the `-g` flag (MCP configuration is always global).
 

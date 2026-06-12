@@ -233,7 +233,7 @@ A **global colony** at `~/.skdd/` holds skills that travel with you rather than 
 skdd init --global
 
 # Forge a personal skill into the global colony
-skdd forge -g --name=commit-message-style
+skdd forge commit-message-style -g
 
 # Check global colony health
 skdd doctor -g
@@ -264,7 +264,7 @@ See [`docs/global-colony.md`](global-colony.md) for the full guide, including th
 
 ```bash
 # Add a server
-skdd mcp add my-tool --command npx --args "-y,@acme/my-tool-mcp" --env "API_KEY=\${MY_KEY}"
+skdd mcp add my-tool --command npx --args "-y @acme/my-tool-mcp" --env "API_KEY=\${MY_KEY}"
 
 # Preview sync without writing
 skdd mcp sync --dry-run

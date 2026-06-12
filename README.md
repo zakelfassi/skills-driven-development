@@ -113,13 +113,13 @@ skdd list --global
 
 **`skdd hub`** opens an Ink TUI with four panes: skills (project + global), mirror status + link/unlink toggles, MCP server × host matrix, and a doctor report — all in one screen.
 
-**`skdd mcp sync`** writes your `~/.skdd/mcp.json` to all installed harness configs using merge-not-overwrite adapters. Supports `${VAR}` environment placeholders (secrets never round-trip), per-server host allowlists, and `--dry-run` mode. Adapters cover all 9 harnesses.
+**`skdd mcp sync`** writes your `~/.skdd/mcp.json` to all installed harness configs using merge-not-overwrite adapters. Supports `${VAR}` environment placeholders (secrets never round-trip), per-server host allowlists, and `--dry-run` mode. Adapters cover all 7 MCP hosts: `claude-code`, `claude-desktop`, `codex`, `droid`, `cursor`, `opencode`, `gemini`. (The 9 harnesses in the support matrix include 2 that do not have an MCP config format: GitHub Copilot and Goose.)
 
 ---
 
 ## Examples Gallery
 
-Three reference colonies — validated by `skdd validate` + `skdd doctor` in CI:
+Three reference colonies — every example passes `skdd validate` and `skdd doctor`:
 
 | Colony | Persona | Skills | What it demonstrates |
 |---|---|---|---|
