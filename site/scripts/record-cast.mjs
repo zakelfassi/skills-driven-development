@@ -16,7 +16,7 @@
  */
 
 import { execFileSync } from "child_process";
-import { mkdtempSync, rmSync, writeFileSync, mkdirSync } from "fs";
+import { mkdtempSync, rmSync, writeFileSync, mkdirSync, realpathSync } from "fs";
 import { join, resolve, dirname } from "path";
 import { fileURLToPath } from "url";
 import { tmpdir } from "os";
@@ -101,7 +101,19 @@ function buildTranscript(commands) {
 
 // ── Main ─────────────────────────────────────────────────────────────────────
 const tmpDir = mkdtempSync(join(tmpdir(), 'skdd-cast-'));
+// Resolve symlinks (macOS /var/folders → /private/var/folders) so both forms
+// are replaced when normalizing output.
+const realTmpDir = realpathSync(tmpDir);
 console.log(`Recording in temp dir: ${tmpDir}`);
+
+// Replace all occurrences of the ephemeral temp path with a stable placeholder
+// so that skdd-cast.json is byte-stable across reruns.
+function normalizePaths(str) {
+  let out = str;
+  if (realTmpDir !== tmpDir) out = out.split(realTmpDir).join('~/demo');
+  out = out.split(tmpDir).join('~/demo');
+  return out;
+}
 
 try {
   const initOut = runCmd(tmpDir, ['init', '--harness=claude']);
@@ -119,12 +131,12 @@ try {
   console.log('✓ doctor done');
 
   const commands = [
-    { label: 'init --harness=claude', output: initOut.trim() },
+    { label: 'init --harness=claude', output: normalizePaths(initOut.trim()) },
     {
       label: 'forge release-notes --non-interactive --from-description "Summarise merged PRs and generate a user-facing CHANGELOG entry for each release"',
-      output: forgeOut.trim(),
+      output: normalizePaths(forgeOut.trim()),
     },
-    { label: 'doctor', output: doctorOut.trim() },
+    { label: 'doctor', output: normalizePaths(doctorOut.trim()) },
   ];
 
   const { items, totalMs } = buildTranscript(commands);
