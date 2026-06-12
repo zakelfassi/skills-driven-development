@@ -1,6 +1,7 @@
 import { Command } from "commander";
 import { runDoctor } from "./commands/doctor.js";
 import { runForge } from "./commands/forge.js";
+import { runHub } from "./commands/hub.js";
 import { runImport } from "./commands/import.js";
 import { runInit } from "./commands/init.js";
 import { runLink } from "./commands/link.js";
@@ -332,6 +333,16 @@ mcp
   });
 
 program.addCommand(mcp);
+
+// ── hub ───────────────────────────────────────────────────────────────────────
+
+program
+  .command("hub")
+  .description("Open the skdd TUI dashboard (skills, mirrors, MCP matrix, doctor)")
+  .action(async () => {
+    const code = await runHub();
+    process.exit(code);
+  });
 
 // ── main ─────────────────────────────────────────────────────────────────────
 

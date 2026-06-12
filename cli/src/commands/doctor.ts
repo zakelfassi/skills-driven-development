@@ -36,8 +36,10 @@ const INSTRUCTION_FILES = [
   ".github/copilot-instructions.md",
 ] as const;
 
-export async function runDoctor(opts: DoctorOptions = {}): Promise<number> {
-  const root = opts.global ? skddHome() : resolve(opts.cwd ?? process.cwd());
+export async function collectDoctorChecks(
+  root: string,
+  opts: { global?: boolean } = {},
+): Promise<{ checks: DoctorCheck[]; canonical: string }> {
   const checks: DoctorCheck[] = [];
 
   const canonical = checkColony(root, checks);
@@ -46,10 +48,17 @@ export async function runDoctor(opts: DoctorOptions = {}): Promise<number> {
   checkValidation(parsedSkills, checks);
   checkRegistry(root, parsedSkills, canonical, checks);
   checkMirrors(root, canonicalPath, checks);
-  // Skip instruction file checks in global mode (no project instruction file)
   if (!opts.global) {
     checkInstructions(root, checks);
   }
+
+  return { checks, canonical };
+}
+
+export async function runDoctor(opts: DoctorOptions = {}): Promise<number> {
+  const root = opts.global ? skddHome() : resolve(opts.cwd ?? process.cwd());
+
+  const { checks, canonical } = await collectDoctorChecks(root, { global: opts.global });
 
   if (opts.json) {
     emitJson(root, canonical, checks);

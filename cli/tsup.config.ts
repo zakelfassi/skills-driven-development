@@ -12,6 +12,7 @@ export default defineConfig({
   clean: true,
   sourcemap: true,
   shims: false,
+  splitting: true,
   define: {
     __SKDD_VERSION__: JSON.stringify(pkg.version),
   },
