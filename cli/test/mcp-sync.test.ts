@@ -553,3 +553,133 @@ describe("runMcpSync — malformed host config blocks write, continues others", 
     expect((cursor.mcpServers as Record<string, unknown>)["srv"]).toBeDefined();
   });
 });
+
+// ── Fix 3: allowlist narrowing removal (integration) ─────────────────────────
+
+describe("runMcpSync — allowlist narrowing removal (fix-3)", () => {
+  it("removes a managed server from a host when its allowlist is updated to exclude that host", async () => {
+    placeAll();
+
+    // First sync: server available on all hosts
+    writeCanonical({ "narrowing-srv": { command: "cmd" } });
+    await runMcpSync();
+
+    // Verify it was synced to cursor
+    expect(
+      (readHostJson(".cursor/mcp.json").mcpServers as Record<string, unknown>)["narrowing-srv"],
+    ).toBeDefined();
+
+    // Second canonical: server now restricted to droid only
+    writeCanonical({
+      "narrowing-srv": { command: "cmd", hosts: ["droid"] },
+    });
+    const code2 = await runMcpSync();
+    expect(code2).toBe(0);
+
+    // cursor should no longer have the server
+    expect(
+      (readHostJson(".cursor/mcp.json").mcpServers as Record<string, unknown>)["narrowing-srv"],
+    ).toBeUndefined();
+    // droid should still have it
+    expect(
+      (readHostJson(".factory/mcp.json").mcpServers as Record<string, unknown>)["narrowing-srv"],
+    ).toBeDefined();
+  });
+
+  it("updates managed state to reflect removal from excluded host", async () => {
+    placeAll();
+    writeCanonical({ "narrowing-srv": { command: "cmd" } });
+    await runMcpSync();
+
+    expect(loadMcpManagedNames(skddTmp, "cursor")).toContain("narrowing-srv");
+
+    // Update allowlist to exclude cursor
+    writeCanonical({ "narrowing-srv": { command: "cmd", hosts: ["droid"] } });
+    await runMcpSync();
+
+    expect(loadMcpManagedNames(skddTmp, "cursor")).not.toContain("narrowing-srv");
+    expect(loadMcpManagedNames(skddTmp, "droid")).toContain("narrowing-srv");
+  });
+});
+
+// ── Fix 4: same-name unmanaged safety (integration) ──────────────────────────
+
+describe("runMcpSync — same-name unmanaged safety (fix-4)", () => {
+  it("does not overwrite a user-authored entry that has the same name as a canonical server", async () => {
+    placeAll();
+
+    // claude-code fixture has "user-managed-mcp" as unmanaged
+    writeCanonical({
+      "user-managed-mcp": { command: "new-skdd-cmd" },
+    });
+
+    const code = await runMcpSync();
+    // Not an error — just a warning
+    expect(code).toBe(0);
+
+    // The user-authored entry must not be overwritten
+    const cc = readHostJson(".claude.json");
+    const entry = (cc.mcpServers as Record<string, unknown>)["user-managed-mcp"] as Record<
+      string,
+      unknown
+    >;
+    expect(entry["command"]).toBe("npx"); // fixture value preserved
+    expect(entry["command"]).not.toBe("new-skdd-cmd");
+  });
+
+  it("does not add the collision server to managed state", async () => {
+    placeAll();
+    writeCanonical({ "user-managed-mcp": { command: "new-skdd-cmd" } });
+    await runMcpSync();
+
+    // Should NOT be tracked as managed (was never written by skdd)
+    expect(loadMcpManagedNames(skddTmp, "claude-code")).not.toContain("user-managed-mcp");
+  });
+});
+
+// ── Fix 5: saveState no-op gate ───────────────────────────────────────────────
+
+describe("runMcpSync — saveState no-op gate (fix-5)", () => {
+  it("does not rewrite .skdd-sync.json on a second sync when nothing changed", async () => {
+    placeAll();
+    writeCanonical({ "state-noop": { command: "cmd" } });
+
+    // First sync: creates the state file
+    await runMcpSync();
+
+    const statePath = join(skddTmp, ".skdd-sync.json");
+    expect(existsSync(statePath)).toBe(true);
+    const stateMtime1 = statSync(statePath).mtimeMs;
+
+    await new Promise((r) => setTimeout(r, 25));
+
+    // Second sync: no changes → state should NOT be rewritten
+    const code2 = await runMcpSync();
+    expect(code2).toBe(0);
+
+    expect(statSync(statePath).mtimeMs).toBe(stateMtime1);
+  });
+
+  it("does rewrite .skdd-sync.json when a change actually occurs", async () => {
+    placeAll();
+    writeCanonical({ "state-change-test": { command: "cmd" } });
+
+    // First sync: state written
+    await runMcpSync();
+
+    const statePath = join(skddTmp, ".skdd-sync.json");
+    const stateMtime1 = statSync(statePath).mtimeMs;
+
+    await new Promise((r) => setTimeout(r, 25));
+
+    // Update canonical with a new server — forces a write
+    writeCanonical({
+      "state-change-test": { command: "cmd" },
+      "state-change-test2": { command: "cmd2" },
+    });
+    await runMcpSync();
+
+    // State must have been rewritten
+    expect(statSync(statePath).mtimeMs).toBeGreaterThan(stateMtime1);
+  });
+});

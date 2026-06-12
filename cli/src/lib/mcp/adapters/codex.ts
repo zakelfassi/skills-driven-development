@@ -21,6 +21,7 @@ import { join } from "node:path";
 import { parse as parseToml } from "smol-toml";
 import { atomicWrite, backupFile } from "../backup.js";
 import { type CanonicalMcpConfig, isRemote, isStdio, type McpServer } from "../schema.js";
+import { deepEqual } from "./_shared.js";
 import type {
   HostApplyResult,
   HostReadResult,
@@ -203,8 +204,9 @@ export const codexAdapter: McpHostAdapter = {
     const p = getConfigPath();
     const originalContent = existsSync(p) ? readFileSync(p, "utf8") : "";
 
-    // Parse existing content to learn what server names already exist.
+    // Parse existing content to learn what server names + data already exist.
     let existingNames = new Set<string>();
+    let existingServersParsed: Record<string, unknown> = {};
     if (originalContent) {
       let parsed: unknown;
       try {
@@ -216,7 +218,9 @@ export const codexAdapter: McpHostAdapter = {
         const obj = parsed as Record<string, unknown>;
         const servers = obj.mcp_servers;
         if (typeof servers === "object" && servers !== null && !Array.isArray(servers)) {
-          existingNames = new Set(Object.keys(servers as Record<string, unknown>));
+          const serversObj = servers as Record<string, unknown>;
+          existingNames = new Set(Object.keys(serversObj));
+          existingServersParsed = serversObj;
         }
       }
     }
@@ -230,11 +234,49 @@ export const codexAdapter: McpHostAdapter = {
     // Determine adds and updates from canonical servers.
     for (const [name, server] of Object.entries(canonical.servers)) {
       // Respect per-server hosts allowlist.
-      if (server.hosts && !server.hosts.includes("codex")) continue;
+      if (server.hosts && !server.hosts.includes("codex")) {
+        // ALLOWLIST NARROWING: if this server was previously managed on codex,
+        // remove it now that codex has been excluded from the allowlist.
+        if (managed.includes(name) && existingNames.has(name)) {
+          changes.push({ op: "remove", name });
+          toRemove.push(name);
+        }
+        continue;
+      }
 
-      const op: ServerChange["op"] = existingNames.has(name) ? "update" : "add";
-      changes.push({ op, name });
-      toUpsert.push([name, server]);
+      if (existingNames.has(name)) {
+        // SAME-NAME UNMANAGED SAFETY: don't overwrite entries not placed by skdd.
+        if (!managed.includes(name)) {
+          warnings.push(
+            `Skipping "${name}": an unmanaged entry with this name already exists; remove it manually to let skdd manage it.`,
+          );
+          continue;
+        }
+
+        // CONTENT-EQUALITY CHECK (parity with JSON adapters): compare parsed
+        // existing server data with what we would generate, using deep-equal so
+        // key ordering differences do not trigger spurious writes.
+        const newBlock = serverToTomlBlock(name, server);
+        let newParsed: unknown;
+        try {
+          const reparsed = parseToml(newBlock);
+          const reparsedServers = (reparsed as Record<string, unknown>).mcp_servers;
+          if (typeof reparsedServers === "object" && reparsedServers !== null) {
+            newParsed = (reparsedServers as Record<string, unknown>)[name];
+          }
+        } catch {
+          // Cannot parse generated block — treat as changed
+        }
+        if (newParsed !== undefined && deepEqual(existingServersParsed[name], newParsed)) {
+          continue; // no change, skip splice
+        }
+
+        changes.push({ op: "update", name });
+        toUpsert.push([name, server]);
+      } else {
+        changes.push({ op: "add", name });
+        toUpsert.push([name, server]);
+      }
     }
 
     // Determine removals: managed servers that have left the canonical config.

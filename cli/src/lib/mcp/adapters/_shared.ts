@@ -10,6 +10,29 @@ import type {
   ServerChange,
 } from "./types.js";
 
+/**
+ * Key-order-agnostic deep equality. Used for content-equality checks to
+ * avoid spurious writes when host config has different key ordering.
+ */
+export function deepEqual(a: unknown, b: unknown): boolean {
+  if (a === b) return true;
+  if (typeof a !== typeof b) return false;
+  if (typeof a !== "object" || a === null || b === null) return false;
+  if (Array.isArray(a) !== Array.isArray(b)) return false;
+  if (Array.isArray(a)) {
+    const aa = a as unknown[];
+    const ba = b as unknown[];
+    if (aa.length !== ba.length) return false;
+    return aa.every((v, i) => deepEqual(v, ba[i]));
+  }
+  const objA = a as Record<string, unknown>;
+  const objB = b as Record<string, unknown>;
+  const keysA = Object.keys(objA);
+  const keysB = Object.keys(objB);
+  if (keysA.length !== keysB.length) return false;
+  return keysA.every((k) => k in objB && deepEqual(objA[k], objB[k]));
+}
+
 export interface JsonAdapterConfig {
   id: McpHostId;
   label: string;
@@ -24,6 +47,12 @@ export interface JsonAdapterConfig {
    * Return null to omit the server (e.g. disabled, or not supported for this host).
    */
   toNativeEntry(server: McpServer): unknown | null;
+  /**
+   * Optional: called when toNativeEntry returns null and the server has NOT been
+   * explicitly disabled. Return a warning string to surface to the user, or
+   * undefined for silent omission.
+   */
+  onSkipped?: (name: string, server: McpServer) => string | undefined;
 }
 
 /**
@@ -85,7 +114,15 @@ export function createJsonAdapter(cfg: JsonAdapterConfig): McpHostAdapter {
       // Process each canonical server
       for (const [name, server] of Object.entries(canonical.servers)) {
         // Respect per-server hosts allowlist
-        if (server.hosts && !server.hosts.includes(cfg.id)) continue;
+        if (server.hosts && !server.hosts.includes(cfg.id)) {
+          // ALLOWLIST NARROWING: if this server was previously managed on this host,
+          // remove it now that the host has been excluded from the allowlist.
+          if (managed.includes(name) && name in nextServers) {
+            changes.push({ op: "remove", name });
+            delete nextServers[name];
+          }
+          continue;
+        }
 
         const nativeEntry = cfg.toNativeEntry(server);
 
@@ -95,12 +132,26 @@ export function createJsonAdapter(cfg: JsonAdapterConfig): McpHostAdapter {
             changes.push({ op: "remove", name });
             delete nextServers[name];
           }
+          // Surface a warning when the server is skipped for a non-disabled reason.
+          if (!server.disabled && cfg.onSkipped) {
+            const warn = cfg.onSkipped(name, server);
+            if (warn) warnings.push(warn);
+          }
           continue;
         }
 
         if (name in currentServers) {
-          // Content-equality check: skip unchanged servers to avoid write churn
-          if (JSON.stringify(nativeEntry) === JSON.stringify(currentServers[name])) {
+          // SAME-NAME UNMANAGED SAFETY: if an entry with this name exists but was not
+          // placed there by skdd, warn and skip to avoid overwriting user-authored config.
+          if (!managed.includes(name)) {
+            warnings.push(
+              `Skipping "${name}": an unmanaged entry with this name already exists; remove it manually to let skdd manage it.`,
+            );
+            continue;
+          }
+          // Content-equality check: skip unchanged servers to avoid write churn.
+          // Uses deep-equal (key-order robust) instead of raw stringify.
+          if (deepEqual(nativeEntry, currentServers[name])) {
             continue;
           }
           changes.push({ op: "update", name });

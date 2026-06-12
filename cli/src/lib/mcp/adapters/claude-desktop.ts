@@ -14,6 +14,14 @@ function toNativeEntry(server: McpServer): unknown | null {
   return e;
 }
 
+function onSkipped(name: string, server: McpServer): string | undefined {
+  // Only warn for remote servers — disabled servers are silently omitted.
+  if (!isStdio(server)) {
+    return `Server "${name}" skipped: Claude Desktop does not support remote MCP servers (url: ${"url" in server ? server.url : "unknown"}).`;
+  }
+  return undefined;
+}
+
 /**
  * Adapter for Claude Desktop (darwin-only).
  *
@@ -40,4 +48,5 @@ export const claudeDesktopAdapter = createJsonAdapter({
   },
   mcpKey: "mcpServers",
   toNativeEntry,
+  onSkipped,
 });

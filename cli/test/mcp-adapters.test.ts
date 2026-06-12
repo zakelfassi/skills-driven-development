@@ -671,3 +671,185 @@ describe("gemini adapter specifics", () => {
     expect(plan.finalDoc).toHaveProperty("ui");
   });
 });
+
+// ── Fix 1: claude-desktop remote server warning ───────────────────────────────
+
+describe("claude-desktop — remote server warning (fix-1)", () => {
+  const DESKTOP_PATH = "Library/Application Support/Claude/claude_desktop_config.json";
+
+  it("includes a warning in plan.warnings when a remote server is skipped", () => {
+    placeFixture("claude-desktop.json", DESKTOP_PATH);
+    const canonical: CanonicalMcpConfig = {
+      version: 1,
+      servers: { "remote-srv": { url: "https://mcp.example.com/mcp", type: "http" } },
+    };
+    const plan = claudeDesktopAdapter.plan(canonical, []);
+    expect(plan.ok).toBe(true);
+    if (!plan.ok) return;
+    expect(plan.warnings.length).toBeGreaterThan(0);
+    expect(plan.warnings.some((w) => w.includes("remote-srv"))).toBe(true);
+    expect(plan.warnings.some((w) => w.toLowerCase().includes("remote"))).toBe(true);
+  });
+
+  it("does NOT produce a warning when a disabled server is silently omitted", () => {
+    placeFixture("claude-desktop.json", DESKTOP_PATH);
+    const canonical: CanonicalMcpConfig = {
+      version: 1,
+      servers: { "disabled-srv": { command: "echo", disabled: true } },
+    };
+    const plan = claudeDesktopAdapter.plan(canonical, []);
+    expect(plan.ok).toBe(true);
+    if (!plan.ok) return;
+    expect(plan.warnings.filter((w) => w.includes("disabled-srv"))).toHaveLength(0);
+  });
+
+  it("warns for remote but not for stdio in same canonical", () => {
+    placeFixture("claude-desktop.json", DESKTOP_PATH);
+    const canonical: CanonicalMcpConfig = {
+      version: 1,
+      servers: {
+        "remote-srv": { url: "https://mcp.example.com/mcp", type: "sse" },
+        "stdio-srv": { command: "echo" },
+      },
+    };
+    const plan = claudeDesktopAdapter.plan(canonical, []);
+    expect(plan.ok).toBe(true);
+    if (!plan.ok) return;
+    expect(plan.warnings.some((w) => w.includes("remote-srv"))).toBe(true);
+    expect(plan.warnings.some((w) => w.includes("stdio-srv"))).toBe(false);
+    // stdio server is added, remote is not
+    const servers = plan.finalDoc["mcpServers"] as Record<string, unknown>;
+    expect(servers).toHaveProperty("stdio-srv");
+    expect(servers).not.toHaveProperty("remote-srv");
+  });
+});
+
+// ── Fix 2: deep-equal content check (key-order robust) ───────────────────────
+
+describe("JSON adapter — deep-equal content check (fix-2)", () => {
+  it("treats host entry as unchanged even when key order differs from generated entry", () => {
+    // Write a claude-code config where server has reversed key order vs what toNativeEntry generates
+    writeFile(
+      ".claude.json",
+      JSON.stringify({
+        mcpServers: {
+          // args before command — different order than toNativeEntry produces
+          "managed-srv": { args: ["-y", "pkg"], command: "npx" },
+        },
+      }),
+    );
+    const canonical: CanonicalMcpConfig = {
+      version: 1,
+      servers: { "managed-srv": { command: "npx", args: ["-y", "pkg"] } },
+    };
+    const plan = claudeCodeAdapter.plan(canonical, ["managed-srv"]);
+    expect(plan.ok).toBe(true);
+    if (!plan.ok) return;
+    // Deep-equal: same content regardless of key order → no changes
+    expect(plan.changes).toHaveLength(0);
+  });
+
+  it("still emits an update when content genuinely differs", () => {
+    writeFile(
+      ".claude.json",
+      JSON.stringify({
+        mcpServers: { "managed-srv": { command: "old-cmd" } },
+      }),
+    );
+    const canonical: CanonicalMcpConfig = {
+      version: 1,
+      servers: { "managed-srv": { command: "new-cmd" } },
+    };
+    const plan = claudeCodeAdapter.plan(canonical, ["managed-srv"]);
+    expect(plan.ok).toBe(true);
+    if (!plan.ok) return;
+    expect(plan.changes.some((c) => c.op === "update" && c.name === "managed-srv")).toBe(true);
+  });
+});
+
+// ── Fix 3: allowlist narrowing removal (JSON adapters) ───────────────────────
+
+describe("JSON adapter — allowlist narrowing removal (fix-3)", () => {
+  it("removes a managed server from a host when that host is excluded from the allowlist", () => {
+    writeFile(
+      ".claude.json",
+      JSON.stringify({ mcpServers: { "narrowing-srv": { command: "cmd" } } }),
+    );
+    const canonical: CanonicalMcpConfig = {
+      version: 1,
+      servers: {
+        "narrowing-srv": { command: "cmd", hosts: ["droid"] as import("../src/lib/mcp/schema.js").McpHostId[] },
+      },
+    };
+    const plan = claudeCodeAdapter.plan(canonical, ["narrowing-srv"]);
+    expect(plan.ok).toBe(true);
+    if (!plan.ok) return;
+    expect(plan.changes.some((c) => c.op === "remove" && c.name === "narrowing-srv")).toBe(true);
+    expect(plan.finalDoc["mcpServers"] as Record<string, unknown>).not.toHaveProperty(
+      "narrowing-srv",
+    );
+  });
+
+  it("does NOT remove a server that is excluded from allowlist but was never managed", () => {
+    writeFile(
+      ".claude.json",
+      JSON.stringify({ mcpServers: { "user-srv": { command: "user-cmd" } } }),
+    );
+    const canonical: CanonicalMcpConfig = {
+      version: 1,
+      servers: {
+        "user-srv": { command: "user-cmd", hosts: ["droid"] as import("../src/lib/mcp/schema.js").McpHostId[] },
+      },
+    };
+    // managed list is empty — "user-srv" was never managed by skdd
+    const plan = claudeCodeAdapter.plan(canonical, []);
+    expect(plan.ok).toBe(true);
+    if (!plan.ok) return;
+    expect(plan.changes.some((c) => c.name === "user-srv")).toBe(false);
+    // User entry preserved
+    expect(plan.finalDoc["mcpServers"] as Record<string, unknown>).toHaveProperty("user-srv");
+  });
+});
+
+// ── Fix 4: same-name unmanaged safety (JSON adapters) ────────────────────────
+
+describe("JSON adapter — same-name unmanaged safety (fix-4)", () => {
+  it("warns and skips when canonical name collides with an unmanaged host entry", () => {
+    // user-managed-mcp exists in the fixture and is NOT in the managed list
+    placeFixture("claude-code.json", ".claude.json");
+    const canonical: CanonicalMcpConfig = {
+      version: 1,
+      servers: { "user-managed-mcp": { command: "new-skdd-cmd" } },
+    };
+    const plan = claudeCodeAdapter.plan(canonical, []); // NOT managed
+    expect(plan.ok).toBe(true);
+    if (!plan.ok) return;
+    // Warning emitted
+    expect(plan.warnings.some((w) => w.includes("user-managed-mcp"))).toBe(true);
+    // Entry unchanged — user-authored command preserved
+    const entry = (plan.finalDoc["mcpServers"] as Record<string, unknown>)[
+      "user-managed-mcp"
+    ] as Record<string, unknown>;
+    expect(entry["command"]).toBe("npx");
+    expect(entry["command"]).not.toBe("new-skdd-cmd");
+    // No change recorded
+    expect(plan.changes.some((c) => c.name === "user-managed-mcp")).toBe(false);
+  });
+
+  it("updates a server when it IS in the managed list (safety does not block managed entries)", () => {
+    writeFile(".claude.json", JSON.stringify({ mcpServers: { "skdd-srv": { command: "old" } } }));
+    const canonical: CanonicalMcpConfig = {
+      version: 1,
+      servers: { "skdd-srv": { command: "new" } },
+    };
+    const plan = claudeCodeAdapter.plan(canonical, ["skdd-srv"]);
+    expect(plan.ok).toBe(true);
+    if (!plan.ok) return;
+    expect(plan.changes.some((c) => c.op === "update" && c.name === "skdd-srv")).toBe(true);
+    const entry = (plan.finalDoc["mcpServers"] as Record<string, unknown>)["skdd-srv"] as Record<
+      string,
+      unknown
+    >;
+    expect(entry["command"]).toBe("new");
+  });
+});

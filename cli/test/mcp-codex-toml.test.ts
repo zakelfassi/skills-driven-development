@@ -600,3 +600,118 @@ describe("codexAdapter metadata", () => {
     expect(codexAdapter.available()).toBe(true);
   });
 });
+
+// ── Fix 3: allowlist narrowing removal (codex) ────────────────────────────────
+
+describe("codexAdapter — allowlist narrowing removal (fix-3)", () => {
+  it("removes a managed server from codex TOML when its hosts allowlist excludes codex", () => {
+    const dest = placeFixture();
+    // existing_managed is in the fixture; pretend it was managed by skdd
+    const canonical = makeCanonical({
+      existing_managed: {
+        command: "old-command",
+        hosts: ["claude-code"] as import("../src/lib/mcp/schema.js").McpHostId[],
+      },
+    });
+    const plan = codexAdapter.plan(canonical, ["existing_managed"]);
+    expect(plan.ok).toBe(true);
+    if (!plan.ok) throw new Error();
+    // Should produce a remove op
+    expect(plan.changes.some((c) => c.op === "remove" && c.name === "existing_managed")).toBe(
+      true,
+    );
+    // Apply and verify the block is gone
+    codexAdapter.apply(plan);
+    const written = readFileSync(dest, "utf8");
+    expect(written).not.toContain("[mcp_servers.existing_managed]");
+  });
+
+  it("does NOT remove a server that is excluded from allowlist but was never managed", () => {
+    placeFixture();
+    const canonical = makeCanonical({
+      user_owned: {
+        command: "user-tool",
+        hosts: ["claude-code"] as import("../src/lib/mcp/schema.js").McpHostId[],
+      },
+    });
+    // user_owned is NOT in managed list
+    const plan = codexAdapter.plan(canonical, []);
+    expect(plan.ok).toBe(true);
+    if (!plan.ok) throw new Error();
+    expect(plan.changes.some((c) => c.name === "user_owned")).toBe(false);
+  });
+});
+
+// ── Fix 4: same-name unmanaged safety (codex) ─────────────────────────────────
+
+describe("codexAdapter — same-name unmanaged safety (fix-4)", () => {
+  it("warns and skips when canonical name collides with an unmanaged codex entry", () => {
+    placeFixture();
+    const canonical = makeCanonical({
+      user_owned: { command: "new-skdd-cmd" }, // same name as unmanaged fixture entry
+    });
+    const plan = codexAdapter.plan(canonical, []); // user_owned NOT managed
+    expect(plan.ok).toBe(true);
+    if (!plan.ok) throw new Error();
+    // Warning emitted
+    expect(plan.warnings.some((w) => w.includes("user_owned"))).toBe(true);
+    // No change recorded for user_owned
+    expect(plan.changes.some((c) => c.name === "user_owned")).toBe(false);
+  });
+
+  it("updates a managed codex entry without warnings", () => {
+    placeFixture();
+    const canonical = makeCanonical({
+      existing_managed: { command: "updated-cmd" },
+    });
+    const plan = codexAdapter.plan(canonical, ["existing_managed"]); // IS managed
+    expect(plan.ok).toBe(true);
+    if (!plan.ok) throw new Error();
+    expect(plan.warnings.some((w) => w.includes("existing_managed"))).toBe(false);
+    expect(plan.changes.some((c) => c.op === "update" && c.name === "existing_managed")).toBe(
+      true,
+    );
+  });
+});
+
+// ── Fix 2 parity: deep-equal content check (codex) ───────────────────────────
+
+describe("codexAdapter — content-equality no-op (fix-2 parity)", () => {
+  it("produces no changes when a managed server content is already up to date", () => {
+    // Place fixture and run a full add cycle first
+    placeFixture();
+    const canonical = makeCanonical({ "my-new-srv": { command: "npx", args: ["-y", "my-pkg"] } });
+    const plan1 = codexAdapter.plan(canonical, []);
+    codexAdapter.apply(plan1);
+
+    // Now re-plan with the same canonical as managed — should be a no-op
+    const plan2 = codexAdapter.plan(canonical, ["my-new-srv"]);
+    expect(plan2.ok).toBe(true);
+    if (!plan2.ok) throw new Error();
+    expect(plan2.changes).toHaveLength(0);
+  });
+
+  it("second apply after first sync does not rewrite the file (mtime unchanged)", async () => {
+    placeFixture();
+    const dest = join(fakeTmp, ".codex", "config.toml");
+    const canonical = makeCanonical({ "mtime-test": { command: "echo" } });
+
+    const plan1 = codexAdapter.plan(canonical, []);
+    codexAdapter.apply(plan1);
+
+    const mtime1 = statSync(dest).mtimeMs;
+    await new Promise((r) => setTimeout(r, 20));
+
+    const plan2 = codexAdapter.plan(canonical, ["mtime-test"]);
+    expect(plan2.ok).toBe(true);
+    if (!plan2.ok) throw new Error();
+    expect(plan2.changes).toHaveLength(0);
+    // apply a no-changes plan — written:false, file untouched
+    const result = codexAdapter.apply(plan2);
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error();
+    expect(result.written).toBe(false);
+
+    expect(statSync(dest).mtimeMs).toBe(mtime1);
+  });
+});

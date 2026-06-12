@@ -234,6 +234,7 @@ export async function runMcpSync(opts: McpSyncOptions = {}): Promise<number> {
   }
 
   let exitCode = 0;
+  let stateChanged = false;
   // Load state once; we accumulate mcp host updates in memory then save once.
   let state = loadState(home) ?? emptyState();
 
@@ -309,11 +310,13 @@ export async function runMcpSync(opts: McpSyncOptions = {}): Promise<number> {
         ...addedOrUpdated.filter((n) => !managed.includes(n)),
       ];
       state = setMcpManagedNames(state, hostId, newManaged);
+      stateChanged = true;
     }
   }
 
-  // Persist the updated state once (no-op on dry-run).
-  if (!opts.dryRun) {
+  // Persist the updated state only when something actually changed.
+  // Skipping the write on a true no-op prevents mtime churn on .skdd-sync.json.
+  if (!opts.dryRun && stateChanged) {
     saveState(home, state);
   }
 
