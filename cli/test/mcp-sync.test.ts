@@ -683,3 +683,123 @@ describe("runMcpSync — saveState no-op gate (fix-5)", () => {
     expect(statSync(statePath).mtimeMs).toBeGreaterThan(stateMtime1);
   });
 });
+
+// ── Fix 6: removal after sync — managed server deleted from host configs ──────
+
+describe("runMcpSync — removal after sync (fix-6)", () => {
+  it("deletes a managed server from all JSON host configs after remove + sync", async () => {
+    placeAll();
+
+    // First sync: add managed-srv to all hosts
+    writeCanonical({ "managed-srv": { command: "my-mcp-cmd" } });
+    const code1 = await runMcpSync();
+    expect(code1).toBe(0);
+
+    // Verify the server was synced to claude-code and cursor
+    expect(
+      (readHostJson(".claude.json").mcpServers as Record<string, unknown>)["managed-srv"],
+    ).toBeDefined();
+    expect(
+      (readHostJson(".cursor/mcp.json").mcpServers as Record<string, unknown>)["managed-srv"],
+    ).toBeDefined();
+
+    // Remove managed-srv from canonical (empty servers)
+    writeCanonical({});
+    const code2 = await runMcpSync();
+    expect(code2).toBe(0);
+
+    // managed-srv must be gone from all JSON hosts
+    const cc = readHostJson(".claude.json");
+    expect((cc.mcpServers as Record<string, unknown>)["managed-srv"]).toBeUndefined();
+
+    const cursor = readHostJson(".cursor/mcp.json");
+    expect((cursor.mcpServers as Record<string, unknown>)["managed-srv"]).toBeUndefined();
+
+    const droid = readHostJson(".factory/mcp.json");
+    expect((droid.mcpServers as Record<string, unknown>)["managed-srv"]).toBeUndefined();
+
+    const gemini = readHostJson(".gemini/settings.json");
+    expect((gemini.mcpServers as Record<string, unknown>)["managed-srv"]).toBeUndefined();
+  });
+
+  it("deletes a managed server from codex TOML after remove + sync", async () => {
+    placeAll();
+
+    // First sync: add managed-srv to codex
+    writeCanonical({ "managed-srv": { command: "my-mcp-cmd" } });
+    await runMcpSync();
+
+    // Verify codex has the managed block
+    const tomlAfterAdd = readFileSync(join(homeTmp, ".codex/config.toml"), "utf8");
+    expect(tomlAfterAdd).toContain("[mcp_servers.managed-srv]");
+
+    // Remove managed-srv from canonical (empty servers)
+    writeCanonical({});
+    const code2 = await runMcpSync();
+    expect(code2).toBe(0);
+
+    // managed-srv block must be gone from codex TOML
+    const tomlAfterRemove = readFileSync(join(homeTmp, ".codex/config.toml"), "utf8");
+    expect(tomlAfterRemove).not.toContain("[mcp_servers.managed-srv]");
+    // Unmanaged TOML entries must be preserved
+    expect(tomlAfterRemove).toContain("[mcp_servers.user_owned]");
+    expect(tomlAfterRemove).toContain("[mcp_servers.existing_managed]");
+    // Comments must be preserved
+    expect(tomlAfterRemove).toContain("# Codex CLI configuration");
+  });
+
+  it("preserves unmanaged entries in JSON hosts after remove + sync", async () => {
+    placeAll();
+
+    // claude-code fixture has user-managed-mcp as unmanaged
+    writeCanonical({ "managed-srv": { command: "cmd" } });
+    await runMcpSync();
+
+    writeCanonical({});
+    await runMcpSync();
+
+    // Unmanaged entries must survive
+    const cc = readHostJson(".claude.json");
+    expect((cc.mcpServers as Record<string, unknown>)["user-managed-mcp"]).toBeDefined();
+  });
+
+  it("clears managed state for the removed server after remove + sync", async () => {
+    placeAll();
+
+    writeCanonical({ "managed-srv": { command: "cmd" } });
+    await runMcpSync();
+
+    expect(loadMcpManagedNames(skddTmp, "claude-code")).toContain("managed-srv");
+    expect(loadMcpManagedNames(skddTmp, "codex")).toContain("managed-srv");
+
+    writeCanonical({});
+    await runMcpSync();
+
+    expect(loadMcpManagedNames(skddTmp, "claude-code")).not.toContain("managed-srv");
+    expect(loadMcpManagedNames(skddTmp, "codex")).not.toContain("managed-srv");
+    expect(loadMcpManagedNames(skddTmp, "cursor")).not.toContain("managed-srv");
+    expect(loadMcpManagedNames(skddTmp, "droid")).not.toContain("managed-srv");
+  });
+
+  it("empty-canonical case: still runs removal planning when no mcp.json servers remain", async () => {
+    placeAll();
+
+    // Add and sync a server
+    writeCanonical({ "rm-test": { command: "rm-cmd" } });
+    await runMcpSync();
+
+    // Now remove from canonical by writing empty servers (simulates skdd mcp remove)
+    writeCanonical({});
+
+    // Must exit 0 and delete managed server from hosts
+    const code = await runMcpSync();
+    expect(code).toBe(0);
+
+    expect(
+      (readHostJson(".claude.json").mcpServers as Record<string, unknown>)["rm-test"],
+    ).toBeUndefined();
+    expect(
+      (readHostJson(".cursor/mcp.json").mcpServers as Record<string, unknown>)["rm-test"],
+    ).toBeUndefined();
+  });
+});

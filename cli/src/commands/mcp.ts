@@ -228,15 +228,27 @@ export async function runMcpSync(opts: McpSyncOptions = {}): Promise<number> {
   const home = skddHome();
   const config = loadMcpConfig(home);
 
-  if (!config || Object.keys(config.servers).length === 0) {
-    logger.info("No MCP servers configured. Use `skdd mcp add <name>` to add one.");
-    return 0;
+  // Load state before the early-exit check so we can detect managed names
+  // that require cleanup even when the canonical config is empty.
+  let state = loadState(home) ?? emptyState();
+
+  const canonicalIsEmpty = !config || Object.keys(config.servers).length === 0;
+  if (canonicalIsEmpty) {
+    // Only skip if there are no managed names to clean up.
+    const hasManagedNames = MCP_HOST_IDS.some((id) => getMcpManagedNames(state, id).length > 0);
+    if (!hasManagedNames) {
+      logger.info("No MCP servers configured. Use `skdd mcp add <name>` to add one.");
+      return 0;
+    }
+    // Fall through: run removal planning to delete stale managed entries from host configs.
   }
+
+  // Use an empty-servers config when canonical file is absent — adapters will
+  // generate remove ops for any name that is managed-but-not-canonical.
+  const effectiveConfig: CanonicalMcpConfig = config ?? { version: 1, servers: {} };
 
   let exitCode = 0;
   let stateChanged = false;
-  // Load state once; we accumulate mcp host updates in memory then save once.
-  let state = loadState(home) ?? emptyState();
 
   for (const hostId of MCP_HOST_IDS) {
     const adapter = ADAPTERS[hostId];
@@ -252,7 +264,7 @@ export async function runMcpSync(opts: McpSyncOptions = {}): Promise<number> {
 
     // Build the canonical config for this host, expanding vars where needed.
     const resolvedServers: Record<string, McpServer> = {};
-    for (const [name, server] of Object.entries(config.servers)) {
+    for (const [name, server] of Object.entries(effectiveConfig.servers)) {
       if (isDroid) {
         // Droid natively supports ${VAR} — write placeholders through as-is.
         resolvedServers[name] = server;
@@ -334,13 +346,18 @@ export async function collectMcpPlanLines(): Promise<string[]> {
   ensureGlobalColony();
   const home = skddHome();
   const config = loadMcpConfig(home);
+  const state = loadState(home) ?? emptyState();
 
-  if (!config || Object.keys(config.servers).length === 0) {
-    return ["No MCP servers configured."];
+  const canonicalIsEmpty = !config || Object.keys(config.servers).length === 0;
+  if (canonicalIsEmpty) {
+    const hasManagedNames = MCP_HOST_IDS.some((id) => getMcpManagedNames(state, id).length > 0);
+    if (!hasManagedNames) {
+      return ["No MCP servers configured."];
+    }
   }
 
+  const effectiveConfig: CanonicalMcpConfig = config ?? { version: 1, servers: {} };
   const lines: string[] = [];
-  const state = loadState(home) ?? emptyState();
 
   for (const hostId of MCP_HOST_IDS) {
     const adapter = ADAPTERS[hostId];
@@ -355,7 +372,7 @@ export async function collectMcpPlanLines(): Promise<string[]> {
     const isDroid = hostId === "droid";
 
     const resolvedServers: Record<string, McpServer> = {};
-    for (const [name, server] of Object.entries(config.servers)) {
+    for (const [name, server] of Object.entries(effectiveConfig.servers)) {
       if (isDroid) {
         resolvedServers[name] = server;
       } else {
