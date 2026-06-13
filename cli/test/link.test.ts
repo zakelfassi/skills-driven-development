@@ -137,6 +137,84 @@ describe("runLink", () => {
     );
   });
 
+  runUnix("managed copy mirror + --mode symlink --force converts to a symlink", async () => {
+    // First link: create a managed copy-mode mirror
+    const first = await runLink({ cwd: tmp, harnesses: ["claude"], mode: "copy", quiet: true });
+    expect(first).toBe(0);
+    const mirrorPath = join(tmp, ".claude/skills");
+    expect(lstatSync(mirrorPath).isDirectory()).toBe(true);
+    expect(lstatSync(mirrorPath).isSymbolicLink()).toBe(false);
+    const stateBefore = loadState(tmp)!;
+    expect(stateBefore.mirrors[0]!.mode).toBe("copy");
+
+    // Re-run with explicit --mode symlink --force — must convert to symlink
+    const second = await runLink({
+      cwd: tmp,
+      harnesses: ["claude"],
+      mode: "symlink",
+      force: true,
+      quiet: true,
+    });
+    expect(second).toBe(0);
+
+    // Must now be a symlink
+    expect(lstatSync(mirrorPath).isSymbolicLink()).toBe(true);
+    expect(readlinkSync(mirrorPath)).toBe("../skills");
+
+    // Skill is still visible through the symlink
+    expect(existsSync(join(tmp, ".claude/skills/hello/SKILL.md"))).toBe(true);
+
+    // State records updated mode
+    const stateAfter = loadState(tmp)!;
+    expect(stateAfter.mirrors[0]!.mode).toBe("symlink");
+  });
+
+  it("managed copy + default/auto refresh stays a copy (M8 holds)", async () => {
+    // First link: create a managed copy
+    const first = await runLink({ cwd: tmp, harnesses: ["claude"], mode: "copy", quiet: true });
+    expect(first).toBe(0);
+    expect(lstatSync(join(tmp, ".claude/skills")).isSymbolicLink()).toBe(false);
+
+    // Re-run without specifying a mode (default/auto)
+    const second = await runLink({ cwd: tmp, harnesses: ["claude"], quiet: true });
+    expect(second).toBe(0);
+
+    // Must still be a directory (copy), not a symlink
+    expect(lstatSync(join(tmp, ".claude/skills")).isSymbolicLink()).toBe(false);
+    expect(lstatSync(join(tmp, ".claude/skills")).isDirectory()).toBe(true);
+
+    // State still records copy
+    const state = loadState(tmp)!;
+    expect(state.mirrors[0]!.mode).toBe("copy");
+  });
+
+  runUnix(
+    "unmanaged real dir + explicit --mode symlink without --force is still blocked",
+    async () => {
+      // Create an unmanaged real dir at the mirror path (no sync-state entry)
+      mkdirSync(join(tmp, ".claude/skills/user-data"), { recursive: true });
+      writeFileSync(join(tmp, ".claude/skills/user-data/important.md"), "user data");
+
+      // State has NO entry for this mirror (unmanaged)
+      saveState(tmp, emptyState("skills"));
+
+      // Explicit --mode symlink without --force must still be blocked for unmanaged dirs
+      const code = await runLink({
+        cwd: tmp,
+        harnesses: ["claude"],
+        mode: "symlink",
+        quiet: true,
+      });
+      expect(code).toBe(1);
+      // User data preserved
+      expect(readFileSync(join(tmp, ".claude/skills/user-data/important.md"), "utf8")).toBe(
+        "user data",
+      );
+      // No state entry written for this blocked mirror
+      expect(loadState(tmp)!.mirrors).toHaveLength(0);
+    },
+  );
+
   it("unmanaged real dir at copy-mode target is still blocked (not overwritten)", async () => {
     // Manually create a real directory at the mirror path without any sync-state entry
     mkdirSync(join(tmp, ".claude/skills/user-data"), { recursive: true });

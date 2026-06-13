@@ -75,12 +75,14 @@ export async function runLink(opts: LinkOptions = {}): Promise<number> {
       // Unmanaged real dirs (not in sync state) stay blocked to protect user data.
       const mirrorEntry = state.mirrors.find((m) => m.target === profile.skillsDir);
       const isManagedCopy = mirrorEntry?.mode === "copy";
-      // Use the RECORDED mirror mode for managed copies — not the current requested
-      // mode — so that a copy stays a copy even when the caller passes mode:'auto'
-      // (which resolves to 'symlink' on Unix).
-      const effectiveMode = isManagedCopy ? "copy" : mode;
+      // Honor an explicit `--mode symlink` request even on managed copies — the user
+      // is intentionally converting the copy to a symlink. They must also pass --force
+      // since the managed copy is a real directory at the target path.
+      // For default/auto (or explicit --mode copy), preserve M8: force-refresh the copy.
+      const isExplicitSymlink = opts.mode === "symlink";
+      const effectiveMode = !isExplicitSymlink && isManagedCopy ? "copy" : mode;
       result = ensureMirror(canonicalPath, mirrorAbs, effectiveMode, {
-        force: opts.force || isManagedCopy,
+        force: opts.force || (!isExplicitSymlink && isManagedCopy),
       });
     } catch (err) {
       logger.error(`${profile.skillsDir}: ${(err as Error).message}`);
@@ -178,12 +180,14 @@ async function runLinkGlobal(opts: LinkOptions): Promise<number> {
       // Unmanaged real dirs (not in sync state) stay blocked to protect user data.
       const mirrorEntry = state.mirrors.find((m) => m.target === mirrorAbs);
       const isManagedCopy = mirrorEntry?.mode === "copy";
-      // Use the RECORDED mirror mode for managed copies — not the current requested
-      // mode — so that a copy stays a copy even when the caller passes mode:'auto'
-      // (which resolves to 'symlink' on Unix).
-      const effectiveMode = isManagedCopy ? "copy" : mode;
+      // Honor an explicit `--mode symlink` request even on managed copies — the user
+      // is intentionally converting the copy to a symlink. They must also pass --force
+      // since the managed copy is a real directory at the target path.
+      // For default/auto (or explicit --mode copy), preserve M8: force-refresh the copy.
+      const isExplicitSymlink = opts.mode === "symlink";
+      const effectiveMode = !isExplicitSymlink && isManagedCopy ? "copy" : mode;
       result = ensureMirror(canonicalPath, mirrorAbs, effectiveMode, {
-        force: opts.force || isManagedCopy,
+        force: opts.force || (!isExplicitSymlink && isManagedCopy),
       });
     } catch (err) {
       logger.error(`${mirrorAbs}: ${(err as Error).message}`);

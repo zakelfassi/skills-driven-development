@@ -184,6 +184,71 @@ describe("runLink --global", () => {
   );
 
   runUnix(
+    "managed copy global mirror + explicit --mode symlink --force converts to symlink",
+    async () => {
+      mkdirSync(join(fakeTmp, ".factory"), { recursive: true });
+
+      // First: create a copy-mode global mirror
+      const code1 = await runLink({
+        global: true,
+        harnesses: ["droid"],
+        mode: "copy",
+        quiet: true,
+      });
+      expect(code1).toBe(0);
+      const droidSkillsDir = join(fakeTmp, ".factory", "skills");
+      expect(lstatSync(droidSkillsDir).isDirectory()).toBe(true);
+      expect(lstatSync(droidSkillsDir).isSymbolicLink()).toBe(false);
+
+      // Re-run with explicit --mode symlink --force — must convert to symlink
+      const code2 = await runLink({
+        global: true,
+        harnesses: ["droid"],
+        mode: "symlink",
+        force: true,
+        quiet: true,
+      });
+      expect(code2).toBe(0);
+
+      // Must now be a symlink
+      expect(lstatSync(droidSkillsDir).isSymbolicLink()).toBe(true);
+      // Skill is still visible
+      expect(existsSync(join(droidSkillsDir, "test-skill", "SKILL.md"))).toBe(true);
+
+      // State updated to symlink mode
+      const state = loadState(skddTmp);
+      const mirrorEntry = state!.mirrors.find((m) => m.target.includes(".factory/skills"));
+      expect(mirrorEntry?.mode).toBe("symlink");
+    },
+  );
+
+  runUnix("managed copy global mirror + default/auto refresh stays a copy (M8 holds)", async () => {
+    mkdirSync(join(fakeTmp, ".factory"), { recursive: true });
+
+    // Create a copy-mode global mirror
+    const code1 = await runLink({
+      global: true,
+      harnesses: ["droid"],
+      mode: "copy",
+      quiet: true,
+    });
+    expect(code1).toBe(0);
+    const droidSkillsDir = join(fakeTmp, ".factory", "skills");
+    expect(lstatSync(droidSkillsDir).isDirectory()).toBe(true);
+
+    // Re-run without specifying mode — must remain a copy
+    const code2 = await runLink({ global: true, harnesses: ["droid"], quiet: true });
+    expect(code2).toBe(0);
+
+    expect(lstatSync(droidSkillsDir).isSymbolicLink()).toBe(false);
+    expect(lstatSync(droidSkillsDir).isDirectory()).toBe(true);
+
+    const state = loadState(skddTmp);
+    const mirrorEntry = state!.mirrors.find((m) => m.target.includes(".factory/skills"));
+    expect(mirrorEntry?.mode).toBe("copy");
+  });
+
+  runUnix(
     "forge -g simulation: explicit mode:auto on recorded copy mirror keeps copy mode",
     async () => {
       mkdirSync(join(fakeTmp, ".factory"), { recursive: true });
