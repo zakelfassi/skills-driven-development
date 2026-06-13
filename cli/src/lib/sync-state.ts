@@ -48,12 +48,24 @@ export function loadState(cwd: string): SyncState | null {
     if (raw.mcp !== undefined) {
       const rawMcp = raw.mcp as Record<string, unknown>;
       const rawHosts = rawMcp["hosts"];
-      state.mcp = {
-        hosts:
-          rawHosts !== null && typeof rawHosts === "object" && !Array.isArray(rawHosts)
-            ? (rawHosts as Record<string, McpHostSyncInfo>)
-            : {},
-      };
+      if (rawHosts !== null && typeof rawHosts === "object" && !Array.isArray(rawHosts)) {
+        const hosts: Record<string, McpHostSyncInfo> = {};
+        for (const [hostId, hostVal] of Object.entries(rawHosts as Record<string, unknown>)) {
+          if (hostVal !== null && typeof hostVal === "object" && !Array.isArray(hostVal)) {
+            const h = hostVal as Record<string, unknown>;
+            const rawManaged = h["managed"];
+            const managed = Array.isArray(rawManaged)
+              ? (rawManaged as unknown[]).filter((s): s is string => typeof s === "string")
+              : [];
+            const lastSync =
+              typeof h["lastSync"] === "string" ? h["lastSync"] : new Date().toISOString();
+            hosts[hostId] = { managed, lastSync };
+          }
+        }
+        state.mcp = { hosts };
+      } else {
+        state.mcp = { hosts: {} };
+      }
     }
     return state;
   } catch {
