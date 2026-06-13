@@ -670,6 +670,219 @@ describe("codexAdapter — same-name unmanaged safety (fix-4)", () => {
   });
 });
 
+// ── Fix: dotted server names are quoted ──────────────────────────────────────
+
+describe("codexAdapter — dotted server name round-trip (fix: quoted TOML keys)", () => {
+  it("findBlockExtent matches a quoted header for a dotted name", () => {
+    const lines = [`[mcp_servers."github.com"]`, 'command = "gh-mcp"', "[other]", "x = 1"];
+    expect(findBlockExtent(lines, "github.com")).toEqual([0, 2]);
+  });
+
+  it("findBlockExtent does NOT match unquoted nested tables for dotted name", () => {
+    // Without the fix, [mcp_servers.github.com] would not be the rootHeader
+    const lines = [
+      "[mcp_servers.github]",
+      "[mcp_servers.github.com]", // nested, not a server named "github.com"
+      'command = "x"',
+    ];
+    // "github.com" as a quoted key should NOT match these lines
+    expect(findBlockExtent(lines, "github.com")).toBeNull();
+  });
+
+  it("spliceBlocks: write dotted-name server produces quoted TOML header", () => {
+    const server: McpServer = { command: "gh-mcp", args: ["--verbose"] };
+    const result = spliceBlocks("", [], [["github.com", server]]);
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error();
+    expect(result.content).toContain(`[mcp_servers."github.com"]`);
+    // Re-parse gate must pass
+    expect(() => parseToml(result.content)).not.toThrow();
+  });
+
+  it("spliceBlocks: round-trip dotted name — write then remove", () => {
+    const server: McpServer = { command: "gh-mcp" };
+    // Step 1: write
+    const written = spliceBlocks("[settings]\nfoo = 1\n", [], [["github.com", server]]);
+    expect(written.ok).toBe(true);
+    if (!written.ok) throw new Error();
+    expect(written.content).toContain(`[mcp_servers."github.com"]`);
+
+    // Step 2: remove
+    const removed = spliceBlocks(written.content, ["github.com"], []);
+    expect(removed.ok).toBe(true);
+    if (!removed.ok) throw new Error();
+    expect(removed.content).not.toContain(`[mcp_servers."github.com"]`);
+    expect(removed.content).toContain("[settings]");
+  });
+
+  it("codexAdapter: full round-trip of dotted server name via plan/apply/read/remove", () => {
+    const dest = placeFixture();
+    const originalContent = readFileSync(dest, "utf8");
+
+    // Add "github.com" server
+    const canonical = makeCanonical({
+      "github.com": { command: "gh-mcp", args: ["--port", "8080"] },
+    });
+    const addPlan = codexAdapter.plan(canonical, []);
+    expect(addPlan.ok).toBe(true);
+    if (!addPlan.ok) throw new Error();
+    expect(addPlan.changes).toEqual([{ op: "add", name: "github.com" }]);
+    codexAdapter.apply(addPlan);
+
+    // Verify written content has quoted header and can be re-parsed
+    const afterAdd = readFileSync(dest, "utf8");
+    expect(afterAdd).toContain(`[mcp_servers."github.com"]`);
+    expect(() => parseToml(afterAdd)).not.toThrow();
+
+    // read() enumerates "github.com" as a server name
+    const readResult = codexAdapter.read();
+    expect(readResult.ok).toBe(true);
+    if (!readResult.ok) throw new Error();
+    expect(readResult.serverNames).toContain("github.com");
+
+    // Remove "github.com"
+    const removePlan = codexAdapter.plan(makeCanonical(), ["github.com"]);
+    expect(removePlan.ok).toBe(true);
+    if (!removePlan.ok) throw new Error();
+    expect(removePlan.changes).toEqual([{ op: "remove", name: "github.com" }]);
+    codexAdapter.apply(removePlan);
+
+    // Verify removed and unmanaged content preserved
+    const afterRemove = readFileSync(dest, "utf8");
+    expect(afterRemove).not.toContain(`[mcp_servers."github.com"]`);
+    // Original comments and unmanaged tables must survive
+    expect(afterRemove).toContain("# Codex CLI configuration");
+    expect(afterRemove).toContain("[mcp_servers.user_owned]");
+    expect(() => parseToml(afterRemove)).not.toThrow();
+
+    // Suppress unused variable warning
+    void originalContent;
+  });
+});
+
+// ── Fix: remote servers emit http_headers ────────────────────────────────────
+
+describe("codexAdapter — remote server http_headers (fix: emit credentials)", () => {
+  it("spliceBlocks: remote server with headers emits http_headers inline table", () => {
+    const server: McpServer = {
+      url: "https://mcp.example.com",
+      type: "http",
+      headers: { Authorization: "Bearer secret", "X-Custom": "value" },
+    };
+    const result = spliceBlocks("", [], [["remote_srv", server]]);
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error();
+    expect(result.content).toContain(`http_headers = {`);
+    expect(result.content).toContain(`Authorization = "Bearer secret"`);
+    expect(result.content).toContain(`X-Custom = "value"`);
+  });
+
+  it("codexAdapter plan: remote server with headers writes http_headers to TOML", () => {
+    placeFixture();
+    const canonical = makeCanonical({
+      remote_auth: {
+        url: "https://api.example.com/mcp",
+        type: "http",
+        headers: { Authorization: "Bearer mytoken" },
+      },
+    });
+    const plan = codexAdapter.plan(canonical, []);
+    expect(plan.ok).toBe(true);
+    if (!plan.ok) throw new Error();
+    expect(plan.changes).toEqual([{ op: "add", name: "remote_auth" }]);
+    const content = plan.finalDoc._tomlContent as string;
+    expect(content).toContain("[mcp_servers.remote_auth]");
+    expect(content).toContain('url = "https://api.example.com/mcp"');
+    expect(content).toContain("http_headers = {");
+    expect(content).toContain('Authorization = "Bearer mytoken"');
+    // Must produce valid TOML
+    expect(() => parseToml(content)).not.toThrow();
+  });
+
+  it("remote server without headers does not emit http_headers", () => {
+    placeFixture();
+    const canonical = makeCanonical({
+      remote_no_auth: { url: "https://open.example.com/mcp", type: "http" },
+    });
+    const plan = codexAdapter.plan(canonical, []);
+    expect(plan.ok).toBe(true);
+    if (!plan.ok) throw new Error();
+    const content = plan.finalDoc._tomlContent as string;
+    expect(content).not.toContain("http_headers");
+  });
+});
+
+// ── Fix: CODEX_HOME env override ─────────────────────────────────────────────
+
+describe("codexAdapter — CODEX_HOME env override", () => {
+  let prevCodexHome: string | undefined;
+  let codexHomeDir: string;
+
+  beforeEach(() => {
+    prevCodexHome = process.env.CODEX_HOME;
+    codexHomeDir = mkdtempSync(join(tmpdir(), "skdd-codex-home-"));
+  });
+
+  afterEach(() => {
+    if (prevCodexHome === undefined) {
+      delete process.env.CODEX_HOME;
+    } else {
+      process.env.CODEX_HOME = prevCodexHome;
+    }
+    rmSync(codexHomeDir, { recursive: true, force: true });
+  });
+
+  it("configPath() uses CODEX_HOME when set", () => {
+    process.env.CODEX_HOME = codexHomeDir;
+    expect(codexAdapter.configPath()).toBe(join(codexHomeDir, "config.toml"));
+  });
+
+  it("configPath() falls back to ~/.codex/config.toml when CODEX_HOME unset", () => {
+    delete process.env.CODEX_HOME;
+    expect(codexAdapter.configPath()).toBe(join(fakeTmp, ".codex", "config.toml"));
+  });
+
+  it("available() returns true when CODEX_HOME dir exists", () => {
+    process.env.CODEX_HOME = codexHomeDir; // dir already created by mkdtempSync
+    expect(codexAdapter.available()).toBe(true);
+  });
+
+  it("available() returns false when CODEX_HOME dir does not exist", () => {
+    const nonExistent = join(codexHomeDir, "nonexistent");
+    process.env.CODEX_HOME = nonExistent;
+    expect(codexAdapter.available()).toBe(false);
+  });
+
+  it("read() reads config.toml from CODEX_HOME", () => {
+    process.env.CODEX_HOME = codexHomeDir;
+    // Write a minimal config.toml into codexHomeDir
+    writeFileSync(
+      join(codexHomeDir, "config.toml"),
+      '[mcp_servers.test_srv]\ncommand = "test"\n',
+      "utf8",
+    );
+    const result = codexAdapter.read();
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error();
+    expect(result.serverNames).toContain("test_srv");
+  });
+
+  it("plan() writes to CODEX_HOME/config.toml, not ~/.codex/config.toml", () => {
+    process.env.CODEX_HOME = codexHomeDir;
+    const canonical = makeCanonical({
+      my_srv: { command: "my-tool" },
+    });
+    const plan = codexAdapter.plan(canonical, []);
+    expect(plan.ok).toBe(true);
+    if (!plan.ok) throw new Error();
+    expect(plan.filePath).toBe(join(codexHomeDir, "config.toml"));
+    codexAdapter.apply(plan);
+    expect(existsSync(join(codexHomeDir, "config.toml"))).toBe(true);
+    // ~/.codex/config.toml should NOT have been created in fakeTmp
+    expect(existsSync(join(fakeTmp, ".codex", "config.toml"))).toBe(false);
+  });
+});
+
 // ── Fix 2 parity: deep-equal content check (codex) ───────────────────────────
 
 describe("codexAdapter — content-equality no-op (fix-2 parity)", () => {

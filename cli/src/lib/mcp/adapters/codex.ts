@@ -31,8 +31,22 @@ import type {
   ServerChange,
 } from "./types.js";
 
+/** Return the TOML dotted-key segment for a server name. Bare TOML keys
+ *  (ASCII letters, digits, underscores, dashes) are returned as-is.
+ *  Any other name (e.g. "github.com") is JSON-quoted so that it becomes a
+ *  single key rather than being interpreted as nested TOML tables. */
+function tomlKey(name: string): string {
+  if (/^[A-Za-z0-9_-]+$/.test(name)) return name;
+  return JSON.stringify(name);
+}
+
+function getCodexDir(): string {
+  const codexHome = process.env.CODEX_HOME;
+  return codexHome ?? join(homedir(), ".codex");
+}
+
 function getConfigPath(): string {
-  return join(homedir(), ".codex", "config.toml");
+  return join(getCodexDir(), "config.toml");
 }
 
 /**
@@ -45,8 +59,9 @@ function getConfigPath(): string {
  * Exported for unit testing.
  */
 export function findBlockExtent(lines: string[], name: string): [number, number] | null {
-  const rootHeader = `[mcp_servers.${name}]`;
-  const subPrefix = `[mcp_servers.${name}.`;
+  const key = tomlKey(name);
+  const rootHeader = `[mcp_servers.${key}]`;
+  const subPrefix = `[mcp_servers.${key}.`;
 
   let startIdx = -1;
   for (let i = 0; i < lines.length; i++) {
@@ -75,7 +90,8 @@ export function findBlockExtent(lines: string[], name: string): [number, number]
  * `disabled:true` maps to `enabled = false`.
  */
 function serverToTomlBlock(name: string, server: McpServer): string {
-  const parts: string[] = [`[mcp_servers.${name}]`];
+  const key = tomlKey(name);
+  const parts: string[] = [`[mcp_servers.${key}]`];
 
   if (isStdio(server)) {
     parts.push(`command = ${JSON.stringify(server.command)}`);
@@ -93,6 +109,12 @@ function serverToTomlBlock(name: string, server: McpServer): string {
     parts.push(`url = ${JSON.stringify(server.url)}`);
     if (server.type) {
       parts.push(`type = ${JSON.stringify(server.type)}`);
+    }
+    if (server.headers && Object.keys(server.headers).length > 0) {
+      const headerEntries = Object.entries(server.headers)
+        .map(([k, v]) => `${k} = ${JSON.stringify(v)}`)
+        .join(", ");
+      parts.push(`http_headers = {${headerEntries}}`);
     }
   }
 
@@ -174,7 +196,7 @@ export const codexAdapter: McpHostAdapter = {
   },
 
   available(): boolean {
-    return existsSync(join(homedir(), ".codex"));
+    return existsSync(getCodexDir());
   },
 
   read(): HostReadResult {
