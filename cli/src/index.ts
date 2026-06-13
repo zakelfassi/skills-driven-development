@@ -13,6 +13,7 @@ import type { LinkMode } from "./lib/fs-link.js";
 import type { Harness } from "./lib/harness.js";
 import { logger } from "./lib/logger.js";
 import type { McpHostId } from "./lib/mcp/schema.js";
+import { parseShellArgs } from "./lib/parse-shell-args.js";
 
 declare const __SKDD_VERSION__: string;
 const VERSION = typeof __SKDD_VERSION__ !== "undefined" ? __SKDD_VERSION__ : "0.0.0-dev";
@@ -259,7 +260,7 @@ mcp
   .option("-c, --command <cmd>", "Executable to run (stdio server)")
   .option(
     "--args <args>",
-    "Space-separated arguments for the command (use quotes for complex args)",
+    "Arguments for the command. Tokens are split on whitespace; quote segments that contain spaces (single or double quotes), e.g. --args '-y @pkg \"/path/with spaces\"'",
   )
   .option(
     "--env <pairs>",
@@ -287,7 +288,7 @@ mcp
         force: boolean;
       },
     ) => {
-      const args = opts.args ? opts.args.split(" ").filter(Boolean) : undefined;
+      const args = opts.args ? parseShellArgs(opts.args) : undefined;
       const env = opts.env
         ? Object.fromEntries(
             opts.env.split(",").map((pair) => {
