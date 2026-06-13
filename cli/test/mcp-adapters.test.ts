@@ -13,7 +13,10 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { stripJsonc } from "../src/lib/mcp/adapters/_shared.js";
 import { claudeCodeAdapter } from "../src/lib/mcp/adapters/claude-code.js";
-import { claudeDesktopAdapter } from "../src/lib/mcp/adapters/claude-desktop.js";
+import {
+  claudeDesktopAdapter,
+  resolveClaudeDesktopPaths,
+} from "../src/lib/mcp/adapters/claude-desktop.js";
 import { cursorAdapter } from "../src/lib/mcp/adapters/cursor.js";
 import { droidAdapter } from "../src/lib/mcp/adapters/droid.js";
 import { geminiAdapter } from "../src/lib/mcp/adapters/gemini.js";
@@ -488,11 +491,11 @@ describe("claude-desktop adapter specifics", () => {
     expect(plan.finalDoc).toHaveProperty("isUsingBuiltInNodeForMcp");
   });
 
-  it("available() returns false on non-darwin platforms", () => {
-    if (process.platform !== "darwin") {
+  it("available() returns false on non-darwin, non-win32 platforms", () => {
+    if (process.platform !== "darwin" && process.platform !== "win32") {
       expect(claudeDesktopAdapter.available()).toBe(false);
     } else {
-      // On darwin, depends on existence of the parent dir — just assert it's a boolean
+      // On darwin/win32, depends on existence of the Claude dir — just assert it's a boolean
       expect(typeof claudeDesktopAdapter.available()).toBe("boolean");
     }
   });
@@ -961,6 +964,45 @@ describe("gemini adapter specifics", () => {
     >;
     expect(entry["httpUrl"]).toBe("https://mcp.example.com/mcp");
     expect(entry["headers"]).toEqual({ Authorization: "Bearer tok" });
+  });
+});
+
+// ── claude-desktop path resolution helper ─────────────────────────────────────
+
+describe("claude-desktop — resolveClaudeDesktopPaths helper", () => {
+  it("darwin: dir and configPath use ~/Library/Application Support/Claude/", () => {
+    const result = resolveClaudeDesktopPaths("darwin", undefined, "/fakehome");
+    expect(result.dir).toBe(join("/fakehome", "Library", "Application Support", "Claude"));
+    expect(result.configPath).toBe(
+      join("/fakehome", "Library", "Application Support", "Claude", "claude_desktop_config.json"),
+    );
+  });
+
+  it("win32 with APPDATA: dir uses APPDATA/Claude/", () => {
+    const result = resolveClaudeDesktopPaths(
+      "win32",
+      join("/fakehome", "AppData", "Roaming"),
+      "/fakehome",
+    );
+    expect(result.dir).toBe(join("/fakehome", "AppData", "Roaming", "Claude"));
+    expect(result.configPath).toBe(
+      join("/fakehome", "AppData", "Roaming", "Claude", "claude_desktop_config.json"),
+    );
+  });
+
+  it("win32 without APPDATA: falls back to homedir/AppData/Roaming/Claude/", () => {
+    const result = resolveClaudeDesktopPaths("win32", undefined, "/fakehome");
+    expect(result.dir).toBe(join("/fakehome", "AppData", "Roaming", "Claude"));
+    expect(result.configPath).toBe(
+      join("/fakehome", "AppData", "Roaming", "Claude", "claude_desktop_config.json"),
+    );
+  });
+
+  it("win32 APPDATA path differs from darwin path", () => {
+    const win = resolveClaudeDesktopPaths("win32", "/appdata", "/home");
+    const mac = resolveClaudeDesktopPaths("darwin", "/appdata", "/home");
+    expect(win.dir).not.toBe(mac.dir);
+    expect(win.configPath).not.toBe(mac.configPath);
   });
 });
 

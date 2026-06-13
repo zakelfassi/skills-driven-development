@@ -23,12 +23,40 @@ function onSkipped(name: string, server: McpServer): string | undefined {
 }
 
 /**
- * Adapter for Claude Desktop (darwin-only).
+ * Resolve the Claude Desktop config directory and config file path for the
+ * given platform. Extracted as a pure function so it can be unit-tested
+ * without mocking process.platform or process.env.
  *
- * Config: ~/Library/Application Support/Claude/claude_desktop_config.json
+ * @param platform - value of process.platform ("darwin", "win32", etc.)
+ * @param appdata  - value of process.env.APPDATA (Windows; may be undefined)
+ * @param homeDir  - resolved homedir() value
+ */
+export function resolveClaudeDesktopPaths(
+  platform: string,
+  appdata: string | undefined,
+  homeDir: string,
+): { dir: string; configPath: string } {
+  if (platform === "win32") {
+    const base = appdata ?? join(homeDir, "AppData", "Roaming");
+    const dir = join(base, "Claude");
+    return { dir, configPath: join(dir, "claude_desktop_config.json") };
+  }
+  // darwin (Linux is unsupported — available() returns false before this is called)
+  const dir = join(homeDir, "Library", "Application Support", "Claude");
+  return { dir, configPath: join(dir, "claude_desktop_config.json") };
+}
+
+/**
+ * Adapter for Claude Desktop (darwin + win32).
+ *
+ * Config paths:
+ *   macOS:   ~/Library/Application Support/Claude/claude_desktop_config.json
+ *   Windows: %APPDATA%\Claude\claude_desktop_config.json
+ *            (falls back to ~/AppData/Roaming/Claude/ when APPDATA is unset)
+ *
  * The file also holds globalShortcut, preferences, isUsingBuiltInNodeForMcp — preserved.
- * Remote servers are skipped silently (Claude Desktop does not support them).
- * available() returns false on non-darwin platforms.
+ * Remote servers are skipped (Claude Desktop does not support them).
+ * available() returns false on Linux and other unsupported platforms.
  */
 export const claudeDesktopAdapter = createJsonAdapter({
   id: "claude-desktop",
@@ -36,17 +64,13 @@ export const claudeDesktopAdapter = createJsonAdapter({
   // Claude Desktop is stdio-only; remote MCP servers are not natively supported.
   acceptsRemote: false,
   configPath() {
-    return join(
-      homedir(),
-      "Library",
-      "Application Support",
-      "Claude",
-      "claude_desktop_config.json",
-    );
+    return resolveClaudeDesktopPaths(process.platform, process.env.APPDATA, homedir()).configPath;
   },
   available() {
-    if (process.platform !== "darwin") return false;
-    return existsSync(join(homedir(), "Library", "Application Support", "Claude"));
+    if (process.platform !== "darwin" && process.platform !== "win32") return false;
+    return existsSync(
+      resolveClaudeDesktopPaths(process.platform, process.env.APPDATA, homedir()).dir,
+    );
   },
   mcpKey: "mcpServers",
   toNativeEntry,
