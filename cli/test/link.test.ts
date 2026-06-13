@@ -13,8 +13,8 @@ import {
 import { platform, tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { runLink } from "../src/commands/link.js";
-import { loadState } from "../src/lib/sync-state.js";
+import { runLink, runUnlink } from "../src/commands/link.js";
+import { emptyState, loadState, saveState } from "../src/lib/sync-state.js";
 
 const skipOnWindows = platform() === "win32";
 const runUnix = skipOnWindows ? it.skip : it;
@@ -133,5 +133,52 @@ describe("runLink", () => {
     });
     expect(code).toBe(0);
     expect(lstatSync(join(tmp, ".claude/skills")).isSymbolicLink()).toBe(true);
+  });
+});
+
+describe("runUnlink", () => {
+  runUnix("unlinks a symlink mirror and clears its state entry", async () => {
+    // Set up: link first (creates symlink + state entry)
+    await runLink({ cwd: tmp, harnesses: ["claude"], quiet: true });
+    expect(lstatSync(join(tmp, ".claude/skills")).isSymbolicLink()).toBe(true);
+    expect(loadState(tmp)!.mirrors).toHaveLength(1);
+
+    const code = await runUnlink({ cwd: tmp, harnesses: ["claude"], quiet: true });
+    expect(code).toBe(0);
+    expect(existsSync(join(tmp, ".claude/skills"))).toBe(false);
+    expect(loadState(tmp)!.mirrors).toHaveLength(0);
+  });
+
+  it("managed copy-mode mirror → removes directory, clears state entry, returns 0", async () => {
+    // Set up: link in copy mode (creates real dir + state entry with mode=copy)
+    await runLink({ cwd: tmp, harnesses: ["claude"], mode: "copy", quiet: true });
+    const mirrorPath = join(tmp, ".claude/skills");
+    expect(lstatSync(mirrorPath).isDirectory()).toBe(true);
+    expect(lstatSync(mirrorPath).isSymbolicLink()).toBe(false);
+    const stateBefore = loadState(tmp)!;
+    expect(stateBefore.mirrors[0]!.mode).toBe("copy");
+
+    const code = await runUnlink({ cwd: tmp, harnesses: ["claude"], quiet: true });
+    expect(code).toBe(0);
+    expect(existsSync(mirrorPath)).toBe(false);
+    const stateAfter = loadState(tmp)!;
+    expect(stateAfter.mirrors).toHaveLength(0);
+  });
+
+  it("unmanaged drifted real dir → protected (no delete), returns 1", async () => {
+    // Set up: create a real directory at the mirror path that is NOT in sync-state
+    mkdirSync(join(tmp, ".claude/skills/user-data"), { recursive: true });
+    writeFileSync(join(tmp, ".claude/skills/user-data/important.md"), "user data");
+
+    // Ensure state has no entry for this mirror (unmanaged)
+    const state = emptyState("skills");
+    saveState(tmp, state);
+
+    const code = await runUnlink({ cwd: tmp, harnesses: ["claude"], quiet: true });
+    expect(code).toBe(1);
+    // User data must be preserved
+    expect(existsSync(join(tmp, ".claude/skills/user-data/important.md"))).toBe(true);
+    // State entry must NOT be created/modified
+    expect(loadState(tmp)!.mirrors).toHaveLength(0);
   });
 });

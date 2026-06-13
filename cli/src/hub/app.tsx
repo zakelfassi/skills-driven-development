@@ -21,8 +21,8 @@ const PANES: { id: PaneId; label: string }[] = [
 
 /** Injectable action handlers — defaults are the real implementations. */
 export interface HubActions {
-  link?: (opts: { harness: Harness; cwd: string }) => Promise<void>;
-  unlink?: (opts: { harness: Harness; cwd: string }) => Promise<void>;
+  link?: (opts: { harness: Harness; cwd: string }) => Promise<number>;
+  unlink?: (opts: { harness: Harness; cwd: string }) => Promise<number>;
   dryRunPlan?: () => Promise<string[]>;
   mcpSync?: () => Promise<number>;
 }
@@ -89,12 +89,12 @@ export function Hub({ data: initialData, cwd, actions, reloader }: HubProps) {
     const doLink =
       actions?.link ??
       (async (o: { harness: Harness; cwd: string }) => {
-        await runLink({ harnesses: [o.harness], cwd: o.cwd, quiet: true });
+        return runLink({ harnesses: [o.harness], cwd: o.cwd, quiet: true });
       });
     const doUnlink =
       actions?.unlink ??
       (async (o: { harness: Harness; cwd: string }) => {
-        await runUnlink({ harnesses: [o.harness], cwd: o.cwd, quiet: true });
+        return runUnlink({ harnesses: [o.harness], cwd: o.cwd, quiet: true });
       });
 
     if (mirror.status === "drift") {
@@ -107,12 +107,20 @@ export function Hub({ data: initialData, cwd, actions, reloader }: HubProps) {
     }
     if (mirror.status === "ok") {
       setActionMessage(`Unlinking ${mirror.harness}…`);
-      await doUnlink({ harness: mirror.harness, cwd });
-      setActionMessage(`Unlinked ${mirror.harness}`);
+      const unlinkCode = await doUnlink({ harness: mirror.harness, cwd });
+      if (unlinkCode !== 0) {
+        setActionMessage(`failed to unlink ${mirror.harness} — run skdd link --force to repair`);
+      } else {
+        setActionMessage(`Unlinked ${mirror.harness}`);
+      }
     } else {
       setActionMessage(`Linking ${mirror.harness}…`);
-      await doLink({ harness: mirror.harness, cwd });
-      setActionMessage(`Linked ${mirror.harness}`);
+      const linkCode = await doLink({ harness: mirror.harness, cwd });
+      if (linkCode !== 0) {
+        setActionMessage(`blocked: target has existing data — use skdd link --force`);
+      } else {
+        setActionMessage(`Linked ${mirror.harness}`);
+      }
     }
     await reloadData();
   }, [activePane, actions, cwd, data.mirrors, selectedIndex, reloadData]);

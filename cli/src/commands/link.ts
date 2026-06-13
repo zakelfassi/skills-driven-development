@@ -231,12 +231,14 @@ export async function runUnlink(opts: UnlinkOptions = {}): Promise<number> {
   if (harnesses.length === 0) return 0;
 
   const state = loadState(cwd) ?? emptyState();
+  let blockedCount = 0;
 
   for (const harness of harnesses) {
     const profile = HARNESSES[harness];
     const mirrorAbs = resolve(cwd, profile.skillsDir);
 
-    // Guard: only remove symlinks by default. Real directories require explicit force.
+    // Guard: only remove symlinks by default. Real directories require explicit force,
+    // UNLESS the sync-state records this as a managed COPY mirror (skdd created it).
     let stat: ReturnType<typeof lstatSync> | null = null;
     try {
       stat = lstatSync(mirrorAbs);
@@ -267,13 +269,28 @@ export async function runUnlink(opts: UnlinkOptions = {}): Promise<number> {
           continue;
         }
       } else {
-        // Real directory without force — refuse to delete user data.
-        if (!quiet) {
-          logger.warn(
-            `${profile.skillsDir} is a real directory (drift), not a symlink — skipping. Pass --force to remove.`,
-          );
+        // Real directory without force — check if this is a skdd-managed COPY mirror.
+        const mirrorEntry = state.mirrors.find((m) => resolve(cwd, m.target) === mirrorAbs);
+        if (mirrorEntry?.mode === "copy") {
+          // Managed copy-mode mirror: skdd created it, safe to remove.
+          try {
+            rmSync(mirrorAbs, { recursive: true, force: true });
+            if (!quiet) logger.success(`Unlinked ${profile.skillsDir} (copy-mode mirror)`);
+          } catch (err) {
+            if (!quiet)
+              logger.warn(`Could not remove ${profile.skillsDir}: ${(err as Error).message}`);
+            continue;
+          }
+        } else {
+          // Unmanaged real directory — refuse to delete user data.
+          if (!quiet) {
+            logger.warn(
+              `${profile.skillsDir} is a real directory (not a skdd-managed mirror) — skipping. Pass --force to remove.`,
+            );
+          }
+          blockedCount++;
+          continue;
         }
-        continue;
       }
     } else {
       if (!quiet) logger.dim(`${profile.skillsDir} already absent`);
@@ -284,5 +301,5 @@ export async function runUnlink(opts: UnlinkOptions = {}): Promise<number> {
   }
 
   saveState(cwd, state);
-  return 0;
+  return blockedCount > 0 ? 1 : 0;
 }

@@ -372,7 +372,7 @@ describe("Hub keypress — mirrors toggle", () => {
   });
 
   it("Enter on ok mirror triggers unlink action", async () => {
-    const mockUnlink = vi.fn().mockResolvedValue(undefined);
+    const mockUnlink = vi.fn().mockResolvedValue(0);
     const data = makeData([
       { harness: "claude", label: "Claude Code", target: ".claude/skills", status: "ok" },
     ]);
@@ -394,7 +394,7 @@ describe("Hub keypress — mirrors toggle", () => {
   });
 
   it("Enter on drift mirror does NOT call unlink and shows a warning", async () => {
-    const mockUnlink = vi.fn().mockResolvedValue(undefined);
+    const mockUnlink = vi.fn().mockResolvedValue(0);
     const data = makeData([
       { harness: "droid", label: "Factory Droid", target: ".factory/skills", status: "drift" },
     ]);
@@ -418,7 +418,7 @@ describe("Hub keypress — mirrors toggle", () => {
   });
 
   it("Enter on unlinked mirror triggers link action", async () => {
-    const mockLink = vi.fn().mockResolvedValue(undefined);
+    const mockLink = vi.fn().mockResolvedValue(0);
     const data = makeData([
       { harness: "codex", label: "OpenAI Codex", target: ".codex/skills", status: "unlinked" },
     ]);
@@ -438,7 +438,7 @@ describe("Hub keypress — mirrors toggle", () => {
   });
 
   it("Enter on missing mirror triggers link action", async () => {
-    const mockLink = vi.fn().mockResolvedValue(undefined);
+    const mockLink = vi.fn().mockResolvedValue(0);
     const data = makeData([
       { harness: "gemini", label: "Gemini CLI", target: ".gemini/skills", status: "missing" },
     ]);
@@ -454,6 +454,50 @@ describe("Hub keypress — mirrors toggle", () => {
     await new Promise((r) => setTimeout(r, 100));
 
     expect(mockLink).toHaveBeenCalledWith({ harness: "gemini", cwd: "/tmp/test" });
+    unmount();
+  });
+
+  it("Enter on unlinked mirror whose link returns non-zero → shows blocked, not Linked", async () => {
+    const mockLink = vi.fn().mockResolvedValue(1);
+    const data = makeData([
+      { harness: "codex", label: "OpenAI Codex", target: ".codex/skills", status: "unlinked" },
+    ]);
+    const mockReloader = vi.fn().mockResolvedValue(data);
+
+    const { stdin, lastFrame, unmount } = render(
+      <Hub data={data} cwd="/tmp/test" actions={{ link: mockLink }} reloader={mockReloader} />,
+    );
+
+    stdin.write("2");
+    await new Promise((r) => setTimeout(r, 30));
+    stdin.write("\r");
+    await new Promise((r) => setTimeout(r, 100));
+
+    const frame = lastFrame();
+    expect(frame).toContain("blocked");
+    expect(frame).not.toContain("Linked codex");
+    unmount();
+  });
+
+  it("Enter on ok mirror whose unlink returns non-zero → shows failed, not Unlinked", async () => {
+    const mockUnlink = vi.fn().mockResolvedValue(1);
+    const data = makeData([
+      { harness: "claude", label: "Claude Code", target: ".claude/skills", status: "ok" },
+    ]);
+    const mockReloader = vi.fn().mockResolvedValue(data);
+
+    const { stdin, lastFrame, unmount } = render(
+      <Hub data={data} cwd="/tmp/test" actions={{ unlink: mockUnlink }} reloader={mockReloader} />,
+    );
+
+    stdin.write("2");
+    await new Promise((r) => setTimeout(r, 30));
+    stdin.write("\r");
+    await new Promise((r) => setTimeout(r, 100));
+
+    const frame = lastFrame();
+    expect(frame).toContain("failed");
+    expect(frame).not.toContain("Unlinked claude");
     unmount();
   });
 });
