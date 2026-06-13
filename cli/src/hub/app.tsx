@@ -96,7 +96,15 @@ export function Hub({ data: initialData, cwd, actions, reloader }: HubProps) {
         await runUnlink({ harnesses: [o.harness], cwd: o.cwd, quiet: true });
       });
 
-    if (mirror.status === "ok" || mirror.status === "drift") {
+    if (mirror.status === "drift") {
+      // A drifted mirror is a real directory (not a symlink) — never delete it from the hub.
+      // The user must explicitly run 'skdd link --force' to repair.
+      setActionMessage(
+        `${mirror.harness} has drift (real dir exists). Run 'skdd link --force' to repair.`,
+      );
+      return;
+    }
+    if (mirror.status === "ok") {
       setActionMessage(`Unlinking ${mirror.harness}…`);
       await doUnlink({ harness: mirror.harness, cwd });
       setActionMessage(`Unlinked ${mirror.harness}`);

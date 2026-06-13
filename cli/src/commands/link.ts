@@ -1,4 +1,4 @@
-import { existsSync, rmSync } from "node:fs";
+import { existsSync, lstatSync, rmSync, unlinkSync } from "node:fs";
 import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import {
   type EnsureMirrorResult,
@@ -216,6 +216,8 @@ export interface UnlinkOptions {
   cwd?: string;
   harnesses?: Harness[];
   quiet?: boolean;
+  /** When true, allow removing a real (non-symlink) directory. Requires explicit opt-in. */
+  force?: boolean;
 }
 
 /**
@@ -234,12 +236,47 @@ export async function runUnlink(opts: UnlinkOptions = {}): Promise<number> {
     const profile = HARNESSES[harness];
     const mirrorAbs = resolve(cwd, profile.skillsDir);
 
-    // Remove from FS (handles symlinks and directories; force = silent if missing)
+    // Guard: only remove symlinks by default. Real directories require explicit force.
+    let stat: ReturnType<typeof lstatSync> | null = null;
     try {
-      rmSync(mirrorAbs, { recursive: true, force: true });
-      if (!quiet) logger.success(`Unlinked ${profile.skillsDir}`);
-    } catch (err) {
-      if (!quiet) logger.warn(`Could not remove ${profile.skillsDir}: ${(err as Error).message}`);
+      stat = lstatSync(mirrorAbs);
+    } catch {
+      // Already absent — treat as success.
+      stat = null;
+    }
+
+    if (stat !== null) {
+      if (stat.isSymbolicLink()) {
+        // Remove the symlink itself (not its target).
+        try {
+          unlinkSync(mirrorAbs);
+          if (!quiet) logger.success(`Unlinked ${profile.skillsDir}`);
+        } catch (err) {
+          if (!quiet)
+            logger.warn(`Could not remove ${profile.skillsDir}: ${(err as Error).message}`);
+          continue;
+        }
+      } else if (opts.force) {
+        // Explicit force: caller acknowledges this removes a real directory.
+        try {
+          rmSync(mirrorAbs, { recursive: true, force: true });
+          if (!quiet) logger.success(`Removed ${profile.skillsDir} (forced)`);
+        } catch (err) {
+          if (!quiet)
+            logger.warn(`Could not remove ${profile.skillsDir}: ${(err as Error).message}`);
+          continue;
+        }
+      } else {
+        // Real directory without force — refuse to delete user data.
+        if (!quiet) {
+          logger.warn(
+            `${profile.skillsDir} is a real directory (drift), not a symlink — skipping. Pass --force to remove.`,
+          );
+        }
+        continue;
+      }
+    } else {
+      if (!quiet) logger.dim(`${profile.skillsDir} already absent`);
     }
 
     // Remove mirror entry from state

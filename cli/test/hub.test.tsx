@@ -393,14 +393,14 @@ describe("Hub keypress — mirrors toggle", () => {
     unmount();
   });
 
-  it("Enter on drift mirror triggers unlink action", async () => {
+  it("Enter on drift mirror does NOT call unlink and shows a warning", async () => {
     const mockUnlink = vi.fn().mockResolvedValue(undefined);
     const data = makeData([
       { harness: "droid", label: "Factory Droid", target: ".factory/skills", status: "drift" },
     ]);
     const mockReloader = vi.fn().mockResolvedValue(data);
 
-    const { stdin, unmount } = render(
+    const { stdin, lastFrame, unmount } = render(
       <Hub data={data} cwd="/tmp/test" actions={{ unlink: mockUnlink }} reloader={mockReloader} />,
     );
 
@@ -409,7 +409,11 @@ describe("Hub keypress — mirrors toggle", () => {
     stdin.write("\r");
     await new Promise((r) => setTimeout(r, 100));
 
-    expect(mockUnlink).toHaveBeenCalledWith({ harness: "droid", cwd: "/tmp/test" });
+    // Must NOT call destructive unlink on a drifted real directory
+    expect(mockUnlink).not.toHaveBeenCalled();
+    // Must show a warning referencing the drift and how to repair
+    const frame = lastFrame();
+    expect(frame).toContain("drift");
     unmount();
   });
 
