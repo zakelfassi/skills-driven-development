@@ -84,6 +84,15 @@ export async function runMcpAdd(name: string, opts: McpAddOptions = {}): Promise
     logger.error("Either --command (stdio) or --url (remote) is required.");
     return 1;
   }
+  if (opts.hosts && opts.hosts.length > 0) {
+    const invalid = opts.hosts.filter((h) => !MCP_HOST_IDS.includes(h));
+    if (invalid.length > 0) {
+      logger.error(
+        `Unknown host ID(s): ${invalid.join(", ")}. Valid IDs: ${MCP_HOST_IDS.join(", ")}.`,
+      );
+      return 1;
+    }
+  }
 
   ensureGlobalColony();
   const home = skddHome();
