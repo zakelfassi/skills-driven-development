@@ -759,7 +759,9 @@ describe("buildMcpRows", () => {
     expect(rows[0]?.hosts["claude-code"]).toBe("unavailable");
   });
 
-  it("excluded: server hosts allowlist excludes this host", () => {
+  it("excluded: server hosts allowlist excludes this host (not present, not managed → excluded)", () => {
+    // Server targets only "droid"; claude-code is excluded by allowlist.
+    // claude-code was never managed and is not present → truly excluded (already clean).
     writeFileSync(
       join(tmpDir, "mcp.json"),
       JSON.stringify({
@@ -768,14 +770,37 @@ describe("buildMcpRows", () => {
       }),
     );
     const adapters: Partial<Record<McpHostId, McpRowAdapter>> = {
-      "claude-code": makeAdapter(true, ["myserver"]),
+      "claude-code": makeAdapter(true, []), // not present in claude-code
       droid: makeAdapter(true, ["myserver"]),
     };
     const rows = buildMcpRows(tmpDir, {
       adapters,
-      loadManaged: () => ["myserver"],
+      loadManaged: (h) => (h === "droid" ? ["myserver"] : []), // only managed on droid
     });
     expect(rows[0]?.hosts["claude-code"]).toBe("excluded");
+    expect(rows[0]?.hosts["droid"]).toBe("synced");
+  });
+
+  it("excluded by allowlist but still managed+present in host → 'drift' (pending removal)", () => {
+    // Server targets only "droid"; but claude-code still has it managed+present
+    // (user narrowed the allowlist after a previous sync). runMcpSync would REMOVE
+    // the entry on next sync → show as drift so users know action is needed.
+    writeFileSync(
+      join(tmpDir, "mcp.json"),
+      JSON.stringify({
+        version: 1,
+        servers: { myserver: { command: "npx", args: ["-y", "my"], hosts: ["droid"] } },
+      }),
+    );
+    const adapters: Partial<Record<McpHostId, McpRowAdapter>> = {
+      "claude-code": makeAdapter(true, ["myserver"]), // still present in claude-code
+      droid: makeAdapter(true, ["myserver"]),
+    };
+    const rows = buildMcpRows(tmpDir, {
+      adapters,
+      loadManaged: () => ["myserver"], // managed on all hosts (including claude-code)
+    });
+    expect(rows[0]?.hosts["claude-code"]).toBe("drift");
     expect(rows[0]?.hosts["droid"]).toBe("synced");
   });
 

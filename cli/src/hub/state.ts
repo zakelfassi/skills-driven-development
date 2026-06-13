@@ -287,6 +287,25 @@ export function buildMcpRows(globalRoot: string, opts?: BuildMcpRowsOpts): McpRo
 
     for (const hostId of ALL_HOST_IDS) {
       if (allowlist && !allowlist.includes(hostId)) {
+        // Before marking as excluded, check whether the server is still managed AND
+        // present in the host config. When a user narrows the hosts allowlist to
+        // remove a host, runMcpSync would REMOVE the existing entry on the next sync.
+        // Show it as "drift" (pending-removal) so users know action is needed, rather
+        // than hiding it as "excluded" and silently letting the stale entry linger.
+        // A truly excluded server that is NOT present (already cleaned up) stays "excluded".
+        const excludedAdapter = adapters[hostId];
+        if (excludedAdapter && excludedAdapter.available()) {
+          const excludedRead = excludedAdapter.read();
+          const excludedManaged = loadManaged(hostId);
+          if (
+            excludedRead.ok &&
+            excludedManaged.includes(name) &&
+            excludedRead.serverNames.includes(name)
+          ) {
+            hosts[hostId] = "drift";
+            continue;
+          }
+        }
         hosts[hostId] = "excluded";
         continue;
       }

@@ -724,6 +724,152 @@ describe("buildMcpRows — empty canonical + managed names → pending removals 
   });
 });
 
+// ── f-m8-hub-narrowing-removal: allowlist narrowing → pending removal as drift ──
+
+describe("buildMcpRows — narrowed allowlist pending removal (f-m8)", () => {
+  it("excluded by allowlist + managed + present in host → 'drift' (pending removal)", () => {
+    // Server targets only 'droid'; claude-code is excluded by allowlist.
+    // But claude-code still has the server in its config AND in managed state
+    // (user previously synced it before narrowing the allowlist).
+    // runMcpSync would REMOVE it on next sync → show as drift, not excluded.
+    const config: CanonicalMcpConfig = {
+      version: 1,
+      servers: {
+        "narrowed-srv": {
+          command: "cmd",
+          hosts: ["droid" as import("../src/lib/mcp/schema.js").McpHostId],
+        },
+      },
+    };
+    writeConfig(tmp, config);
+
+    const adapter = makeAdapter({
+      serverNames: ["narrowed-srv"], // still present in host config
+    });
+
+    const rows = buildMcpRows(tmp, {
+      adapters: { "claude-code": adapter },
+      loadManaged: (hostId) => (hostId === "claude-code" ? ["narrowed-srv"] : []),
+    });
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0].hosts["claude-code"]).toBe("drift");
+  });
+
+  it("excluded by allowlist + NOT present in host → 'excluded' (already clean)", () => {
+    // Server targets only 'droid'; claude-code is excluded.
+    // claude-code does NOT have the server in its config (already removed or never added).
+    // No pending removal needed → show as excluded.
+    const config: CanonicalMcpConfig = {
+      version: 1,
+      servers: {
+        "narrowed-srv": {
+          command: "cmd",
+          hosts: ["droid" as import("../src/lib/mcp/schema.js").McpHostId],
+        },
+      },
+    };
+    writeConfig(tmp, config);
+
+    const adapter = makeAdapter({
+      serverNames: [], // not present in host config
+    });
+
+    const rows = buildMcpRows(tmp, {
+      adapters: { "claude-code": adapter },
+      loadManaged: () => [], // not managed either
+    });
+
+    expect(rows[0].hosts["claude-code"]).toBe("excluded");
+  });
+
+  it("excluded by allowlist + managed but NOT present in host → 'excluded'", () => {
+    // In managed state but not in host config — was removed externally.
+    // Still excluded by allowlist, and without a host entry there's nothing to remove.
+    const config: CanonicalMcpConfig = {
+      version: 1,
+      servers: {
+        "narrowed-srv": {
+          command: "cmd",
+          hosts: ["droid" as import("../src/lib/mcp/schema.js").McpHostId],
+        },
+      },
+    };
+    writeConfig(tmp, config);
+
+    const adapter = makeAdapter({
+      serverNames: [], // not present in host config
+    });
+
+    const rows = buildMcpRows(tmp, {
+      adapters: { "claude-code": adapter },
+      loadManaged: (hostId) => (hostId === "claude-code" ? ["narrowed-srv"] : []),
+    });
+
+    // Managed but not present → no pending removal needed → excluded
+    expect(rows[0].hosts["claude-code"]).toBe("excluded");
+  });
+
+  it("excluded by allowlist + present but NOT managed → 'excluded'", () => {
+    // Present in host but was never managed by skdd (unmanaged entry).
+    // Allowlist excludes the host; since it's not managed, skdd won't remove it.
+    const config: CanonicalMcpConfig = {
+      version: 1,
+      servers: {
+        "narrowed-srv": {
+          command: "cmd",
+          hosts: ["droid" as import("../src/lib/mcp/schema.js").McpHostId],
+        },
+      },
+    };
+    writeConfig(tmp, config);
+
+    const adapter = makeAdapter({
+      serverNames: ["narrowed-srv"], // present but not managed
+    });
+
+    const rows = buildMcpRows(tmp, {
+      adapters: { "claude-code": adapter },
+      loadManaged: () => [], // not managed
+    });
+
+    expect(rows[0].hosts["claude-code"]).toBe("excluded");
+  });
+
+  it("narrowing on one host does not affect other hosts in the allowlist", () => {
+    // Server targets droid only. droid itself should be synced; claude-code is excluded+managed+present → drift.
+    const config: CanonicalMcpConfig = {
+      version: 1,
+      servers: {
+        "narrowed-srv": {
+          command: "cmd",
+          hosts: ["droid" as import("../src/lib/mcp/schema.js").McpHostId],
+        },
+      },
+    };
+    writeConfig(tmp, config);
+
+    const droidAdapter = makeAdapter({
+      serverNames: ["narrowed-srv"],
+      planFn: (_c, _m) => okPlan(), // synced
+    });
+    const claudeAdapter = makeAdapter({
+      serverNames: ["narrowed-srv"], // still present (pending removal)
+    });
+
+    const rows = buildMcpRows(tmp, {
+      adapters: {
+        droid: droidAdapter,
+        "claude-code": claudeAdapter,
+      },
+      loadManaged: (hostId) => (["droid", "claude-code"].includes(hostId) ? ["narrowed-srv"] : []),
+    });
+
+    expect(rows[0].hosts["droid"]).toBe("synced");
+    expect(rows[0].hosts["claude-code"]).toBe("drift");
+  });
+});
+
 // ── f-m7-hub-mirror-accuracy: symlink target verification ────────────────────
 
 describe("buildMirrorRows — symlink pointing at non-canonical target → 'drift'", () => {
