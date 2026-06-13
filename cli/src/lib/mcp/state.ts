@@ -15,7 +15,9 @@ export type { McpHostSyncInfo };
  */
 export function getMcpManagedNames(state: SyncState, hostId: McpHostId): string[] {
   const managed = state.mcp?.hosts?.[hostId]?.managed;
-  return Array.isArray(managed) ? managed : [];
+  return Array.isArray(managed) && (managed as unknown[]).every((s) => typeof s === "string")
+    ? managed
+    : [];
 }
 
 /**

@@ -122,7 +122,7 @@ describe("loadState — managed is a valid string array", () => {
     expect(state!.mcp!.hosts["cursor"]!.managed).toEqual(["server-a", "server-b"]);
   });
 
-  it("filters out non-string elements from managed array", () => {
+  it("coerces mixed string+number array ['good',42,null,'also-good'] to [] (strict: any non-string → reject whole)", () => {
     writeFileSync(
       statePath(tmp),
       JSON.stringify({
@@ -141,7 +141,84 @@ describe("loadState — managed is a valid string array", () => {
     );
     const state = loadState(tmp);
     expect(state).not.toBeNull();
-    expect(state!.mcp!.hosts["cursor"]!.managed).toEqual(["good", "also-good"]);
+    expect(state!.mcp!.hosts["cursor"]!.managed).toEqual([]);
+  });
+});
+
+// ── Mixed array regression: strict reject-all (f-m12-state-array-validate) ───
+
+describe("loadState — mixed managed arrays → all become [] (strict validation)", () => {
+  it("coerces ['srv', 123] to []", () => {
+    writeFileSync(
+      statePath(tmp),
+      JSON.stringify({
+        version: 2,
+        canonical: "skills",
+        mirrors: [],
+        mcp: {
+          hosts: { cursor: { managed: ["srv", 123], lastSync: "2026-01-01T00:00:00.000Z" } },
+        },
+      }),
+    );
+    const state = loadState(tmp);
+    expect(state).not.toBeNull();
+    expect(state!.mcp!.hosts["cursor"]!.managed).toEqual([]);
+  });
+
+  it("coerces [1, 2] to []", () => {
+    writeFileSync(
+      statePath(tmp),
+      JSON.stringify({
+        version: 2,
+        canonical: "skills",
+        mirrors: [],
+        mcp: {
+          hosts: { cursor: { managed: [1, 2], lastSync: "2026-01-01T00:00:00.000Z" } },
+        },
+      }),
+    );
+    const state = loadState(tmp);
+    expect(state).not.toBeNull();
+    expect(state!.mcp!.hosts["cursor"]!.managed).toEqual([]);
+  });
+
+  it("coerces ['a', null] to []", () => {
+    writeFileSync(
+      statePath(tmp),
+      JSON.stringify({
+        version: 2,
+        canonical: "skills",
+        mirrors: [],
+        mcp: {
+          hosts: { cursor: { managed: ["a", null], lastSync: "2026-01-01T00:00:00.000Z" } },
+        },
+      }),
+    );
+    const state = loadState(tmp);
+    expect(state).not.toBeNull();
+    expect(state!.mcp!.hosts["cursor"]!.managed).toEqual([]);
+  });
+
+  it("preserves clean all-string array ['server-a', 'server-b']", () => {
+    writeFileSync(
+      statePath(tmp),
+      JSON.stringify({
+        version: 2,
+        canonical: "skills",
+        mirrors: [],
+        mcp: {
+          hosts: {
+            cursor: {
+              managed: ["server-a", "server-b"],
+              lastSync: "2026-01-01T00:00:00.000Z",
+            },
+          },
+        },
+      }),
+    );
+    const state = loadState(tmp);
+    expect(state).not.toBeNull();
+    expect(state!.mcp!.hosts["cursor"]!.managed).toEqual(["server-a", "server-b"]);
   });
 });
 
@@ -205,6 +282,57 @@ describe("getMcpManagedNames — managed is not an array at runtime", () => {
       },
     };
     expect(getMcpManagedNames(state, "cursor")).toEqual(["a", "b"]);
+  });
+
+  it("returns [] for mixed array ['srv', 123] (runtime bypass — strict reject-all)", () => {
+    const state = {
+      version: 2,
+      canonical: "skills",
+      mirrors: [],
+      mcp: {
+        hosts: {
+          cursor: {
+            managed: ["srv", 123] as unknown as string[],
+            lastSync: "2026-01-01T00:00:00.000Z",
+          },
+        },
+      },
+    };
+    expect(getMcpManagedNames(state, "cursor")).toEqual([]);
+  });
+
+  it("returns [] for all-number array [1, 2] (runtime bypass)", () => {
+    const state = {
+      version: 2,
+      canonical: "skills",
+      mirrors: [],
+      mcp: {
+        hosts: {
+          cursor: {
+            managed: [1, 2] as unknown as string[],
+            lastSync: "2026-01-01T00:00:00.000Z",
+          },
+        },
+      },
+    };
+    expect(getMcpManagedNames(state, "cursor")).toEqual([]);
+  });
+
+  it("returns [] for mixed array ['a', null] (runtime bypass)", () => {
+    const state = {
+      version: 2,
+      canonical: "skills",
+      mirrors: [],
+      mcp: {
+        hosts: {
+          cursor: {
+            managed: ["a", null] as unknown as string[],
+            lastSync: "2026-01-01T00:00:00.000Z",
+          },
+        },
+      },
+    };
+    expect(getMcpManagedNames(state, "cursor")).toEqual([]);
   });
 });
 

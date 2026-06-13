@@ -54,9 +54,11 @@ export function loadState(cwd: string): SyncState | null {
           if (hostVal !== null && typeof hostVal === "object" && !Array.isArray(hostVal)) {
             const h = hostVal as Record<string, unknown>;
             const rawManaged = h["managed"];
-            const managed = Array.isArray(rawManaged)
-              ? (rawManaged as unknown[]).filter((s): s is string => typeof s === "string")
-              : [];
+            const managed =
+              Array.isArray(rawManaged) &&
+              (rawManaged as unknown[]).every((s) => typeof s === "string")
+                ? (rawManaged as string[])
+                : [];
             const lastSync =
               typeof h["lastSync"] === "string" ? h["lastSync"] : new Date().toISOString();
             hosts[hostId] = { managed, lastSync };

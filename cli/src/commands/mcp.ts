@@ -528,6 +528,17 @@ export async function collectMcpPlanLines(): Promise<string[]> {
     // Exclude expansion-failed managed names so the adapter does not plan
     // a removal for them (matching runMcpSync's effectiveManaged logic).
     const effectiveManaged = managed.filter((m) => !expansionFailedManaged.has(m));
+
+    // Skip hosts with nothing to do (mirrors runMcpSync's host-relevance check).
+    // A malformed config on an untargeted host must not appear as "blocked" in
+    // the dry-run preview when the real sync would silently skip it.
+    const hasIntendedServers = Object.values(resolvedConfig.servers).some(
+      (server) => !server.hosts || server.hosts.includes(hostId),
+    );
+    if (!hasIntendedServers && effectiveManaged.length === 0) {
+      continue;
+    }
+
     const plan = adapter.plan(resolvedConfig, effectiveManaged);
 
     if (!plan.ok) {

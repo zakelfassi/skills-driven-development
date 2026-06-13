@@ -22,7 +22,7 @@
  *
  * All tests use SKDD_HOME + HOME temp dirs — never touch the real user home.
  */
-import { copyFileSync, mkdirSync, mkdtempSync, rmSync } from "node:fs";
+import { copyFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -227,5 +227,35 @@ describe("hub dry-run: still-intended + unset var → no removal line", () => {
     const ccLines = lines.filter((l) => l.startsWith("[claude-code]"));
     const removalLine = ccLines.find((l) => l.includes("- hub-still-srv"));
     expect(removalLine).toBeUndefined();
+  });
+});
+
+// ── 6. untargeted malformed host → not shown as blocked in dry-run preview ───
+
+describe("hub dry-run: untargeted malformed host → no blocked line (parity with runMcpSync skip)", () => {
+  it("collectMcpPlanLines does not show [cursor] blocked when cursor is not targeted and has no managed entries", async () => {
+    // Place a valid claude-code config so that host is available
+    placeFixture("claude-code.json", ".claude.json");
+
+    // Place a malformed cursor config
+    mkdirSync(join(homeTmp, ".cursor"), { recursive: true });
+    writeFileSync(join(homeTmp, ".cursor/mcp.json"), "THIS IS NOT JSON <<<");
+
+    // Canonical: server is allowlisted to claude-code only — cursor is untargeted
+    writeCanonical({
+      "dryrun-skip-srv": {
+        command: "my-cmd",
+        hosts: ["claude-code"],
+      },
+    });
+
+    // Verify sync itself exits 0 (cursor is skipped silently)
+    const syncCode = await runMcpSync();
+    expect(syncCode).toBe(0);
+
+    // Verify hub dry-run also skips cursor — no blocked line
+    const lines = await collectMcpPlanLines();
+    const cursorBlocked = lines.find((l) => l.startsWith("[cursor]") && l.includes("blocked"));
+    expect(cursorBlocked).toBeUndefined();
   });
 });
