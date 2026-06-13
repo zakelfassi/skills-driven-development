@@ -29,6 +29,9 @@ import { collectMcpPlanLines, runMcpSync } from "../src/commands/mcp.js";
 import { type CanonicalMcpConfig, saveMcpConfig } from "../src/lib/mcp/schema.js";
 import { saveMcpManagedNames } from "../src/lib/mcp/state.js";
 
+const runClaudeDesktopAvailable =
+  process.platform === "darwin" || process.platform === "win32" ? it : it.skip;
+
 // ── Environment setup ─────────────────────────────────────────────────────────
 
 let skddTmp: string;
@@ -182,26 +185,30 @@ describe("C: malformed config + pending managed removal → exit 1 (M12-A5 regre
     expect(code).toBe(1);
   });
 
-  it("exits 1 when claude-desktop has a managed entry pending removal and its config is malformed", async () => {
-    // On darwin only (claude-desktop is not available on Linux/other platforms).
-    placeMalformedClaudeDesktop();
-    placeClaudeCode();
+  runClaudeDesktopAvailable(
+    "exits 1 when claude-desktop has a managed entry pending removal and its config is malformed",
+    async () => {
+      // Claude Desktop adapter is unavailable on Linux, so this regression is
+      // covered only on platforms where a malformed config can be parsed.
+      placeMalformedClaudeDesktop();
+      placeClaudeCode();
 
-    // Seed: claude-desktop previously managed "old-server"
-    saveMcpManagedNames(skddTmp, "claude-desktop", ["old-server"]);
+      // Seed: claude-desktop previously managed "old-server"
+      saveMcpManagedNames(skddTmp, "claude-desktop", ["old-server"]);
 
-    writeCanonical({
-      "remote-srv": {
-        url: "https://mcp.example.com/sse",
-        type: "sse",
-        // remote-only → omitted by claude-desktop, but managed cleanup is still needed
-      },
-    });
+      writeCanonical({
+        "remote-srv": {
+          url: "https://mcp.example.com/sse",
+          type: "sse",
+          // remote-only → omitted by claude-desktop, but managed cleanup is still needed
+        },
+      });
 
-    const code = await runMcpSync();
-    // claude-desktop must be parsed to remove "old-server"; malformed → exit 1
-    expect(code).toBe(1);
-  });
+      const code = await runMcpSync();
+      // claude-desktop must be parsed to remove "old-server"; malformed → exit 1
+      expect(code).toBe(1);
+    },
+  );
 });
 
 // ── D: well-formed host with intended server → exit 0 (no regression) ─────────
