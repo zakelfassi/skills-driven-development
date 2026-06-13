@@ -1,4 +1,5 @@
 import {
+  chmodSync,
   existsSync,
   lstatSync,
   mkdirSync,
@@ -181,4 +182,28 @@ describe("runUnlink", () => {
     // State entry must NOT be created/modified
     expect(loadState(tmp)!.mirrors).toHaveLength(0);
   });
+
+  runUnix(
+    "returns non-zero when unlinkSync throws (FS removal failure — e.g. EACCES)",
+    async () => {
+      // Set up: link first so a symlink exists at .claude/skills
+      await runLink({ cwd: tmp, harnesses: ["claude"], quiet: true });
+      expect(lstatSync(join(tmp, ".claude/skills")).isSymbolicLink()).toBe(true);
+
+      // Make the parent directory read-only so unlinkSync on the symlink fails
+      const parentDir = join(tmp, ".claude");
+      chmodSync(parentDir, 0o555);
+      let code: number;
+      try {
+        code = await runUnlink({ cwd: tmp, harnesses: ["claude"], quiet: true });
+      } finally {
+        // Restore permissions before cleanup
+        chmodSync(parentDir, 0o755);
+      }
+      // FS removal threw → must return non-zero (was 0 before the fix)
+      expect(code).toBe(1);
+      // Symlink must still be present (removal failed)
+      expect(existsSync(join(tmp, ".claude/skills"))).toBe(true);
+    },
+  );
 });

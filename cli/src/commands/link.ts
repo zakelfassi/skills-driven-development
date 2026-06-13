@@ -232,6 +232,7 @@ export async function runUnlink(opts: UnlinkOptions = {}): Promise<number> {
 
   const state = loadState(cwd) ?? emptyState();
   let blockedCount = 0;
+  let removalFailedCount = 0;
 
   for (const harness of harnesses) {
     const profile = HARNESSES[harness];
@@ -256,6 +257,7 @@ export async function runUnlink(opts: UnlinkOptions = {}): Promise<number> {
         } catch (err) {
           if (!quiet)
             logger.warn(`Could not remove ${profile.skillsDir}: ${(err as Error).message}`);
+          removalFailedCount++;
           continue;
         }
       } else if (opts.force) {
@@ -266,6 +268,7 @@ export async function runUnlink(opts: UnlinkOptions = {}): Promise<number> {
         } catch (err) {
           if (!quiet)
             logger.warn(`Could not remove ${profile.skillsDir}: ${(err as Error).message}`);
+          removalFailedCount++;
           continue;
         }
       } else {
@@ -279,6 +282,7 @@ export async function runUnlink(opts: UnlinkOptions = {}): Promise<number> {
           } catch (err) {
             if (!quiet)
               logger.warn(`Could not remove ${profile.skillsDir}: ${(err as Error).message}`);
+            removalFailedCount++;
             continue;
           }
         } else {
@@ -301,5 +305,5 @@ export async function runUnlink(opts: UnlinkOptions = {}): Promise<number> {
   }
 
   saveState(cwd, state);
-  return blockedCount > 0 ? 1 : 0;
+  return blockedCount > 0 || removalFailedCount > 0 ? 1 : 0;
 }

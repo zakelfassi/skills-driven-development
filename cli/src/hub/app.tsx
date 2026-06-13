@@ -234,6 +234,7 @@ export function Hub({ data: initialData, cwd, actions, reloader }: HubProps) {
             projectSkills={data.projectSkills}
             globalSkills={data.globalSkills}
             selectedIndex={selectedIndex}
+            registryError={data.registryError}
           />
         )}
         {activePane === "mirrors" && (

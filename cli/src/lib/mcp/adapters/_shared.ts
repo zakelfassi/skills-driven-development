@@ -11,61 +11,118 @@ import type {
 } from "./types.js";
 
 /**
+ * Advance `pos` past whitespace and JSONC comments (// and slash-star…star-slash).
+ * Returns the index of the next non-whitespace, non-comment character.
+ * Used as a lookahead to detect trailing commas before } or ].
+ */
+function skipWsAndComments(text: string, pos: number): number {
+  let j = pos;
+  while (j < text.length) {
+    const c = text[j];
+    if (c === " " || c === "\t" || c === "\r" || c === "\n") {
+      j++;
+    } else if (c === "/" && text[j + 1] === "/") {
+      // Line comment: skip to end of line
+      while (j < text.length && text[j] !== "\n") j++;
+    } else if (c === "/" && text[j + 1] === "*") {
+      // Block comment: skip to closing star-slash
+      j += 2;
+      while (j < text.length && !(text[j] === "*" && text[j + 1] === "/")) j++;
+      j += 2;
+    } else {
+      break;
+    }
+  }
+  return j;
+}
+
+/**
  * Strip JSONC extensions (// line comments, /* block comments, trailing commas)
- * from input and return standard JSON text. Dependency-free, two-pass approach.
+ * from input and return standard JSON text. Dependency-free, single-pass approach.
  *
- * Pass 1 strips comments while preserving string literals verbatim.
- * Pass 2 removes trailing commas before } or ] using a regex on the now-clean text.
+ * A single stateful scan tracks whether the cursor is inside a string literal
+ * (including escape handling) and only strips comments and trailing commas
+ * OUTSIDE string literals — string values are never rewritten.
+ *
+ * Fail-closed behaviour:
+ * - An unterminated block comment (slash-star with no matching star-slash before EOF) throws
+ *   a SyntaxError so the adapter rejects the file rather than silently accepting
+ *   malformed input.
+ * - Malformed input that is not valid even after stripping will still throw when
+ *   passed to JSON.parse.
  *
  * NOTE: Comments are NOT preserved on write. When skdd applies changes to an
  * OpenCode config that contained comments, the written file will be valid JSON
  * without those comments. All unmanaged keys and servers survive via the
  * merge-not-overwrite logic in createJsonAdapter.
- *
- * Malformed input that is not valid even after stripping will still throw when
- * passed to JSON.parse, so the adapter fails closed on truly corrupt files.
  */
 export function stripJsonc(text: string): string {
-  // Pass 1: strip line and block comments, preserving string contents verbatim
   let i = 0;
-  let s = "";
+  let result = "";
 
   while (i < text.length) {
-    // String literal — pass through verbatim, handling escape sequences
+    // ── String literal ────────────────────────────────────────────────────────
+    // Pass through verbatim (including escape sequences) so that string VALUES
+    // containing characters like ',', '}', ']', '/', or '*' are never modified.
     if (text[i] === '"') {
-      s += '"';
+      result += '"';
       i++;
       while (i < text.length) {
         const ch = text[i];
-        s += ch;
+        result += ch;
         i++;
         if (ch === "\\") {
           // Escaped character — copy next char verbatim (don't interpret it)
-          if (i < text.length) s += text[i++];
+          if (i < text.length) result += text[i++];
         } else if (ch === '"') {
           break; // end of string
         }
       }
+      continue;
     }
-    // Line comment: // ... \n
-    else if (text[i] === "/" && text[i + 1] === "/") {
+
+    // ── Line comment: // ... \n ───────────────────────────────────────────────
+    if (text[i] === "/" && text[i + 1] === "/") {
       while (i < text.length && text[i] !== "\n") i++;
+      continue;
     }
-    // Block comment: /* ... */
-    else if (text[i] === "/" && text[i + 1] === "*") {
+
+    // ── Block comment: /* ... */ ──────────────────────────────────────────────
+    if (text[i] === "/" && text[i + 1] === "*") {
       i += 2;
-      while (i < text.length && !(text[i] === "*" && text[i + 1] === "/")) i++;
-      i += 2; // skip closing */
-    } else {
-      s += text[i++];
+      let terminated = false;
+      while (i < text.length) {
+        if (text[i] === "*" && text[i + 1] === "/") {
+          i += 2;
+          terminated = true;
+          break;
+        }
+        i++;
+      }
+      if (!terminated) {
+        throw new SyntaxError("Unterminated block comment in JSONC input");
+      }
+      continue;
     }
+
+    // ── Trailing comma ────────────────────────────────────────────────────────
+    // A comma is a trailing comma when the only characters between it and the
+    // next structural character are whitespace or comments, and that next character
+    // is } or ]. We perform a non-consuming lookahead and simply skip the comma.
+    if (text[i] === ",") {
+      const j = skipWsAndComments(text, i + 1);
+      if (j < text.length && (text[j] === "}" || text[j] === "]")) {
+        // Trailing comma: consume it without emitting
+        i++;
+        continue;
+      }
+    }
+
+    // ── Ordinary character ────────────────────────────────────────────────────
+    result += text[i++];
   }
 
-  // Pass 2: remove trailing commas before } or ] — safe now that comments are gone.
-  // Uses a regex rather than a second state machine since comment stripping is complete.
-  // Note: this could theoretically corrupt a string value that literally contains
-  // ",\s*}" or ",\s*]", but that pattern never appears in MCP server config values.
-  return s.replace(/,(\s*[}\]])/g, "$1");
+  return result;
 }
 
 /**

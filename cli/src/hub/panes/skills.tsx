@@ -5,10 +5,28 @@ interface SkillsPaneProps {
   projectSkills: SkillRow[];
   globalSkills: SkillRow[];
   selectedIndex: number;
+  /** Set when a project or global .skills-registry.json could not be loaded. */
+  registryError?: string;
 }
 
-export function SkillsPane({ projectSkills, globalSkills, selectedIndex }: SkillsPaneProps) {
+export function SkillsPane({
+  projectSkills,
+  globalSkills,
+  selectedIndex,
+  registryError,
+}: SkillsPaneProps) {
   const allSkills = [...projectSkills, ...globalSkills];
+
+  if (registryError) {
+    return (
+      <Box flexDirection="column" paddingX={1}>
+        <Text color="red" bold>
+          Registry error: {registryError}
+        </Text>
+        <Text color="gray">Fix the malformed .skills-registry.json and press Tab to refresh.</Text>
+      </Box>
+    );
+  }
 
   if (allSkills.length === 0) {
     return (

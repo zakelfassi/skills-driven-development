@@ -86,6 +86,21 @@ describe("SkillsPane", () => {
     expect(frame).toContain("navigate");
     unmount();
   });
+
+  it("renders registry error when registryError prop is set (m7-scrutiny)", () => {
+    const { lastFrame, unmount } = render(
+      <SkillsPane
+        projectSkills={[]}
+        globalSkills={[]}
+        selectedIndex={0}
+        registryError="project registry: Unexpected token '}'"
+      />,
+    );
+    const frame = lastFrame();
+    expect(frame).toContain("Registry error");
+    expect(frame).toContain("Unexpected token '}'");
+    unmount();
+  });
 });
 
 // ── MirrorsPane ───────────────────────────────────────────────────────────────

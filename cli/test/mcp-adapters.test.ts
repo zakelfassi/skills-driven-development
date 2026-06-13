@@ -11,6 +11,7 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { stripJsonc } from "../src/lib/mcp/adapters/_shared.js";
 import { claudeCodeAdapter } from "../src/lib/mcp/adapters/claude-code.js";
 import { claudeDesktopAdapter } from "../src/lib/mcp/adapters/claude-desktop.js";
 import { cursorAdapter } from "../src/lib/mcp/adapters/cursor.js";
@@ -1355,5 +1356,50 @@ describe("opencode adapter — JSONC parsing (fix-6)", () => {
     );
     const result = claudeCodeAdapter.read();
     expect(result.ok).toBe(false);
+  });
+});
+
+// ── stripJsonc edge-case regression tests (m7-scrutiny) ──────────────────────
+//
+// The previous regex-based trailing-comma pass could corrupt string VALUES that
+// literally contained ',}' or ',]'. The new stateful scanner never rewrites
+// inside string literals.
+
+describe("stripJsonc — edge-case regression (m7-scrutiny)", () => {
+  it("does not corrupt a string value containing ',}'", () => {
+    const input = `{ "key": "a,}b" }`;
+    const parsed = JSON.parse(stripJsonc(input)) as Record<string, string>;
+    expect(parsed["key"]).toBe("a,}b");
+  });
+
+  it("does not corrupt a string value containing ',]'", () => {
+    const input = `{ "key": "x,]y" }`;
+    const parsed = JSON.parse(stripJsonc(input)) as Record<string, string>;
+    expect(parsed["key"]).toBe("x,]y");
+  });
+
+  it("strips a real trailing comma before } without corrupting adjacent string", () => {
+    const input = `{ "url": "https://host/path,}extra", "port": 8080, }`;
+    const parsed = JSON.parse(stripJsonc(input)) as Record<string, unknown>;
+    expect(parsed["url"]).toBe("https://host/path,}extra");
+    expect(parsed["port"]).toBe(8080);
+  });
+
+  it("strips a real trailing comma before ]", () => {
+    const input = `{ "args": ["a", "b,]c", ] }`;
+    const parsed = JSON.parse(stripJsonc(input)) as Record<string, unknown>;
+    expect((parsed["args"] as string[])[1]).toBe("b,]c");
+  });
+
+  it("throws SyntaxError on an unterminated block comment", () => {
+    const input = `{ /* unterminated block comment "key": 1 }`;
+    expect(() => stripJsonc(input)).toThrow(SyntaxError);
+    expect(() => stripJsonc(input)).toThrow("Unterminated block comment");
+  });
+
+  it("accepts a properly terminated block comment", () => {
+    const input = `{ /* comment */ "key": 1 }`;
+    const parsed = JSON.parse(stripJsonc(input)) as Record<string, number>;
+    expect(parsed["key"]).toBe(1);
   });
 });
