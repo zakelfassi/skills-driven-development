@@ -243,6 +243,59 @@ describe("runImport", () => {
     },
   );
 
+  runUnix(
+    "--apply removes harness copies when skill is already in canonical (no skip-guard regression)",
+    async () => {
+      // Canonical already has "hello"
+      writeSkill(join(tmp, "skills/hello"), HELLO_SKILL);
+      // Harness also has the identical "hello" skill (duplicate copy)
+      writeSkill(join(tmp, ".claude/skills/hello"), HELLO_SKILL);
+
+      const code = await runImport(undefined, { cwd: tmp, apply: true, skipLink: true });
+      restoreConsole();
+
+      // Zero exit: already-canonical is not an error condition
+      expect(code).toBe(0);
+      // Canonical skill still intact
+      expect(existsSync(join(tmp, "skills/hello/SKILL.md"))).toBe(true);
+      // Harness copy was removed — skip guard must NOT fire when dest is held by the same-named scan entry
+      expect(existsSync(join(tmp, ".claude/skills/hello"))).toBe(false);
+    },
+  );
+
+  runUnix(
+    "--apply mixed run: migrated skill source removed, skipped skill source preserved",
+    async () => {
+      // "world" is only in a harness dir, no canonical entry — will be migrated
+      writeSkill(join(tmp, ".claude/skills/world"), WORLD_SKILL);
+      // "hello" is only in a harness dir, but canonical dest dir exists with a different frontmatter name
+      writeSkill(join(tmp, ".cursor/skills/hello"), HELLO_SKILL);
+      mkdirSync(join(tmp, "skills/hello"), { recursive: true });
+      writeFileSync(
+        join(tmp, "skills/hello/SKILL.md"),
+        `---\nname: hello-v2\ndescription: Different name.\n---\n\n# Hello V2\n`,
+      );
+
+      const code = await runImport(undefined, { cwd: tmp, apply: true, skipLink: true });
+      restoreConsole();
+
+      // Non-zero exit: one item was skipped (occupied destination)
+      expect(code).not.toBe(0);
+      // "world" was migrated into canonical
+      expect(existsSync(join(tmp, "skills/world/SKILL.md"))).toBe(true);
+      // "world" harness source was removed after successful migration
+      expect(existsSync(join(tmp, ".claude/skills/world"))).toBe(false);
+      // "hello" harness source was preserved (skip guard fired due to occupied dest)
+      expect(existsSync(join(tmp, ".cursor/skills/hello/SKILL.md"))).toBe(true);
+      // The occupied canonical dir still has its original conflicting content
+      expect(existsSync(join(tmp, "skills/hello/SKILL.md"))).toBe(true);
+      // Informative message emitted about the skipped item
+      const allLogs = logs.join("\n");
+      expect(allLogs).toMatch(/destination.*already exists/);
+      expect(allLogs).toMatch(/manual review/);
+    },
+  );
+
   it("errors when the target directory does not exist", async () => {
     const code = await runImport("does-not-exist", { cwd: tmp, json: true });
     restoreConsole();
@@ -383,4 +436,38 @@ describe("runImport — global mode colony bootstrap", () => {
     // Colony was created
     expect(existsSync(join(skddFreshHome, "skills"))).toBe(true);
   });
+
+  runUnix(
+    "import -g --apply preserves harness source when global canonical dest is occupied (not in scan)",
+    async () => {
+      const skddFreshHome = join(skddParent, ".skdd-fresh");
+      // Pre-create canonical with a dir whose SKILL.md uses a different frontmatter name —
+      // the scan will pick it up as "hello-v2", not "hello", so it won't satisfy the
+      // canonical entry check for the harness "hello" skill.
+      mkdirSync(join(skddFreshHome, "skills", "hello"), { recursive: true });
+      writeFileSync(
+        join(skddFreshHome, "skills", "hello", "SKILL.md"),
+        `---\nname: hello-v2\ndescription: Different name.\n---\n\n# Hello V2\n`,
+      );
+
+      // Seed the droid harness global dir with the actual "hello" skill
+      const droidGlobalDir = join(fakeTmp, ".factory", "skills", "hello");
+      mkdirSync(droidGlobalDir, { recursive: true });
+      writeFileSync(join(droidGlobalDir, "SKILL.md"), HELLO_SKILL);
+
+      const code = await runImport(undefined, { global: true, apply: true, skipLink: true });
+      restoreConsole();
+
+      // Non-zero exit: unresolved item requiring manual review
+      expect(code).not.toBe(0);
+      // Harness source MUST still exist (not deleted)
+      expect(existsSync(join(droidGlobalDir, "SKILL.md"))).toBe(true);
+      // The occupied canonical dir still has its original content
+      expect(existsSync(join(skddFreshHome, "skills", "hello", "SKILL.md"))).toBe(true);
+      // Informative message emitted
+      const allLogs = logs.join("\n");
+      expect(allLogs).toMatch(/destination.*already exists/);
+      expect(allLogs).toMatch(/manual review/);
+    },
+  );
 });
