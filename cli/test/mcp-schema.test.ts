@@ -540,6 +540,43 @@ describe("loadMcpConfig duplicate server name detection", () => {
     }
   });
 
+  it("rejects a file with two top-level 'servers' keys (duplicate top-level key)", () => {
+    // JSON.parse keeps the LAST servers object; a file with two top-level
+    // "servers" keys is structurally invalid and must fail closed.
+    const rawJson =
+      '{"version":1,"servers":{"server-a":{"command":"cmd1"}},"servers":{"server-b":{"command":"cmd2"}}}';
+    writeFileSync(join(tmp, "mcp.json"), rawJson);
+    const result = loadMcpConfigResult(tmp);
+    expect(result.status).toBe("invalid");
+    if (result.status === "invalid") {
+      expect(result.reason).toMatch(/[Dd]uplicate.*servers/);
+    }
+  });
+
+  it("rejects duplicate server names inside the SECOND (effective) servers object", () => {
+    // Two top-level "servers" keys; the second (effective) one contains a
+    // duplicate server name. The old scanner stopped at the FIRST servers object
+    // and would have silently passed. The new scanner must catch this.
+    const rawJson =
+      '{"version":1,"servers":{"unique":{"command":"cmd1"}},"servers":{"duped":{"command":"cmd2"},"duped":{"command":"cmd3"}}}';
+    writeFileSync(join(tmp, "mcp.json"), rawJson);
+    const result = loadMcpConfigResult(tmp);
+    expect(result.status).toBe("invalid");
+  });
+
+  it("single top-level servers with unique names is still valid (no regression)", () => {
+    const rawJson = JSON.stringify({
+      version: 1,
+      servers: {
+        "server-a": { command: "cmd1" },
+        "server-b": { command: "cmd2" },
+      },
+    });
+    writeFileSync(join(tmp, "mcp.json"), rawJson);
+    const result = loadMcpConfigResult(tmp);
+    expect(result.status).toBe("ok");
+  });
+
   it("no false positive when a nested 'servers' object appears earlier and top-level server names are unique", () => {
     // Nested "servers" inside another value must NOT trigger a false duplicate error
     // when the real top-level servers map has unique names.

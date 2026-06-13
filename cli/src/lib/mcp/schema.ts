@@ -222,9 +222,16 @@ function parseJsonString(rawText: string, pos: number): { value: string; end: nu
   return { value, end: j };
 }
 
+type DupScanResult =
+  | { kind: "ok" }
+  | { kind: "dup-toplevel-servers" }
+  | { kind: "dup-server-names"; names: string[] };
+
 /**
- * Scan raw JSON text for duplicate keys at the top level of the "servers" object.
- * Returns the list of duplicated key names (empty if none found).
+ * Scan raw JSON text for:
+ *   1. Duplicate top-level `"servers"` keys (depth-1 object key appearing more
+ *      than once — JSON.parse keeps the last, silently discarding the others).
+ *   2. Duplicate server-name keys inside the EFFECTIVE (last) `servers` object.
  *
  * Must run BEFORE JSON.parse, which silently collapses duplicate keys by keeping
  * only the last value, masking configuration errors.
@@ -235,17 +242,22 @@ function parseJsonString(rawText: string, pos: number): { value: string; end: nu
  * value (e.g. `"metadata": { "servers": { … } }`) must not fool the scan into
  * checking the wrong object.
  */
-function findDuplicateServerNames(rawText: string): string[] {
-  // ── Phase 1: find the opening '{' of the top-level "servers" value ──────────
+function findDuplicateServerNames(rawText: string): DupScanResult {
+  // ── Phase 1: find ALL top-level "servers" keys; track LAST position ─────────
   //
   // Walk the entire raw text, maintaining a brace/bracket depth counter and
   // skipping over string content so that braces inside strings don't skew the
   // depth.  We look for a "servers" key only when depth == 1 (i.e. we are
   // directly inside the outermost JSON object).
+  //
+  // We do NOT break on the first hit — we keep scanning so we can detect a
+  // second top-level "servers" key.  JSON.parse keeps the LAST one, so we also
+  // record its opening '{' for Phase 2.
 
   let i = 0;
   let depth = 0;
-  let serversStart = -1; // index of '{' that opens the canonical servers map
+  let serversCount = 0; // number of top-level "servers" keys seen
+  let serversStart = -1; // '{' of the LAST top-level "servers" value
 
   while (i < rawText.length) {
     const ch = rawText[i];
@@ -274,7 +286,8 @@ function findDuplicateServerNames(rawText: string): string[] {
           afterStr++;
         }
         if (afterStr < rawText.length && rawText[afterStr] === ":" && value === "servers") {
-          // Found the "servers" key at depth 1.  Locate its value (must be '{').
+          // Found a "servers" key at depth 1.  Record it and locate its value.
+          serversCount++;
           let valuePos = afterStr + 1;
           while (valuePos < rawText.length) {
             const vc = rawText[valuePos];
@@ -285,9 +298,9 @@ function findDuplicateServerNames(rawText: string): string[] {
             }
           }
           if (valuePos < rawText.length && rawText[valuePos] === "{") {
-            serversStart = valuePos;
-            break;
+            serversStart = valuePos; // update: keep LAST valid servers object
           }
+          // Do NOT break — continue scanning for additional top-level "servers" keys.
         }
       }
 
@@ -297,11 +310,17 @@ function findDuplicateServerNames(rawText: string): string[] {
     }
   }
 
-  if (serversStart === -1) return [];
+  // A hand-edited file with MORE THAN ONE top-level "servers" key is structurally
+  // invalid: JSON.parse silently discards all but the last.
+  if (serversCount > 1) {
+    return { kind: "dup-toplevel-servers" };
+  }
 
-  // ── Phase 2: scan the canonical servers object for duplicate top-level keys ──
+  if (serversStart === -1) return { kind: "ok" };
+
+  // ── Phase 2: scan the EFFECTIVE servers object for duplicate server names ────
   //
-  // Starting at serversStart (the '{' of the servers map), walk
+  // Starting at serversStart (the '{' of the LAST / effective servers map), walk
   // character-by-character and collect string keys at depth 1 within that
   // object.  We deliberately do NOT handle '['/']' here: server values are
   // always plain objects, and skipping array brackets is safe because
@@ -338,7 +357,11 @@ function findDuplicateServerNames(rawText: string): string[] {
     }
   }
 
-  return [...seen.entries()].filter(([, count]) => count > 1).map(([key]) => key);
+  const dupes = [...seen.entries()].filter(([, count]) => count > 1).map(([key]) => key);
+  if (dupes.length > 0) {
+    return { kind: "dup-server-names", names: dupes };
+  }
+  return { kind: "ok" };
 }
 
 /**
@@ -363,9 +386,12 @@ export function loadMcpConfigResult(dir: string): LoadMcpConfigResult {
   if (!existsSync(p)) return { status: "absent" };
   try {
     const rawText = readFileSync(p, "utf8");
-    const dupes = findDuplicateServerNames(rawText);
-    if (dupes.length > 0) {
-      return { status: "invalid", reason: `Duplicate server names: ${dupes.join(", ")}` };
+    const dupScan = findDuplicateServerNames(rawText);
+    if (dupScan.kind === "dup-toplevel-servers") {
+      return { status: "invalid", reason: 'Duplicate top-level "servers" keys in config' };
+    }
+    if (dupScan.kind === "dup-server-names") {
+      return { status: "invalid", reason: `Duplicate server names: ${dupScan.names.join(", ")}` };
     }
     const raw = JSON.parse(rawText) as unknown;
     const result = validateMcpConfig(raw);
