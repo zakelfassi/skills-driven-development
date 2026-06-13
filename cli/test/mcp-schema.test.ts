@@ -159,6 +159,223 @@ describe("validateMcpConfig", () => {
   });
 });
 
+// ── field type validation ─────────────────────────────────────────────────────
+
+describe("validateMcpConfig field type validation", () => {
+  // stdio: command type
+  it("rejects command that is not a string", () => {
+    const raw = { version: 1, servers: { s: { command: 123 } } };
+    const result = validateMcpConfig(raw);
+    expect(result.ok).toBe(false);
+    if (!result.ok)
+      expect(result.errors.some((e) => e.server === "s" && /command/.test(e.message))).toBe(true);
+  });
+
+  it("rejects command that is an object", () => {
+    const raw = { version: 1, servers: { s: { command: { bin: "npx" } } } };
+    const result = validateMcpConfig(raw);
+    expect(result.ok).toBe(false);
+  });
+
+  // stdio: args type
+  it("rejects args that is not an array", () => {
+    const raw = { version: 1, servers: { s: { command: "cmd", args: "not-an-array" } } };
+    const result = validateMcpConfig(raw);
+    expect(result.ok).toBe(false);
+    if (!result.ok)
+      expect(result.errors.some((e) => e.server === "s" && /args/.test(e.message))).toBe(true);
+  });
+
+  it("rejects args that contains a non-string element", () => {
+    const raw = { version: 1, servers: { s: { command: "cmd", args: ["ok", 42] } } };
+    const result = validateMcpConfig(raw);
+    expect(result.ok).toBe(false);
+    if (!result.ok)
+      expect(result.errors.some((e) => e.server === "s" && /args/.test(e.message))).toBe(true);
+  });
+
+  it("accepts args as an empty array", () => {
+    const raw = { version: 1, servers: { s: { command: "cmd", args: [] } } };
+    expect(validateMcpConfig(raw).ok).toBe(true);
+  });
+
+  // stdio: env type
+  it("rejects env that is not an object", () => {
+    const raw = { version: 1, servers: { s: { command: "cmd", env: "not-an-object" } } };
+    const result = validateMcpConfig(raw);
+    expect(result.ok).toBe(false);
+    if (!result.ok)
+      expect(result.errors.some((e) => e.server === "s" && /env/.test(e.message))).toBe(true);
+  });
+
+  it("rejects env that is an array", () => {
+    const raw = { version: 1, servers: { s: { command: "cmd", env: ["KEY=val"] } } };
+    const result = validateMcpConfig(raw);
+    expect(result.ok).toBe(false);
+  });
+
+  it("rejects env where a value is not a string", () => {
+    const raw = { version: 1, servers: { s: { command: "cmd", env: { KEY: 123 } } } };
+    const result = validateMcpConfig(raw);
+    expect(result.ok).toBe(false);
+    if (!result.ok)
+      expect(result.errors.some((e) => e.server === "s" && /env/.test(e.message))).toBe(true);
+  });
+
+  it("accepts env as an empty object", () => {
+    const raw = { version: 1, servers: { s: { command: "cmd", env: {} } } };
+    expect(validateMcpConfig(raw).ok).toBe(true);
+  });
+
+  // remote: url type
+  it("rejects url that is not a string", () => {
+    const raw = { version: 1, servers: { s: { url: 123 } } };
+    const result = validateMcpConfig(raw);
+    expect(result.ok).toBe(false);
+    if (!result.ok)
+      expect(result.errors.some((e) => e.server === "s" && /url/.test(e.message))).toBe(true);
+  });
+
+  it("rejects url that is an object", () => {
+    const raw = { version: 1, servers: { s: { url: { href: "https://x.com" } } } };
+    const result = validateMcpConfig(raw);
+    expect(result.ok).toBe(false);
+  });
+
+  // remote: type field
+  it("rejects type that is not http or sse", () => {
+    const raw = { version: 1, servers: { s: { url: "https://x.com", type: "websocket" } } };
+    const result = validateMcpConfig(raw);
+    expect(result.ok).toBe(false);
+    if (!result.ok)
+      expect(result.errors.some((e) => e.server === "s" && /type/.test(e.message))).toBe(true);
+  });
+
+  it("accepts type http", () => {
+    const raw = { version: 1, servers: { s: { url: "https://x.com", type: "http" } } };
+    expect(validateMcpConfig(raw).ok).toBe(true);
+  });
+
+  it("accepts type sse", () => {
+    const raw = { version: 1, servers: { s: { url: "https://x.com", type: "sse" } } };
+    expect(validateMcpConfig(raw).ok).toBe(true);
+  });
+
+  // remote: headers type
+  it("rejects headers that is not an object", () => {
+    const raw = { version: 1, servers: { s: { url: "https://x.com", headers: "auth" } } };
+    const result = validateMcpConfig(raw);
+    expect(result.ok).toBe(false);
+    if (!result.ok)
+      expect(result.errors.some((e) => e.server === "s" && /headers/.test(e.message))).toBe(true);
+  });
+
+  it("rejects headers where a value is not a string", () => {
+    const raw = {
+      version: 1,
+      servers: { s: { url: "https://x.com", headers: { Authorization: 42 } } },
+    };
+    const result = validateMcpConfig(raw);
+    expect(result.ok).toBe(false);
+    if (!result.ok)
+      expect(result.errors.some((e) => e.server === "s" && /headers/.test(e.message))).toBe(true);
+  });
+
+  it("accepts headers as a valid string-value object", () => {
+    const raw = {
+      version: 1,
+      servers: { s: { url: "https://x.com", headers: { Authorization: "Bearer tok" } } },
+    };
+    expect(validateMcpConfig(raw).ok).toBe(true);
+  });
+
+  // shared: hosts type
+  it("rejects hosts that is not an array", () => {
+    const raw = { version: 1, servers: { s: { command: "cmd", hosts: "claude-code" } } };
+    const result = validateMcpConfig(raw);
+    expect(result.ok).toBe(false);
+    if (!result.ok)
+      expect(result.errors.some((e) => e.server === "s" && /hosts/.test(e.message))).toBe(true);
+  });
+
+  it("rejects hosts that contains a non-string element", () => {
+    const raw = { version: 1, servers: { s: { command: "cmd", hosts: ["claude-code", 42] } } };
+    const result = validateMcpConfig(raw);
+    expect(result.ok).toBe(false);
+  });
+
+  // shared: disabled type
+  it("rejects disabled that is not a boolean", () => {
+    const raw = { version: 1, servers: { s: { command: "cmd", disabled: "yes" } } };
+    const result = validateMcpConfig(raw);
+    expect(result.ok).toBe(false);
+    if (!result.ok)
+      expect(result.errors.some((e) => e.server === "s" && /disabled/.test(e.message))).toBe(true);
+  });
+
+  it("rejects disabled that is 0 (number)", () => {
+    const raw = { version: 1, servers: { s: { command: "cmd", disabled: 0 } } };
+    const result = validateMcpConfig(raw);
+    expect(result.ok).toBe(false);
+  });
+
+  it("accepts disabled as true", () => {
+    const raw = { version: 1, servers: { s: { command: "cmd", disabled: true } } };
+    expect(validateMcpConfig(raw).ok).toBe(true);
+  });
+
+  it("accepts disabled as false", () => {
+    const raw = { version: 1, servers: { s: { command: "cmd", disabled: false } } };
+    expect(validateMcpConfig(raw).ok).toBe(true);
+  });
+
+  // loadMcpConfigResult fails closed on type violations
+  it("loadMcpConfig returns null when command is a number", () => {
+    const rawJson = JSON.stringify({ version: 1, servers: { bad: { command: 123 } } });
+    writeFileSync(join(tmp, "mcp.json"), rawJson);
+    expect(loadMcpConfig(tmp)).toBeNull();
+  });
+
+  it("loadMcpConfig returns null when url is a number", () => {
+    const rawJson = JSON.stringify({ version: 1, servers: { bad: { url: 456 } } });
+    writeFileSync(join(tmp, "mcp.json"), rawJson);
+    expect(loadMcpConfig(tmp)).toBeNull();
+  });
+
+  // well-typed full config still loads
+  it("accepts a fully-typed stdio server with all optional fields", () => {
+    const raw = {
+      version: 1,
+      servers: {
+        s: {
+          command: "npx",
+          args: ["-y", "mcp-pkg"],
+          env: { API_KEY: "secret" },
+          hosts: ["claude-code", "droid"],
+          disabled: false,
+        },
+      },
+    };
+    expect(validateMcpConfig(raw).ok).toBe(true);
+  });
+
+  it("accepts a fully-typed remote server with all optional fields", () => {
+    const raw = {
+      version: 1,
+      servers: {
+        s: {
+          url: "https://mcp.example.com",
+          type: "http",
+          headers: { Authorization: "Bearer tok" },
+          hosts: ["claude-code"],
+          disabled: false,
+        },
+      },
+    };
+    expect(validateMcpConfig(raw).ok).toBe(true);
+  });
+});
+
 // ── expandEnvPlaceholders ────────────────────────────────────────────────────
 
 describe("expandEnvPlaceholders", () => {

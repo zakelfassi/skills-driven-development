@@ -102,6 +102,69 @@ export function validateMcpConfig(raw: unknown): ValidationResult {
     } else if (!hasCommand && !hasUrl) {
       errors.push({ server: name, message: "Server must have either command or url" });
     }
+
+    // --- Field type validation ---
+
+    // Shared optional fields
+    if ("hosts" in srv) {
+      const hosts = srv["hosts"];
+      if (!Array.isArray(hosts) || hosts.some((h) => typeof h !== "string")) {
+        errors.push({ server: name, message: "hosts must be an array of strings" });
+      }
+    }
+    if ("disabled" in srv) {
+      if (typeof srv["disabled"] !== "boolean") {
+        errors.push({ server: name, message: "disabled must be a boolean" });
+      }
+    }
+
+    // Stdio-specific fields
+    if (hasCommand) {
+      if (typeof srv["command"] !== "string") {
+        errors.push({ server: name, message: "command must be a string" });
+      }
+      if ("args" in srv) {
+        const args = srv["args"];
+        if (!Array.isArray(args) || args.some((a) => typeof a !== "string")) {
+          errors.push({ server: name, message: "args must be an array of strings" });
+        }
+      }
+      if ("env" in srv) {
+        const env = srv["env"];
+        if (
+          typeof env !== "object" ||
+          env === null ||
+          Array.isArray(env) ||
+          Object.values(env as Record<string, unknown>).some((v) => typeof v !== "string")
+        ) {
+          errors.push({ server: name, message: "env must be an object with string values" });
+        }
+      }
+    }
+
+    // Remote-specific fields
+    if (hasUrl) {
+      if (typeof srv["url"] !== "string") {
+        errors.push({ server: name, message: "url must be a string" });
+      }
+      if ("type" in srv) {
+        const type = srv["type"];
+        if (type !== "http" && type !== "sse") {
+          errors.push({ server: name, message: 'type must be "http" or "sse"' });
+        }
+      }
+      if ("headers" in srv) {
+        const headers = srv["headers"];
+        if (
+          typeof headers !== "object" ||
+          headers === null ||
+          Array.isArray(headers) ||
+          Object.values(headers as Record<string, unknown>).some((v) => typeof v !== "string")
+        ) {
+          errors.push({ server: name, message: "headers must be an object with string values" });
+        }
+      }
+    }
   }
 
   if (errors.length > 0) return { ok: false, errors };
