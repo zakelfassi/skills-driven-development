@@ -631,3 +631,86 @@ describe("buildMcpRows — droid host skips env expansion (M5-A13)", () => {
     expect(rows[0].hosts["claude-code"]).toBe("needs-env");
   });
 });
+
+// ── M6 f-m6-hub-empty-removals: empty canonical + managed names → pending removals ──
+
+describe("buildMcpRows — empty canonical + managed names → pending removals (M6)", () => {
+  it("absent mcp.json + managed names for one host → calls onPendingRemovals with count", () => {
+    // No mcp.json → absent canonical; managed state has 2 names for claude-code
+    let capturedCount: number | undefined;
+    const rows = buildMcpRows(tmp, {
+      loadManaged: (hostId) => (hostId === "claude-code" ? ["srv1", "srv2"] : []),
+      onPendingRemovals: (count) => {
+        capturedCount = count;
+      },
+    });
+
+    expect(rows).toHaveLength(0);
+    expect(capturedCount).toBe(2);
+  });
+
+  it("valid mcp.json with zero servers + managed names → calls onPendingRemovals", () => {
+    // mcp.json exists but servers:{} → canonical is effectively empty
+    writeConfig(tmp, { version: 1, servers: {} });
+
+    let capturedCount: number | undefined;
+    const rows = buildMcpRows(tmp, {
+      loadManaged: (hostId) => (hostId === "claude-code" ? ["old-srv"] : []),
+      onPendingRemovals: (count) => {
+        capturedCount = count;
+      },
+    });
+
+    expect(rows).toHaveLength(0);
+    expect(capturedCount).toBe(1);
+  });
+
+  it("absent canonical + no managed names → does NOT call onPendingRemovals", () => {
+    let called = false;
+    buildMcpRows(tmp, {
+      loadManaged: () => [],
+      onPendingRemovals: () => {
+        called = true;
+      },
+    });
+
+    expect(called).toBe(false);
+  });
+
+  it("absent canonical + managed names across multiple hosts → sums all hosts", () => {
+    // claude-code: 2, codex: 1, droid: 3 → total 6
+    let capturedCount: number | undefined;
+    buildMcpRows(tmp, {
+      loadManaged: (hostId) => {
+        if (hostId === "claude-code") return ["a", "b"];
+        if (hostId === "codex") return ["c"];
+        if (hostId === "droid") return ["d", "e", "f"];
+        return [];
+      },
+      onPendingRemovals: (count) => {
+        capturedCount = count;
+      },
+    });
+
+    expect(capturedCount).toBe(6);
+  });
+
+  it("invalid mcp.json → does NOT call onPendingRemovals (onConfigError is called instead)", () => {
+    writeFileSync(join(tmp, "mcp.json"), "{ not valid json }", "utf8");
+
+    let pendingCalled = false;
+    let configErrorCalled = false;
+    buildMcpRows(tmp, {
+      loadManaged: (hostId) => (hostId === "claude-code" ? ["srv"] : []),
+      onPendingRemovals: () => {
+        pendingCalled = true;
+      },
+      onConfigError: () => {
+        configErrorCalled = true;
+      },
+    });
+
+    expect(pendingCalled).toBe(false);
+    expect(configErrorCalled).toBe(true);
+  });
+});

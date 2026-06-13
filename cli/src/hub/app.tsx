@@ -242,6 +242,7 @@ export function Hub({ data: initialData, cwd, actions, reloader }: HubProps) {
             dryRunOutput={dryRunOutput}
             configError={data.mcpConfigError}
             actionMessage={actionMessage}
+            pendingRemovals={data.pendingMcpRemovals}
           />
         )}
         {activePane === "doctor" && (

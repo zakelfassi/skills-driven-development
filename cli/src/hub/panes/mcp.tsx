@@ -7,6 +7,8 @@ interface McpPaneProps {
   dryRunOutput?: string[];
   configError?: string;
   actionMessage?: string;
+  /** Total managed entries pending removal when canonical registry is empty. */
+  pendingRemovals?: number;
 }
 
 const CELL: Record<McpCellStatus, { char: string; color: string }> = {
@@ -33,6 +35,7 @@ export function McpPane({
   dryRunOutput,
   configError,
   actionMessage,
+  pendingRemovals,
 }: McpPaneProps) {
   if (configError) {
     return (
@@ -44,6 +47,37 @@ export function McpPane({
   }
 
   if (rows.length === 0) {
+    if (pendingRemovals && pendingRemovals > 0) {
+      const label = pendingRemovals === 1 ? "entry" : "entries";
+      return (
+        <Box paddingX={1} flexDirection="column">
+          <Text color="yellow">
+            {pendingRemovals} managed {label} pending removal (canonical registry is empty). Run
+            `skdd mcp sync` to apply.
+          </Text>
+          {dryRunOutput && dryRunOutput.length > 0 && (
+            <Box marginTop={1} flexDirection="column">
+              <Text color="gray">── dry-run plan ──</Text>
+              {dryRunOutput.map((line, i) => (
+                // biome-ignore lint/suspicious/noArrayIndexKey: stable index-keyed static lines
+                <Text key={i} color="gray">
+                  {line}
+                </Text>
+              ))}
+            </Box>
+          )}
+          {actionMessage && (
+            <Box marginTop={1}>
+              <Text color="cyan">{actionMessage}</Text>
+            </Box>
+          )}
+          <Box marginTop={1}>
+            <Text color="gray">s sync · d dry-run</Text>
+          </Box>
+        </Box>
+      );
+    }
+
     return (
       <Box paddingX={1}>
         <Text color="yellow">

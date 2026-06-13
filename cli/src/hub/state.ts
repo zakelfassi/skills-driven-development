@@ -56,6 +56,8 @@ export interface HubData {
   mirrors: MirrorRow[];
   mcpRows: McpRow[];
   mcpConfigError?: string;
+  /** Total managed MCP entries pending removal when the canonical registry is empty. */
+  pendingMcpRemovals: number;
   doctorChecks: DoctorCheck[];
 }
 
@@ -68,9 +70,13 @@ export async function loadHubData(cwd: string): Promise<HubData> {
 
   const mirrors = buildMirrorRows(projectRoot);
   let mcpConfigError: string | undefined;
+  let pendingMcpRemovals = 0;
   const mcpRows = buildMcpRows(globalRoot, {
     onConfigError: (reason) => {
       mcpConfigError = reason;
+    },
+    onPendingRemovals: (count) => {
+      pendingMcpRemovals = count;
     },
   });
   const { checks: doctorChecks } = await collectDoctorChecks(projectRoot, { global: false });
@@ -83,6 +89,7 @@ export async function loadHubData(cwd: string): Promise<HubData> {
     mirrors,
     mcpRows,
     mcpConfigError,
+    pendingMcpRemovals,
     doctorChecks,
   };
 }
@@ -203,20 +210,46 @@ export interface BuildMcpRowsOpts {
    * showing an empty matrix. Not called for an absent file.
    */
   onConfigError?: (reason: string) => void;
+  /**
+   * Called when the canonical registry is empty (absent or zero servers) but
+   * the managed-state still lists names that runMcpSync would REMOVE from host
+   * configs. The argument is the total count of pending-removal entries across
+   * all hosts. Not called when managed state is also empty.
+   */
+  onPendingRemovals?: (count: number) => void;
+}
+
+/** Sum managed entries across all hosts and fire onPendingRemovals if > 0. */
+function notifyPendingRemovals(
+  loadManaged: (hostId: McpHostId) => string[],
+  onPendingRemovals: ((count: number) => void) | undefined,
+): void {
+  if (!onPendingRemovals) return;
+  const total = ALL_HOST_IDS.reduce((sum, hostId) => sum + loadManaged(hostId).length, 0);
+  if (total > 0) onPendingRemovals(total);
 }
 
 export function buildMcpRows(globalRoot: string, opts?: BuildMcpRowsOpts): McpRow[] {
   const result = loadMcpConfigResult(globalRoot);
-  if (result.status === "invalid") {
-    opts?.onConfigError?.(result.reason);
-    return [];
-  }
-  if (result.status === "absent") return [];
-  const config = result.config;
 
   const adapters = opts?.adapters ?? ADAPTERS;
   const loadManaged =
     opts?.loadManaged ?? ((hostId: McpHostId) => loadMcpManagedNames(globalRoot, hostId));
+
+  if (result.status === "invalid") {
+    opts?.onConfigError?.(result.reason);
+    return [];
+  }
+  if (result.status === "absent") {
+    notifyPendingRemovals(loadManaged, opts?.onPendingRemovals);
+    return [];
+  }
+  const config = result.config;
+
+  if (Object.keys(config.servers).length === 0) {
+    notifyPendingRemovals(loadManaged, opts?.onPendingRemovals);
+    return [];
+  }
 
   return Object.entries(config.servers).map(([name, server]) => {
     const hosts: Record<McpHostId, McpCellStatus> = {} as Record<McpHostId, McpCellStatus>;
