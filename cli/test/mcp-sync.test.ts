@@ -552,6 +552,58 @@ describe("runMcpSync — malformed host config blocks write, continues others", 
     const cursor = readHostJson(".cursor/mcp.json");
     expect((cursor.mcpServers as Record<string, unknown>)["srv"]).toBeDefined();
   });
+
+  it("exits 1 when mcpServers is a string ('oops'), does not overwrite, continues other hosts", async () => {
+    // claude-code has mcpServers as a string — malformed
+    writeFileSync(join(homeTmp, ".claude.json"), JSON.stringify({ mcpServers: "oops" }), "utf8");
+    const claudeMtimeBefore = statSync(join(homeTmp, ".claude.json")).mtimeMs;
+
+    // cursor is healthy
+    ensureDir(".cursor");
+    placeFixture("cursor.json", ".cursor/mcp.json");
+
+    writeCanonical({ srv: { command: "cmd" } });
+
+    const code = await runMcpSync();
+    expect(code).toBe(1);
+
+    // claude-code file is NOT overwritten
+    expect(statSync(join(homeTmp, ".claude.json")).mtimeMs).toBe(claudeMtimeBefore);
+    expect(
+      (JSON.parse(readFileSync(join(homeTmp, ".claude.json"), "utf8")) as Record<string, unknown>)
+        .mcpServers,
+    ).toBe("oops");
+
+    // cursor was still synced
+    const cursor = readHostJson(".cursor/mcp.json");
+    expect((cursor.mcpServers as Record<string, unknown>)["srv"]).toBeDefined();
+  });
+
+  it("exits 1 when mcpServers is an array ([]), does not overwrite, continues other hosts", async () => {
+    // claude-code has mcpServers as an array — malformed
+    writeFileSync(join(homeTmp, ".claude.json"), JSON.stringify({ mcpServers: [] }), "utf8");
+    const claudeMtimeBefore = statSync(join(homeTmp, ".claude.json")).mtimeMs;
+
+    // cursor is healthy
+    ensureDir(".cursor");
+    placeFixture("cursor.json", ".cursor/mcp.json");
+
+    writeCanonical({ srv: { command: "cmd" } });
+
+    const code = await runMcpSync();
+    expect(code).toBe(1);
+
+    // claude-code file is NOT overwritten
+    expect(statSync(join(homeTmp, ".claude.json")).mtimeMs).toBe(claudeMtimeBefore);
+    expect(
+      (JSON.parse(readFileSync(join(homeTmp, ".claude.json"), "utf8")) as Record<string, unknown>)
+        .mcpServers,
+    ).toEqual([]);
+
+    // cursor was still synced
+    const cursor = readHostJson(".cursor/mcp.json");
+    expect((cursor.mcpServers as Record<string, unknown>)["srv"]).toBeDefined();
+  });
 });
 
 // ── Fix 3: allowlist narrowing removal (integration) ─────────────────────────

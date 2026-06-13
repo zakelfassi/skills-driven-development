@@ -859,3 +859,80 @@ describe("JSON adapter — same-name unmanaged safety (fix-4)", () => {
     expect(entry["command"]).toBe("new");
   });
 });
+
+// ── Fix 5: host-map guard — malformed mcpKey value blocks read/plan/apply ────
+
+describe("JSON adapter — host-map guard (fix-5)", () => {
+  it("read() returns ok:false when mcpServers is a string", () => {
+    writeFile(".claude.json", JSON.stringify({ mcpServers: "oops" }));
+    const result = claudeCodeAdapter.read();
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.reason).toContain("mcpServers");
+    }
+  });
+
+  it("read() returns ok:false when mcpServers is an array", () => {
+    writeFile(".claude.json", JSON.stringify({ mcpServers: [] }));
+    const result = claudeCodeAdapter.read();
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.reason).toContain("mcpServers");
+    }
+  });
+
+  it("read() returns ok:false when mcp key is a number (opencode adapter)", () => {
+    writeFile(".config/opencode/opencode.json", JSON.stringify({ mcp: 42 }));
+    const result = opencodeAdapter.read();
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.reason).toContain("mcp");
+    }
+  });
+
+  it("plan() returns ok:false when mcpServers is a string, apply never writes", () => {
+    const filePath = writeFile(".claude.json", JSON.stringify({ mcpServers: "oops" }));
+    const mtimeBefore = statSync(filePath).mtimeMs;
+
+    const plan = claudeCodeAdapter.plan(makeCanonical(), []);
+    expect(plan.ok).toBe(false);
+
+    const result = claudeCodeAdapter.apply(plan);
+    expect(result.ok).toBe(false);
+
+    // File is untouched
+    expect(statSync(filePath).mtimeMs).toBe(mtimeBefore);
+    expect(readFileSync(filePath, "utf8")).toBe(JSON.stringify({ mcpServers: "oops" }));
+  });
+
+  it("plan() returns ok:false when mcpServers is an array, apply never writes", () => {
+    const filePath = writeFile(".claude.json", JSON.stringify({ mcpServers: [] }));
+    const mtimeBefore = statSync(filePath).mtimeMs;
+
+    const plan = claudeCodeAdapter.plan(makeCanonical(), []);
+    expect(plan.ok).toBe(false);
+
+    claudeCodeAdapter.apply(plan);
+
+    // File is untouched
+    expect(statSync(filePath).mtimeMs).toBe(mtimeBefore);
+  });
+
+  it("read() returns ok:true when mcpServers is absent (not present in doc)", () => {
+    writeFile(".claude.json", JSON.stringify({ someOtherKey: true }));
+    const result = claudeCodeAdapter.read();
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.serverNames).toEqual([]);
+    }
+  });
+
+  it("read() returns ok:true when mcpServers is a valid plain object", () => {
+    writeFile(".claude.json", JSON.stringify({ mcpServers: { "my-srv": { command: "cmd" } } }));
+    const result = claudeCodeAdapter.read();
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.serverNames).toContain("my-srv");
+    }
+  });
+});

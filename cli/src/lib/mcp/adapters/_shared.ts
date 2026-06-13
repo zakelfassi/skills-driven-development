@@ -78,6 +78,15 @@ export function createJsonAdapter(cfg: JsonAdapterConfig): McpHostAdapter {
     }
     const obj = raw as Record<string, unknown>;
     const servers = obj[cfg.mcpKey];
+    if (servers !== undefined) {
+      if (typeof servers !== "object" || servers === null || Array.isArray(servers)) {
+        const kind = Array.isArray(servers) ? "array" : typeof servers;
+        return {
+          ok: false,
+          reason: `${p}: "${cfg.mcpKey}" must be an object but got ${kind} — refusing to overwrite`,
+        };
+      }
+    }
     let serverNames: string[] = [];
     if (typeof servers === "object" && servers !== null && !Array.isArray(servers)) {
       serverNames = Object.keys(servers as Record<string, unknown>);
