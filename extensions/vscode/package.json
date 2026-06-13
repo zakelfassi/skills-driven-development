@@ -33,7 +33,9 @@
     "skdd",
     "claude-code",
     "codex",
-    "cursor"
+    "cursor",
+    "ai",
+    "agents"
   ],
   "activationEvents": [
     "onLanguage:markdown"
