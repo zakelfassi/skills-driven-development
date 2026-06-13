@@ -3,6 +3,7 @@
  * not hardcoded in source.
  */
 
+import { execSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -34,8 +35,14 @@ describe("version build-time define", () => {
     expect(config).toMatch(/package\.json/);
   });
 
-  it("cli/package.json version matches expected published baseline (0.3.0)", () => {
+  it("built CLI --version output matches cli/package.json version dynamically", () => {
     const pkg = JSON.parse(readFileSync(resolve(ROOT, "package.json"), "utf8"));
-    expect(pkg.version).toBe("0.3.0");
+    const distIndex = resolve(ROOT, "dist/index.js");
+    // Build so dist reflects the current package.json version
+    execSync("pnpm build", { cwd: ROOT, stdio: "pipe" });
+    const output = execSync(`node ${JSON.stringify(distIndex)} --version`, {
+      encoding: "utf8",
+    }).trim();
+    expect(output).toBe(pkg.version);
   });
 });
