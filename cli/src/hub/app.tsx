@@ -24,6 +24,7 @@ export interface HubActions {
   link?: (opts: { harness: Harness; cwd: string }) => Promise<void>;
   unlink?: (opts: { harness: Harness; cwd: string }) => Promise<void>;
   dryRunPlan?: () => Promise<string[]>;
+  mcpSync?: () => Promise<number>;
 }
 
 export interface HubProps {
@@ -119,10 +120,15 @@ export function Hub({ data: initialData, cwd, actions, reloader }: HubProps) {
   const syncMcp = useCallback(async () => {
     if (activePane !== "mcp") return;
     setActionMessage("Syncing MCP servers…");
-    await runMcpSync({ dryRun: false });
+    const doSync = actions?.mcpSync ?? (() => runMcpSync({ dryRun: false }));
+    const code = await doSync();
     await reloadData();
-    setActionMessage("MCP sync complete");
-  }, [activePane, reloadData]);
+    if (code !== 0) {
+      setActionMessage("MCP sync failed — run skdd mcp sync for details");
+    } else {
+      setActionMessage("MCP sync complete");
+    }
+  }, [activePane, actions, reloadData]);
 
   const dryRunMcp = useCallback(async () => {
     if (activePane !== "mcp") return;
@@ -235,6 +241,7 @@ export function Hub({ data: initialData, cwd, actions, reloader }: HubProps) {
             selectedIndex={selectedIndex}
             dryRunOutput={dryRunOutput}
             configError={data.mcpConfigError}
+            actionMessage={actionMessage}
           />
         )}
         {activePane === "doctor" && (

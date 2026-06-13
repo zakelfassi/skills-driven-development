@@ -514,6 +514,74 @@ describe("Hub keypress — MCP dry-run", () => {
   });
 });
 
+// ── Hub keypress — MCP sync ───────────────────────────────────────────────────
+
+describe("Hub keypress — MCP sync", () => {
+  const makeData = (mcpRows: McpRow[] = []): HubData => ({
+    projectRoot: "/tmp/test",
+    globalRoot: "/tmp/global",
+    projectSkills: [],
+    globalSkills: [],
+    mirrors: [],
+    mcpRows,
+    doctorChecks: [],
+  });
+
+  const makeMcpRow = (): McpRow => ({
+    name: "skdd-mcp",
+    kind: "stdio",
+    hosts: {
+      "claude-code": "drift",
+      "claude-desktop": "unavailable",
+      codex: "synced",
+      droid: "unavailable",
+      cursor: "unavailable",
+      opencode: "unavailable",
+      gemini: "unavailable",
+    },
+  });
+
+  it("s keypress with non-zero sync result shows failure message", async () => {
+    const mockSync = vi.fn().mockResolvedValue(1);
+    const data = makeData([makeMcpRow()]);
+    const mockReloader = vi.fn().mockResolvedValue(data);
+
+    const { stdin, lastFrame, unmount } = render(
+      <Hub data={data} cwd="/tmp/test" actions={{ mcpSync: mockSync }} reloader={mockReloader} />,
+    );
+
+    stdin.write("3");
+    await new Promise((r) => setTimeout(r, 30));
+    stdin.write("s");
+    await new Promise((r) => setTimeout(r, 100));
+
+    const frame = lastFrame();
+    expect(frame).toContain("failed");
+    expect(frame).not.toContain("complete");
+    unmount();
+  });
+
+  it("s keypress with zero sync result shows complete message", async () => {
+    const mockSync = vi.fn().mockResolvedValue(0);
+    const data = makeData([makeMcpRow()]);
+    const mockReloader = vi.fn().mockResolvedValue(data);
+
+    const { stdin, lastFrame, unmount } = render(
+      <Hub data={data} cwd="/tmp/test" actions={{ mcpSync: mockSync }} reloader={mockReloader} />,
+    );
+
+    stdin.write("3");
+    await new Promise((r) => setTimeout(r, 30));
+    stdin.write("s");
+    await new Promise((r) => setTimeout(r, 100));
+
+    const frame = lastFrame();
+    expect(frame).toContain("complete");
+    expect(frame).not.toContain("failed");
+    unmount();
+  });
+});
+
 // ── buildMcpRows unit tests ───────────────────────────────────────────────────
 
 describe("buildMcpRows", () => {

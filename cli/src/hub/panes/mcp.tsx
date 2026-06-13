@@ -6,6 +6,7 @@ interface McpPaneProps {
   selectedIndex: number;
   dryRunOutput?: string[];
   configError?: string;
+  actionMessage?: string;
 }
 
 const CELL: Record<McpCellStatus, { char: string; color: string }> = {
@@ -26,7 +27,13 @@ const HOST_SHORT: Record<string, string> = {
   gemini: "GM",
 };
 
-export function McpPane({ rows, selectedIndex, dryRunOutput, configError }: McpPaneProps) {
+export function McpPane({
+  rows,
+  selectedIndex,
+  dryRunOutput,
+  configError,
+  actionMessage,
+}: McpPaneProps) {
   if (configError) {
     return (
       <Box paddingX={1} flexDirection="column">
@@ -85,6 +92,11 @@ export function McpPane({ rows, selectedIndex, dryRunOutput, configError }: McpP
               {line}
             </Text>
           ))}
+        </Box>
+      )}
+      {actionMessage && (
+        <Box marginTop={1}>
+          <Text color="cyan">{actionMessage}</Text>
         </Box>
       )}
       <Box marginTop={1}>
