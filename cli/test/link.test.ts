@@ -112,6 +112,50 @@ describe("runLink", () => {
     expect(state!.mirrors[0]!.mode).toBe("copy");
   });
 
+  it("managed copy-mode mirror is refreshed on re-link — new skill appears without --force", async () => {
+    // First link: creates the managed copy and records it in state
+    const first = await runLink({ cwd: tmp, harnesses: ["claude"], mode: "copy", quiet: true });
+    expect(first).toBe(0);
+    expect(existsSync(join(tmp, ".claude/skills/hello/SKILL.md"))).toBe(true);
+
+    // Add a new skill to canonical AFTER the initial copy
+    mkdirSync(join(tmp, "skills/newskill"), { recursive: true });
+    writeFileSync(
+      join(tmp, "skills/newskill/SKILL.md"),
+      "---\nname: newskill\ndescription: New. Use when new.\n---\n\n# New Skill\n",
+    );
+    expect(existsSync(join(tmp, ".claude/skills/newskill/SKILL.md"))).toBe(false);
+
+    // Re-run link without --force — the managed copy should be refreshed
+    const second = await runLink({ cwd: tmp, harnesses: ["claude"], mode: "copy", quiet: true });
+    expect(second).toBe(0);
+
+    // New skill must now appear in the copy target
+    expect(existsSync(join(tmp, ".claude/skills/newskill/SKILL.md"))).toBe(true);
+    expect(readFileSync(join(tmp, ".claude/skills/newskill/SKILL.md"), "utf8")).toContain(
+      "# New Skill",
+    );
+  });
+
+  it("unmanaged real dir at copy-mode target is still blocked (not overwritten)", async () => {
+    // Manually create a real directory at the mirror path without any sync-state entry
+    mkdirSync(join(tmp, ".claude/skills/user-data"), { recursive: true });
+    writeFileSync(join(tmp, ".claude/skills/user-data/important.md"), "user data");
+
+    // Ensure state has NO entry for this mirror (unmanaged)
+    const state = emptyState("skills");
+    saveState(tmp, state);
+
+    const code = await runLink({ cwd: tmp, harnesses: ["claude"], mode: "copy", quiet: true });
+    expect(code).toBe(1);
+    // User data must be preserved
+    expect(readFileSync(join(tmp, ".claude/skills/user-data/important.md"), "utf8")).toBe(
+      "user data",
+    );
+    // State must NOT record this unmanaged dir
+    expect(loadState(tmp)!.mirrors).toHaveLength(0);
+  });
+
   runUnix("blocks when the target already has unrelated content (no --force)", async () => {
     mkdirSync(join(tmp, ".claude/skills/other"), { recursive: true });
     writeFileSync(join(tmp, ".claude/skills/other/SKILL.md"), "existing user data");
