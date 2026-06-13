@@ -40,5 +40,7 @@ export const droidAdapter = createJsonAdapter({
     return existsSync(join(homedir(), ".factory"));
   },
   mcpKey: "mcpServers",
+  // Droid natively persists disabled entries (disabled:true); never omits them.
+  omitsDisabled: false,
   toNativeEntry,
 });

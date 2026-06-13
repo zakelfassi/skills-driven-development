@@ -190,6 +190,8 @@ export function spliceBlocks(
 export const codexAdapter: McpHostAdapter = {
   id: "codex",
   label: "Codex CLI",
+  // Codex natively persists disabled entries (enabled=false); never omits them.
+  omitsDisabled: false,
 
   configPath(): string {
     return getConfigPath();

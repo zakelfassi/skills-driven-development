@@ -320,24 +320,26 @@ export async function runMcpSync(opts: McpSyncOptions = {}): Promise<number> {
         const { resolved, unresolved } = expandServerVars(server);
         if (unresolved.length > 0) {
           if (managed.includes(name)) {
-            // Evaluate removal/omission intent FIRST: if the server is disabled
-            // or this host is excluded by the hosts allowlist, the server is
-            // meant to be removed — do NOT preserve it via expansionFailedManaged.
-            // Only preserve when the server is still genuinely intended for this
-            // host (would be an add/update if the var were set).
-            const intendedForHost =
-              !server.disabled && (!server.hosts || server.hosts.includes(hostId));
+            // A managed server is 'intended for removal/omission on this host' ONLY IF:
+            //   - the server is host-excluded by the hosts allowlist, OR
+            //   - the server is disabled AND this adapter omits disabled entries
+            //     (claude-code/claude-desktop/cursor/gemini: omitsDisabled=true)
+            // In all other cases — including disabled servers on native-persist hosts
+            // (droid/opencode/codex: omitsDisabled=false) — preserve the existing
+            // entry.  A transient unset env var must never trigger destructive removal.
+            const hostExcluded = server.hosts != null && !server.hosts.includes(hostId);
+            const disabledOnOmittingHost = server.disabled === true && adapter.omitsDisabled;
+            const intendedForHost = !hostExcluded && !disabledOnOmittingHost;
             if (intendedForHost) {
-              // Still intended: preserve the existing entry.  A transient unset
-              // env var must never trigger destructive removal of an active server.
+              // Still intended (or disabled-on-native-persist-host): keep the existing
+              // entry.  Do NOT let a transient unset env var trigger destructive removal.
               logger.warn(
                 `[${hostId}] Skipping update for "${name}": unresolved env vars: ${unresolved.join(", ")} (existing entry preserved)`,
               );
               expansionFailedManaged.add(name);
             } else {
-              // Disabled or host excluded: removal/omission is intended.
-              // Fall through without adding to expansionFailedManaged so the
-              // adapter can plan the removal.
+              // Host-excluded or disabled-on-omitting-host: removal/omission is intended.
+              // Removal does not need resolved env values — let the adapter plan it.
               logger.warn(
                 `[${hostId}] Skipping "${name}": unresolved env vars: ${unresolved.join(", ")}`,
               );

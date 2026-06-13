@@ -47,6 +47,8 @@ export const opencodeAdapter = createJsonAdapter({
     return existsSync(join(homedir(), ".config", "opencode"));
   },
   mcpKey: "mcp",
+  // OpenCode natively persists disabled entries (enabled:false); never omits them.
+  omitsDisabled: false,
   toNativeEntry,
   // OpenCode accepts JSONC (comments + trailing commas) per opencode.ai/docs/config.
   // Strip JSONC extensions before parsing so user configs with comments are not

@@ -175,6 +175,12 @@ export interface JsonAdapterConfig {
    * input so the adapter fails closed.
    */
   parseRaw?: (text: string) => unknown;
+  /**
+   * Whether this adapter omits disabled servers (entry absent after sync)
+   * rather than persisting them natively. Defaults to true; set to false for
+   * adapters that keep the entry with a disabled marker (droid, opencode).
+   */
+  omitsDisabled?: boolean;
 }
 
 /**
@@ -220,6 +226,7 @@ export function createJsonAdapter(cfg: JsonAdapterConfig): McpHostAdapter {
   return {
     id: cfg.id,
     label: cfg.label,
+    omitsDisabled: cfg.omitsDisabled ?? true,
     configPath: cfg.configPath,
     available: cfg.available,
     read: readImpl,

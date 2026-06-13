@@ -70,6 +70,17 @@ export type HostApplyResult = HostApplyResultOk | HostApplyResultErr;
 export interface McpHostAdapter {
   id: McpHostId;
   label: string;
+  /**
+   * True when this adapter omits disabled entries from the host config (entry
+   * deleted / absent after sync). False when it persists disabled entries
+   * natively with a host-level disabled marker (droid: disabled:true,
+   * opencode: enabled:false, codex: enabled=false).
+   *
+   * The sync orchestrator uses this to determine whether a disabled server with
+   * unresolved env vars should be treated as "intended for removal" (true) or
+   * "still-present, preserve existing entry" (false).
+   */
+  omitsDisabled: boolean;
   /** Absolute path to the host config file, homedir-aware. */
   configPath(): string;
   /** True when this adapter is usable (platform check + existence heuristic). */
