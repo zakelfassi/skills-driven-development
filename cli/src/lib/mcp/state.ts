@@ -14,7 +14,7 @@ export type { McpHostSyncInfo };
  * Returns an empty array if no mcp state exists yet for that host.
  */
 export function getMcpManagedNames(state: SyncState, hostId: McpHostId): string[] {
-  return state.mcp?.hosts[hostId]?.managed ?? [];
+  return state.mcp?.hosts?.[hostId]?.managed ?? [];
 }
 
 /**

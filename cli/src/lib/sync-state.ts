@@ -45,7 +45,16 @@ export function loadState(cwd: string): SyncState | null {
       canonical: raw.canonical,
       mirrors: raw.mirrors as SyncMirror[],
     };
-    if (raw.mcp !== undefined) state.mcp = raw.mcp as SyncState["mcp"];
+    if (raw.mcp !== undefined) {
+      const rawMcp = raw.mcp as Record<string, unknown>;
+      const rawHosts = rawMcp["hosts"];
+      state.mcp = {
+        hosts:
+          rawHosts !== null && typeof rawHosts === "object" && !Array.isArray(rawHosts)
+            ? (rawHosts as Record<string, McpHostSyncInfo>)
+            : {},
+      };
+    }
     return state;
   } catch {
     return null;
