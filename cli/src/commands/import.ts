@@ -1,5 +1,14 @@
 import { createHash } from "node:crypto";
-import { cpSync, existsSync, mkdirSync, readFileSync, realpathSync, rmSync } from "node:fs";
+import {
+  cpSync,
+  existsSync,
+  lstatSync,
+  mkdirSync,
+  readFileSync,
+  realpathSync,
+  rmdirSync,
+  rmSync,
+} from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
 import matter from "gray-matter";
 import { ensureGlobalColony, globalSkillsDir, skddHome } from "../lib/global.js";
@@ -348,12 +357,54 @@ async function applyConsolidation(
 
   if (opts.skipLink) return 0;
 
-  if (!opts.json) logger.dim("Running 'skdd link --force' to refresh harness mirrors…");
-  // --force is safe here: we just consolidated every skill out of the harness dirs,
-  // so whatever's left is either empty or non-skill cruft that the user can recreate.
+  // Try to remove any harness skill-dirs that are now empty so the non-forced runLink
+  // below can replace them with clean symlinks. Dirs that still contain unrecognized
+  // files (anything import didn't process: malformed skills, auxiliary top-level files)
+  // will resist rmdirSync and stay in place; runLink will block on them instead of
+  // silently deleting user content.
+  const harnessDirsToCheck: string[] = [];
+  if (opts.global) {
+    for (const h of Object.keys(HARNESSES) as Harness[]) {
+      harnessDirsToCheck.push(globalSkillsDir(h));
+    }
+  } else {
+    for (const profile of Object.values(HARNESSES)) {
+      harnessDirsToCheck.push(join(root, profile.skillsDir));
+    }
+  }
+  for (const hDir of harnessDirsToCheck) {
+    let stat: ReturnType<typeof lstatSync> | null = null;
+    try {
+      stat = lstatSync(hDir);
+    } catch {
+      continue; // directory doesn't exist — nothing to do
+    }
+    if (!stat.isDirectory()) continue; // already a symlink or non-dir — leave alone
+    try {
+      rmdirSync(hDir); // only succeeds when empty; throws ENOTEMPTY if content remains
+    } catch {
+      // content remains — leave the dir for runLink to block on
+    }
+  }
+
+  if (!opts.json) logger.dim("Running 'skdd link' to refresh harness mirrors…");
+  // Run without --force: if any harness dir still contains unrecognized files
+  // (malformed skills, auxiliary top-level files, etc.) that import did not consolidate,
+  // ensureMirror's block protection prevents silent data loss. The user is prompted to
+  // review those files and then run 'skdd link --force' to finish.
   const linkCode = opts.global
-    ? await runLink({ global: true, quiet: opts.json ?? false, force: true })
-    : await runLink({ cwd: root, quiet: opts.json ?? false, force: true });
+    ? await runLink({ global: true, quiet: opts.json ?? false })
+    : await runLink({ cwd: root, quiet: opts.json ?? false });
+  if (linkCode !== 0 && !opts.json) {
+    const forceCmd = opts.global ? "skdd link -g --force" : "skdd link --force";
+    logger.warn(
+      `Some harness skill dirs still contain unrecognized files that import did not move.\n` +
+        `  Your recognized skills are safely consolidated in canonical; those files were NOT deleted.\n` +
+        `  Review the blocked dirs listed above, then run:\n` +
+        `    ${forceCmd}\n` +
+        `  to replace each remaining directory with a symlink (permanently deletes its contents).`,
+    );
+  }
   return linkCode;
 }
 

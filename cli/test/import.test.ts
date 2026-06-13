@@ -219,6 +219,33 @@ describe("runImport", () => {
     restoreConsole();
     expect(code).toBe(1);
   });
+
+  runUnix(
+    "--apply with leftover unrecognized harness content: valid skills consolidated, unrecognized files preserved, link blocked",
+    async () => {
+      // Valid skill that will be consolidated into canonical
+      writeSkill(join(tmp, ".claude/skills/hello"), HELLO_SKILL);
+      // Unrecognized top-level file inside the harness skills dir
+      writeFileSync(join(tmp, ".claude/skills/readme.txt"), "my notes");
+      // Malformed skill dir: has SKILL.md but no frontmatter name — import leaves it
+      mkdirSync(join(tmp, ".claude/skills/no-name"), { recursive: true });
+      writeFileSync(
+        join(tmp, ".claude/skills/no-name/SKILL.md"),
+        "# No frontmatter name\n\nContent.",
+      );
+
+      const code = await runImport(undefined, { cwd: tmp, apply: true });
+      restoreConsole();
+
+      // Link was blocked because harness dir still had content — non-zero exit
+      expect(code).toBe(1);
+      // Valid skill IS in canonical (data was not lost)
+      expect(existsSync(join(tmp, "skills/hello/SKILL.md"))).toBe(true);
+      // Unrecognized content was NOT deleted
+      expect(existsSync(join(tmp, ".claude/skills/readme.txt"))).toBe(true);
+      expect(existsSync(join(tmp, ".claude/skills/no-name/SKILL.md"))).toBe(true);
+    },
+  );
 });
 
 describe("runImport — global mode colony bootstrap", () => {
@@ -276,6 +303,35 @@ describe("runImport — global mode colony bootstrap", () => {
       expect(existsSync(join(skddFreshHome, "skills"))).toBe(true);
       // hello skill consolidated into canonical
       expect(existsSync(join(skddFreshHome, "skills", "hello", "SKILL.md"))).toBe(true);
+    },
+  );
+
+  runUnix(
+    "import -g --apply with leftover unrecognized harness content: valid skills consolidated, unrecognized files preserved, link blocked",
+    async () => {
+      const skddFreshHome = join(skddParent, ".skdd-fresh");
+      expect(existsSync(skddFreshHome)).toBe(false);
+
+      // Valid skill in the droid harness global dir
+      const droidSkillsDir = join(fakeTmp, ".factory", "skills");
+      mkdirSync(join(droidSkillsDir, "hello"), { recursive: true });
+      writeFileSync(join(droidSkillsDir, "hello", "SKILL.md"), HELLO_SKILL);
+      // Unrecognized top-level file in the same harness skills dir
+      writeFileSync(join(droidSkillsDir, "extra.txt"), "do not delete me");
+      // Malformed skill dir (no frontmatter name) — import leaves it behind
+      mkdirSync(join(droidSkillsDir, "no-name"), { recursive: true });
+      writeFileSync(join(droidSkillsDir, "no-name", "SKILL.md"), "# No frontmatter name");
+
+      const code = await runImport(undefined, { global: true, apply: true });
+      restoreConsole();
+
+      // Link was blocked — non-zero exit
+      expect(code).toBe(1);
+      // Valid skill IS in canonical
+      expect(existsSync(join(skddFreshHome, "skills", "hello", "SKILL.md"))).toBe(true);
+      // Unrecognized content was NOT deleted
+      expect(existsSync(join(droidSkillsDir, "extra.txt"))).toBe(true);
+      expect(existsSync(join(droidSkillsDir, "no-name", "SKILL.md"))).toBe(true);
     },
   );
 
