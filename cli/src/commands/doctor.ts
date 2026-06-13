@@ -1,5 +1,6 @@
 import { existsSync, lstatSync, readFileSync, readlinkSync } from "node:fs";
 import { dirname, isAbsolute, join, relative, resolve } from "node:path";
+import { dirTreeHash } from "../lib/dir-tree-hash.js";
 import { globalSkillsDir, skddHome } from "../lib/global.js";
 import { detectAllHarnesses, HARNESSES, type Harness } from "../lib/harness.js";
 import { logger, pc } from "../lib/logger.js";
@@ -420,6 +421,15 @@ function verifyMirror(
     }
     if (!stat.isDirectory()) {
       return { ok: false, reason: "expected directory copy, found file" };
+    }
+    // Compare tree hashes to detect stale copies.
+    const targetHash = dirTreeHash(target);
+    const canonicalHash = dirTreeHash(canonicalPath);
+    if (targetHash !== canonicalHash) {
+      return {
+        ok: false,
+        reason: "copy is stale — contents differ from canonical (re-run skdd link -g)",
+      };
     }
     return { ok: true };
   } catch (err) {

@@ -213,6 +213,62 @@ describe("runDoctor", () => {
     expect(mirrorError.message).toMatch(/does not exist/);
   });
 
+  it("copy-mode project mirror in sync reports OK", async () => {
+    mkdirSync(join(tmp, "skills/hello"), { recursive: true });
+    writeFileSync(join(tmp, "skills/hello/SKILL.md"), HELLO_SKILL);
+    writeFileSync(join(tmp, ".skills-registry.md"), HELLO_REGISTRY);
+    // Create a copy mirror that matches canonical exactly
+    mkdirSync(join(tmp, ".claude/skills/hello"), { recursive: true });
+    writeFileSync(join(tmp, ".claude/skills/hello/SKILL.md"), HELLO_SKILL);
+    writeFileSync(
+      join(tmp, ".skdd-sync.json"),
+      JSON.stringify(
+        {
+          version: 1,
+          canonical: "skills",
+          mirrors: [{ target: ".claude/skills", mode: "copy", createdAt: "2026-06-13T00:00:00Z" }],
+        },
+        null,
+        2,
+      ) + "\n",
+    );
+    const code = await runDoctor({ cwd: tmp, json: true });
+    restoreConsole();
+    expect(code).toBe(0);
+    const payload = JSON.parse(logs[0]!);
+    const mirrors = payload.checks.find((c: { section: string }) => c.section === "Mirrors");
+    expect(mirrors.status).toBe("ok");
+  });
+
+  it("stale copy-mode project mirror reports error", async () => {
+    mkdirSync(join(tmp, "skills/hello"), { recursive: true });
+    writeFileSync(join(tmp, "skills/hello/SKILL.md"), HELLO_SKILL);
+    writeFileSync(join(tmp, ".skills-registry.md"), HELLO_REGISTRY);
+    // Create a copy mirror that is out of date (empty)
+    mkdirSync(join(tmp, ".claude/skills"), { recursive: true });
+    writeFileSync(
+      join(tmp, ".skdd-sync.json"),
+      JSON.stringify(
+        {
+          version: 1,
+          canonical: "skills",
+          mirrors: [{ target: ".claude/skills", mode: "copy", createdAt: "2026-06-13T00:00:00Z" }],
+        },
+        null,
+        2,
+      ) + "\n",
+    );
+    const code = await runDoctor({ cwd: tmp, json: true });
+    restoreConsole();
+    expect(code).toBe(1);
+    const payload = JSON.parse(logs[0]!);
+    const mirrorErr = payload.checks.find(
+      (c: { section: string; status: string }) => c.section === "Mirrors" && c.status === "error",
+    );
+    expect(mirrorErr).toBeDefined();
+    expect(mirrorErr.message).toMatch(/stale/i);
+  });
+
   it("flags instruction files without a Skills block", async () => {
     mkdirSync(join(tmp, "skills/hello"), { recursive: true });
     writeFileSync(join(tmp, "skills/hello/SKILL.md"), HELLO_SKILL);
@@ -347,6 +403,61 @@ describe("runDoctor --global mirrors", () => {
     const mirrors = payload.checks.find((c: { section: string }) => c.section === "Mirrors");
     expect(mirrors).toBeDefined();
     expect(mirrors.status).toBe("ok");
+  });
+
+  it("copy-mode global mirror whose contents match canonical reports OK", async () => {
+    mkdirSync(join(fakeTmp, ".factory"), { recursive: true });
+    const globalSkills = join(fakeTmp, ".factory", "skills");
+    // Mirror is a directory copy that matches canonical exactly
+    mkdirSync(join(globalSkills, "hello"), { recursive: true });
+    writeFileSync(join(globalSkills, "hello", "SKILL.md"), HELLO_SKILL);
+    writeFileSync(
+      join(skddTmp, ".skdd-sync.json"),
+      JSON.stringify(
+        {
+          version: 2,
+          canonical: "skills",
+          mirrors: [{ target: globalSkills, mode: "copy", createdAt: "2026-06-13T00:00:00Z" }],
+        },
+        null,
+        2,
+      ) + "\n",
+    );
+    const code = await runDoctor({ global: true, json: true });
+    restoreGlobal();
+    expect(code).toBe(0);
+    const payload = JSON.parse(globalLogs[0]!);
+    const mirrors = payload.checks.find((c: { section: string }) => c.section === "Mirrors");
+    expect(mirrors).toBeDefined();
+    expect(mirrors.status).toBe("ok");
+  });
+
+  it("stale copy-mode global mirror (canonical has changed) reports error", async () => {
+    mkdirSync(join(fakeTmp, ".factory"), { recursive: true });
+    const globalSkills = join(fakeTmp, ".factory", "skills");
+    // Mirror is an empty directory — stale relative to canonical which has hello/
+    mkdirSync(globalSkills, { recursive: true });
+    writeFileSync(
+      join(skddTmp, ".skdd-sync.json"),
+      JSON.stringify(
+        {
+          version: 2,
+          canonical: "skills",
+          mirrors: [{ target: globalSkills, mode: "copy", createdAt: "2026-06-13T00:00:00Z" }],
+        },
+        null,
+        2,
+      ) + "\n",
+    );
+    const code = await runDoctor({ global: true, json: true });
+    restoreGlobal();
+    expect(code).toBe(1);
+    const payload = JSON.parse(globalLogs[0]!);
+    const mirrorErr = payload.checks.find(
+      (c: { section: string; status: string }) => c.section === "Mirrors" && c.status === "error",
+    );
+    expect(mirrorErr).toBeDefined();
+    expect(mirrorErr.message).toMatch(/stale/i);
   });
 
   it("project doctor is unchanged — mirrors check uses project logic", async () => {
