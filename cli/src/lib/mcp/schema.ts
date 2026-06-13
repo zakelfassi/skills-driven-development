@@ -188,78 +188,153 @@ export function validateMcpConfig(raw: unknown): ValidationResult {
 // -- Load / Save --
 
 /**
+ * Parse a JSON string starting at position `pos` (which must point at the opening `"`).
+ * Returns the decoded string value and the index immediately after the closing `"`.
+ */
+function parseJsonString(rawText: string, pos: number): { value: string; end: number } {
+  let raw = "";
+  let j = pos + 1; // skip opening '"'
+  while (j < rawText.length) {
+    const c = rawText[j];
+    if (c === "\\") {
+      // Include backslash + next char verbatim so JSON.parse can decode later.
+      raw += c;
+      j++;
+      if (j < rawText.length) {
+        raw += rawText[j];
+        j++;
+      }
+    } else if (c === '"') {
+      j++; // skip closing '"'
+      break;
+    } else {
+      raw += c;
+      j++;
+    }
+  }
+  // Decode JSON escape sequences (e.g. \u0061 → 'a') via JSON.parse.
+  let value: string;
+  try {
+    value = JSON.parse('"' + raw + '"') as string;
+  } catch {
+    value = raw; // fallback: malformed escapes won't be valid keys
+  }
+  return { value, end: j };
+}
+
+/**
  * Scan raw JSON text for duplicate keys at the top level of the "servers" object.
  * Returns the list of duplicated key names (empty if none found).
  *
  * Must run BEFORE JSON.parse, which silently collapses duplicate keys by keeping
  * only the last value, masking configuration errors.
+ *
+ * Crucially, this function tracks brace/bracket DEPTH and string state so that it
+ * locates the DEPTH-1 (canonical, top-level) "servers" key specifically.  A
+ * hand-edited file that contains a nested `"servers"` object inside some other
+ * value (e.g. `"metadata": { "servers": { … } }`) must not fool the scan into
+ * checking the wrong object.
  */
 function findDuplicateServerNames(rawText: string): string[] {
-  // Locate "servers": { in the raw text
-  const serversKeyRe = /"servers"\s*:\s*\{/;
-  const match = serversKeyRe.exec(rawText);
-  if (!match) return [];
+  // ── Phase 1: find the opening '{' of the top-level "servers" value ──────────
+  //
+  // Walk the entire raw text, maintaining a brace/bracket depth counter and
+  // skipping over string content so that braces inside strings don't skew the
+  // depth.  We look for a "servers" key only when depth == 1 (i.e. we are
+  // directly inside the outermost JSON object).
 
-  // The last char of the match is '{' — that is the servers object's opening brace.
-  const openBrace = match.index + match[0].length - 1;
-
-  // Walk character-by-character, collecting string keys at depth 1.
-  const seen = new Map<string, number>();
+  let i = 0;
   let depth = 0;
-  let i = openBrace;
+  let serversStart = -1; // index of '{' that opens the canonical servers map
 
   while (i < rawText.length) {
     const ch = rawText[i];
 
-    if (ch === "{") {
+    if (ch === "{" || ch === "[") {
       depth++;
       i++;
-    } else if (ch === "}") {
+    } else if (ch === "}" || ch === "]") {
       depth--;
-      if (depth === 0) break;
+      if (depth < 0) break; // malformed JSON
       i++;
     } else if (ch === '"') {
-      // Parse the JSON string starting at i, collecting raw bytes including
-      // escape sequences so we can decode them accurately below.
-      let raw = "";
-      let j = i + 1;
-      while (j < rawText.length) {
-        const c = rawText[j];
-        if (c === "\\") {
-          // Include backslash + next char verbatim so JSON.parse can decode later.
-          raw += c;
-          j++;
-          if (j < rawText.length) {
-            raw += rawText[j];
-            j++;
-          }
-        } else if (c === '"') {
-          j++;
-          break;
-        } else {
-          raw += c;
-          j++;
-        }
-      }
-      // Decode JSON escape sequences (e.g. \u0061 → 'a') so that semantically
-      // identical keys like "\u006d\u0079" and "my" are treated as duplicates.
-      let str: string;
-      try {
-        str = JSON.parse('"' + raw + '"') as string;
-      } catch {
-        str = raw; // fallback: malformed escape sequences won't be valid keys
-      }
-      // j is now past the closing quote
+      const { value, end } = parseJsonString(rawText, i);
+
       if (depth === 1) {
-        // Check if followed by ':' — if so, this string is an object key
-        const rest = rawText.slice(j).trimStart();
-        if (rest.startsWith(":")) {
-          seen.set(str, (seen.get(str) ?? 0) + 1);
+        // We are inside the top-level object.  Check whether this string is
+        // immediately followed by ':' (making it an object key).
+        let afterStr = end;
+        while (
+          afterStr < rawText.length &&
+          rawText[afterStr] !== ":" &&
+          rawText[afterStr] !== '"'
+        ) {
+          const wc = rawText[afterStr];
+          if (wc !== " " && wc !== "\t" && wc !== "\n" && wc !== "\r") break;
+          afterStr++;
+        }
+        if (afterStr < rawText.length && rawText[afterStr] === ":" && value === "servers") {
+          // Found the "servers" key at depth 1.  Locate its value (must be '{').
+          let valuePos = afterStr + 1;
+          while (valuePos < rawText.length) {
+            const vc = rawText[valuePos];
+            if (vc === " " || vc === "\t" || vc === "\n" || vc === "\r") {
+              valuePos++;
+            } else {
+              break;
+            }
+          }
+          if (valuePos < rawText.length && rawText[valuePos] === "{") {
+            serversStart = valuePos;
+            break;
+          }
         }
       }
-      i = j;
+
+      i = end;
     } else {
       i++;
+    }
+  }
+
+  if (serversStart === -1) return [];
+
+  // ── Phase 2: scan the canonical servers object for duplicate top-level keys ──
+  //
+  // Starting at serversStart (the '{' of the servers map), walk
+  // character-by-character and collect string keys at depth 1 within that
+  // object.  We deliberately do NOT handle '['/']' here: server values are
+  // always plain objects, and skipping array brackets is safe because
+  //   • strings inside arrays are not followed by ':'
+  //   • nested '{' / '}' inside arrays are tracked correctly by the depth counter.
+
+  const seen = new Map<string, number>();
+  let sdepth = 0;
+  let k = serversStart;
+
+  while (k < rawText.length) {
+    const ch = rawText[k];
+
+    if (ch === "{") {
+      sdepth++;
+      k++;
+    } else if (ch === "}") {
+      sdepth--;
+      if (sdepth === 0) break;
+      k++;
+    } else if (ch === '"') {
+      const { value, end } = parseJsonString(rawText, k);
+
+      if (sdepth === 1) {
+        // Check if followed by ':' — if so, this string is a server name key.
+        const rest = rawText.slice(end).trimStart();
+        if (rest.startsWith(":")) {
+          seen.set(value, (seen.get(value) ?? 0) + 1);
+        }
+      }
+      k = end;
+    } else {
+      k++;
     }
   }
 

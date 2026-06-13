@@ -6,6 +6,7 @@ import {
   type CanonicalMcpConfig,
   expandEnvPlaceholders,
   loadMcpConfig,
+  loadMcpConfigResult,
   saveMcpConfig,
   validateMcpConfig,
 } from "../src/lib/mcp/schema.js";
@@ -513,6 +514,52 @@ describe("loadMcpConfig duplicate server name detection", () => {
       '{"version":1,"servers":{"\\u0041":{"command":"cmd1"},"\\u0042":{"command":"cmd2"}}}';
     writeFileSync(join(tmp, "mcp.json"), rawJson);
     expect(loadMcpConfig(tmp)).not.toBeNull();
+  });
+
+  it("fails closed when a nested 'servers' object appears earlier but real top-level servers has duplicates", () => {
+    // A nested "servers" key inside another value appears BEFORE the canonical top-level
+    // "servers" map. The duplicate-scan must ignore the nested one and catch the real
+    // duplicate at the top level.
+    const rawJson = JSON.stringify({
+      version: 1,
+      metadata: {
+        servers: { "nested-unique": { command: "x" } },
+      },
+      servers: { "real-server": { command: "cmd1" } },
+    }).replace(
+      // Inject a second "real-server" key to create a top-level duplicate that
+      // JSON.parse would silently collapse.
+      '"real-server":{"command":"cmd1"}}',
+      '"real-server":{"command":"cmd1"},"real-server":{"command":"cmd2"}}',
+    );
+    writeFileSync(join(tmp, "mcp.json"), rawJson);
+    const result = loadMcpConfigResult(tmp);
+    expect(result.status).toBe("invalid");
+    if (result.status === "invalid") {
+      expect(result.reason).toMatch(/real-server/);
+    }
+  });
+
+  it("no false positive when a nested 'servers' object appears earlier and top-level server names are unique", () => {
+    // Nested "servers" inside another value must NOT trigger a false duplicate error
+    // when the real top-level servers map has unique names.
+    const rawJson = `{
+  "version": 1,
+  "metadata": {
+    "servers": {
+      "alpha": { "command": "nested-cmd" },
+      "alpha": { "command": "nested-cmd-dup" }
+    }
+  },
+  "servers": {
+    "server-a": { "command": "cmd1" },
+    "server-b": { "command": "cmd2" }
+  }
+}`;
+    writeFileSync(join(tmp, "mcp.json"), rawJson);
+    const result = loadMcpConfigResult(tmp);
+    // The nested "alpha" duplicate is inside metadata.servers — must not cause a failure
+    expect(result.status).toBe("ok");
   });
 });
 
