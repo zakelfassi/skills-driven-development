@@ -572,8 +572,9 @@ describe("buildMcpRows", () => {
       join(tmpDir, "mcp.json"),
       JSON.stringify({ version: 1, servers: { myserver: { command: "npx", args: ["-y", "my"] } } }),
     );
+    // Real adapter behavior: server was managed but is now absent → plan emits "add" to restore it.
     const adapters: Partial<Record<McpHostId, McpRowAdapter>> = {
-      "claude-code": makeAdapter(true, []),
+      "claude-code": makeAdapter(true, [], [{ op: "add", name: "myserver" }]),
     };
     const rows = buildMcpRows(tmpDir, {
       adapters,
@@ -582,7 +583,10 @@ describe("buildMcpRows", () => {
     expect(rows[0]?.hosts["claude-code"]).toBe("drift");
   });
 
-  it("drift: server present in host but not managed by skdd", () => {
+  it("excluded: server present in host but not managed by skdd (adapter emits no change)", () => {
+    // When a canonical server exists in the host but was never synced by skdd, the real
+    // adapter's unmanaged-safety check skips it (no add/update in plan). That means the
+    // adapter intentionally leaves it alone — correctly shown as "excluded", not "drift".
     writeFileSync(
       join(tmpDir, "mcp.json"),
       JSON.stringify({ version: 1, servers: { myserver: { command: "npx", args: ["-y", "my"] } } }),
@@ -594,7 +598,7 @@ describe("buildMcpRows", () => {
       adapters,
       loadManaged: () => [],
     });
-    expect(rows[0]?.hosts["claude-code"]).toBe("drift");
+    expect(rows[0]?.hosts["claude-code"]).toBe("excluded");
   });
 
   it("drift: adapter.read() fails (malformed host config)", () => {

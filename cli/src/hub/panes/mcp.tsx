@@ -12,6 +12,7 @@ const CELL: Record<McpCellStatus, { char: string; color: string }> = {
   drift: { char: "!", color: "yellow" },
   excluded: { char: "·", color: "gray" },
   unavailable: { char: "—", color: "gray" },
+  "needs-env": { char: "?", color: "magenta" },
 };
 
 const HOST_SHORT: Record<string, string> = {
@@ -78,7 +79,7 @@ export function McpPane({ rows, selectedIndex, dryRunOutput }: McpPaneProps) {
       )}
       <Box marginTop={1}>
         <Text color="gray">
-          ↑↓ navigate · s sync · d dry-run · ✓synced !drift ·excluded —unavailable
+          ↑↓ navigate · s sync · d dry-run · ✓synced !drift ·excluded —unavailable ?needs-env
         </Text>
       </Box>
       <Box>

@@ -4,7 +4,14 @@ import { collectDoctorChecks, type DoctorCheck } from "../commands/doctor.js";
 import { skddHome } from "../lib/global.js";
 import { HARNESSES, type Harness } from "../lib/harness.js";
 import { ADAPTERS, type HostReadResult, type HostSyncPlan } from "../lib/mcp/adapters/index.js";
-import { type CanonicalMcpConfig, loadMcpConfig, type McpHostId } from "../lib/mcp/schema.js";
+import {
+  type CanonicalMcpConfig,
+  expandEnvPlaceholders,
+  isStdio,
+  loadMcpConfig,
+  type McpHostId,
+  type McpServer,
+} from "../lib/mcp/schema.js";
 import { loadMcpManagedNames } from "../lib/mcp/state.js";
 import { loadRegistry, type Registry } from "../lib/registry.js";
 import { loadState, type SyncMirror } from "../lib/sync-state.js";
@@ -33,7 +40,7 @@ export interface MirrorRow {
   status: "ok" | "drift" | "missing" | "unlinked";
 }
 
-export type McpCellStatus = "synced" | "drift" | "excluded" | "unavailable";
+export type McpCellStatus = "synced" | "drift" | "excluded" | "unavailable" | "needs-env";
 
 export interface McpRow {
   name: string;
@@ -114,6 +121,55 @@ function checkMirrorStatus(target: string, mirror: SyncMirror): MirrorRow["statu
   }
 }
 
+/**
+ * Expand `${VAR}` placeholders in a server's env/url/headers using process.env.
+ * Returns the expanded server and a list of unresolved variable names.
+ * Used by buildMcpRows so the plan comparison is apples-to-apples with what
+ * the host file holds (the resolved value), not the raw canonical placeholder.
+ */
+function expandServerForPlan(server: McpServer): { server: McpServer; unresolved: string[] } {
+  const unresolved: string[] = [];
+
+  if (isStdio(server)) {
+    const expandedEnv: Record<string, string> | undefined = server.env
+      ? Object.fromEntries(
+          Object.entries(server.env).map(([k, v]) => {
+            const result = expandEnvPlaceholders(v);
+            unresolved.push(...result.unresolved);
+            return [k, result.value];
+          }),
+        )
+      : undefined;
+    return {
+      server: expandedEnv !== undefined ? { ...server, env: expandedEnv } : { ...server },
+      unresolved,
+    };
+  }
+
+  // Remote server: expand url and headers.
+  const urlResult = expandEnvPlaceholders(server.url);
+  unresolved.push(...urlResult.unresolved);
+
+  const expandedHeaders: Record<string, string> | undefined = server.headers
+    ? Object.fromEntries(
+        Object.entries(server.headers).map(([k, v]) => {
+          const result = expandEnvPlaceholders(v);
+          unresolved.push(...result.unresolved);
+          return [k, result.value];
+        }),
+      )
+    : undefined;
+
+  return {
+    server: {
+      ...server,
+      url: urlResult.value,
+      ...(expandedHeaders !== undefined ? { headers: expandedHeaders } : {}),
+    },
+    unresolved,
+  };
+}
+
 /** Minimal adapter surface needed by buildMcpRows — enables injection in tests. */
 export interface McpRowAdapter {
   available(): boolean;
@@ -163,16 +219,47 @@ export function buildMcpRows(globalRoot: string, opts?: BuildMcpRowsOpts): McpRo
       const isManaged = managed.includes(name);
       const isPresent = readResult.serverNames.includes(name);
 
-      if (!isManaged || !isPresent) {
+      // Fix 1: expand ${VAR} placeholders before computing plan/status.
+      // The host file holds the resolved value; passing the unexpanded canonical to
+      // plan() makes it always see a diff → permanent false-positive "drift".
+      // If a variable is unset, mark as "needs-env" instead of misleading "drift".
+      const { server: expandedServer, unresolved } = expandServerForPlan(server);
+      if (unresolved.length > 0) {
+        hosts[hostId] = "needs-env";
+        continue;
+      }
+
+      // Build an expanded config for plan comparison (only this server's values change).
+      const expandedConfig: CanonicalMcpConfig = {
+        ...config,
+        servers: { ...config.servers, [name]: expandedServer },
+      };
+
+      // Content-equality check: synced requires the host entry to match canonical.
+      // Use adapter.plan() — zero changes for this server means content is equal.
+      const syncPlan = adapter.plan(expandedConfig, managed);
+
+      if (!syncPlan.ok) {
         hosts[hostId] = "drift";
         continue;
       }
 
-      // Content-equality check: synced requires the host entry to match canonical.
-      // Use adapter.plan() — zero changes for this server means content is equal.
-      const syncPlan = adapter.plan(config, managed);
-      hosts[hostId] =
-        syncPlan.ok && !syncPlan.changes.some((c) => c.name === name) ? "synced" : "drift";
+      const planAddsOrUpdatesThis = syncPlan.changes.some(
+        (c) => (c.op === "add" || c.op === "update") && c.name === name,
+      );
+
+      // Fix 2: distinguish intentional skip from genuine drift.
+      // Adapters omit some servers by design (disabled:true on claude-code/cursor/gemini,
+      // remote servers on claude-desktop). After a correct sync those servers are neither
+      // "managed" nor "present", but the plan emits no add/update for them either.
+      // Treat that as "excluded" (in-intended-state), not "drift".
+      if (!isManaged || !isPresent) {
+        hosts[hostId] = planAddsOrUpdatesThis ? "drift" : "excluded";
+        continue;
+      }
+
+      // Server is managed and present: check content equality.
+      hosts[hostId] = syncPlan.changes.some((c) => c.name === name) ? "drift" : "synced";
     }
 
     return {
