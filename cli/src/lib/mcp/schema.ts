@@ -193,19 +193,51 @@ function findDuplicateServerNames(rawText: string): string[] {
   return [...seen.entries()].filter(([, count]) => count > 1).map(([key]) => key);
 }
 
-export function loadMcpConfig(dir: string): CanonicalMcpConfig | null {
+/**
+ * Discriminated result for loading the canonical mcp.json.
+ *
+ * - `absent`  — file does not exist (not an error; callers may create it)
+ * - `invalid` — file exists but is malformed or fails schema validation
+ * - `ok`      — file exists and is valid
+ */
+export type LoadMcpConfigResult =
+  | { status: "ok"; config: CanonicalMcpConfig }
+  | { status: "absent" }
+  | { status: "invalid"; reason: string };
+
+/**
+ * Load the canonical mcp.json and return a discriminated result.
+ * Unlike `loadMcpConfig`, this distinguishes between an absent file and a
+ * present-but-invalid one, enabling callers to fail closed on corruption.
+ */
+export function loadMcpConfigResult(dir: string): LoadMcpConfigResult {
   const p = join(dir, MCP_CONFIG_FILE);
-  if (!existsSync(p)) return null;
+  if (!existsSync(p)) return { status: "absent" };
   try {
     const rawText = readFileSync(p, "utf8");
-    if (findDuplicateServerNames(rawText).length > 0) return null;
+    const dupes = findDuplicateServerNames(rawText);
+    if (dupes.length > 0) {
+      return { status: "invalid", reason: `Duplicate server names: ${dupes.join(", ")}` };
+    }
     const raw = JSON.parse(rawText) as unknown;
     const result = validateMcpConfig(raw);
-    if (!result.ok) return null;
-    return result.config;
-  } catch {
-    return null;
+    if (!result.ok) {
+      const msgs = result.errors
+        .map((e) => (e.server ? `${e.server}: ${e.message}` : e.message))
+        .join("; ");
+      return { status: "invalid", reason: msgs };
+    }
+    return { status: "ok", config: result.config };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { status: "invalid", reason: `Parse error: ${msg}` };
   }
+}
+
+export function loadMcpConfig(dir: string): CanonicalMcpConfig | null {
+  const result = loadMcpConfigResult(dir);
+  if (result.status === "ok") return result.config;
+  return null;
 }
 
 export function saveMcpConfig(dir: string, config: CanonicalMcpConfig): void {

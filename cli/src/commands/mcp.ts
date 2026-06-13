@@ -6,6 +6,7 @@ import {
   expandEnvPlaceholders,
   isStdio,
   loadMcpConfig,
+  loadMcpConfigResult,
   MCP_HOST_IDS,
   type McpHostId,
   type McpServer,
@@ -86,7 +87,13 @@ export async function runMcpAdd(name: string, opts: McpAddOptions = {}): Promise
 
   ensureGlobalColony();
   const home = skddHome();
-  const existing = loadMcpConfig(home) ?? { version: 1 as const, servers: {} };
+  const loadResult = loadMcpConfigResult(home);
+  if (loadResult.status === "invalid") {
+    logger.error(`mcp.json is invalid: ${loadResult.reason}. Fix it before adding servers.`);
+    return 1;
+  }
+  const existing =
+    loadResult.status === "ok" ? loadResult.config : { version: 1 as const, servers: {} };
 
   if (name in existing.servers && !opts.force) {
     logger.error(`Server "${name}" already exists. Use --force to overwrite.`);
@@ -138,12 +145,19 @@ export async function runMcpRemove(name: string, opts: McpRemoveOptions = {}): P
 
   ensureGlobalColony();
   const home = skddHome();
-  const config = loadMcpConfig(home);
+  const loadResult = loadMcpConfigResult(home);
 
-  if (!config) {
+  if (loadResult.status === "invalid") {
+    logger.error(`mcp.json is invalid: ${loadResult.reason}. Fix it before removing servers.`);
+    return 1;
+  }
+
+  if (loadResult.status === "absent") {
     logger.error("No mcp.json found. Nothing to remove.");
     return opts.force ? 0 : 1;
   }
+
+  const config = loadResult.config;
 
   if (!(name in config.servers)) {
     logger.error(`Server "${name}" not found in mcp.json.`);
@@ -226,7 +240,16 @@ export interface McpSyncOptions {
 export async function runMcpSync(opts: McpSyncOptions = {}): Promise<number> {
   ensureGlobalColony();
   const home = skddHome();
-  const config = loadMcpConfig(home);
+  const loadResult = loadMcpConfigResult(home);
+
+  // Fail closed: if the canonical file exists but is invalid, abort immediately.
+  // Do NOT plan removals — a corrupt file must not trigger mass deletion of managed entries.
+  if (loadResult.status === "invalid") {
+    logger.error(`mcp.json is invalid: ${loadResult.reason}. Fix it before syncing.`);
+    return 1;
+  }
+
+  const config = loadResult.status === "ok" ? loadResult.config : null;
 
   // Load state before the early-exit check so we can detect managed names
   // that require cleanup even when the canonical config is empty.
