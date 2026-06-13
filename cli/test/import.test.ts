@@ -1,3 +1,4 @@
+import { execSync } from "node:child_process";
 import {
   existsSync,
   lstatSync,
@@ -353,6 +354,71 @@ describe("runImport", () => {
     },
   );
 
+  runUnix(
+    "--apply does not delete harness source when it has an extra symlink not in canonical",
+    async () => {
+      // Canonical has the skill
+      writeSkill(join(tmp, "skills/hello"), HELLO_SKILL);
+      // Harness has the same SKILL.md but ALSO has a symlink that canonical does not
+      writeSkill(join(tmp, ".claude/skills/hello"), HELLO_SKILL);
+      symlinkSync("./SKILL.md", join(tmp, ".claude/skills/hello/alias.md"));
+
+      const code = await runImport(undefined, { cwd: tmp, apply: true, skipLink: true });
+      restoreConsole();
+
+      // Non-zero exit: symlink makes the tree non-identical → preserved for manual review
+      expect(code).not.toBe(0);
+      // Harness source MUST still exist
+      expect(existsSync(join(tmp, ".claude/skills/hello/SKILL.md"))).toBe(true);
+      expect(lstatSync(join(tmp, ".claude/skills/hello/alias.md")).isSymbolicLink()).toBe(true);
+      // Canonical skill is untouched
+      expect(existsSync(join(tmp, "skills/hello/SKILL.md"))).toBe(true);
+    },
+  );
+
+  runUnix(
+    "--apply does not delete harness source when it has an extra empty subdir not in canonical",
+    async () => {
+      // Canonical has the skill (no subdirs)
+      writeSkill(join(tmp, "skills/hello"), HELLO_SKILL);
+      // Harness has the same SKILL.md but ALSO an empty subdir that canonical lacks
+      writeSkill(join(tmp, ".claude/skills/hello"), HELLO_SKILL);
+      mkdirSync(join(tmp, ".claude/skills/hello/empty-subdir"), { recursive: true });
+
+      const code = await runImport(undefined, { cwd: tmp, apply: true, skipLink: true });
+      restoreConsole();
+
+      // Non-zero exit: empty subdir makes trees structurally non-identical
+      expect(code).not.toBe(0);
+      // Harness source MUST still exist (empty subdir was NOT destroyed)
+      expect(existsSync(join(tmp, ".claude/skills/hello/SKILL.md"))).toBe(true);
+      expect(existsSync(join(tmp, ".claude/skills/hello/empty-subdir"))).toBe(true);
+      // Canonical skill is untouched
+      expect(existsSync(join(tmp, "skills/hello/SKILL.md"))).toBe(true);
+    },
+  );
+
+  runUnix(
+    "--apply does not delete harness source when it contains a special file (FIFO)",
+    async () => {
+      // Canonical has the skill
+      writeSkill(join(tmp, "skills/hello"), HELLO_SKILL);
+      // Harness has the same SKILL.md but also a FIFO (special file type)
+      writeSkill(join(tmp, ".claude/skills/hello"), HELLO_SKILL);
+      execSync(`mkfifo "${join(tmp, ".claude/skills/hello/event.fifo")}"`);
+
+      const code = await runImport(undefined, { cwd: tmp, apply: true, skipLink: true });
+      restoreConsole();
+
+      // Non-zero exit: special file → dir is non-comparable, preserved for manual review
+      expect(code).not.toBe(0);
+      // Harness source MUST still exist
+      expect(existsSync(join(tmp, ".claude/skills/hello/SKILL.md"))).toBe(true);
+      // Canonical skill is untouched
+      expect(existsSync(join(tmp, "skills/hello/SKILL.md"))).toBe(true);
+    },
+  );
+
   runUnix("--apply migrates full skill dir including scripts/ into canonical", async () => {
     // Harness has a skill with a scripts/ subdir — no canonical entry
     writeSkill(join(tmp, ".claude/skills/hello"), HELLO_SKILL);
@@ -510,12 +576,16 @@ describe("runImport — global mode colony bootstrap", () => {
   );
 
   it("import -g --canonical custom exits non-zero with clear error (global mode rejects --canonical)", async () => {
+    const skddFreshHome = join(skddParent, ".skdd-fresh");
     const code = await runImport(undefined, { global: true, canonical: "custom", json: false });
     restoreConsole();
     expect(code).toBe(1);
     const allLogs = logs.join("\n");
     expect(allLogs).toMatch(/--canonical.*--global|global.*--canonical/i);
     expect(allLogs).toMatch(/~\/.skdd\/skills/);
+    // Guard must fire before ensureGlobalColony — no default colony files must be created
+    expect(existsSync(join(skddFreshHome, "skills"))).toBe(false);
+    expect(existsSync(join(skddFreshHome, ".skills-registry.md"))).toBe(false);
   });
 
   it("import -g --canonical custom --apply exits non-zero before any FS writes (no partial colony)", async () => {
@@ -528,8 +598,10 @@ describe("runImport — global mode colony bootstrap", () => {
     });
     restoreConsole();
     expect(code).toBe(1);
-    // Colony should NOT have been bootstrapped (no FS side-effects before the guard)
+    // Guard fires before ensureGlobalColony — no colony files should exist in SKDD_HOME
     expect(existsSync(join(skddFreshHome, "custom"))).toBe(false);
+    expect(existsSync(join(skddFreshHome, "skills"))).toBe(false);
+    expect(existsSync(join(skddFreshHome, ".skills-registry.md"))).toBe(false);
     const allLogs = logs.join("\n");
     expect(allLogs).toMatch(/--canonical.*--global|global.*--canonical/i);
   });
