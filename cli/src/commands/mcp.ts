@@ -287,6 +287,9 @@ export async function runMcpSync(opts: McpSyncOptions = {}): Promise<number> {
 
     // Build the canonical config for this host, expanding vars where needed.
     const resolvedServers: Record<string, McpServer> = {};
+    // Track managed servers whose expansion failed so we can preserve their
+    // host entries instead of letting the adapter plan a removal for them.
+    const expansionFailedManaged = new Set<string>();
     for (const [name, server] of Object.entries(effectiveConfig.servers)) {
       if (isDroid) {
         // Droid natively supports ${VAR} — write placeholders through as-is.
@@ -294,9 +297,19 @@ export async function runMcpSync(opts: McpSyncOptions = {}): Promise<number> {
       } else {
         const { resolved, unresolved } = expandServerVars(server);
         if (unresolved.length > 0) {
-          logger.warn(
-            `[${hostId}] Skipping "${name}": unresolved env vars: ${unresolved.join(", ")}`,
-          );
+          if (managed.includes(name)) {
+            // Already managed and present on this host: preserve the existing
+            // entry rather than letting the adapter remove it.  A transient
+            // unset env var must never trigger destructive removal.
+            logger.warn(
+              `[${hostId}] Skipping update for "${name}": unresolved env vars: ${unresolved.join(", ")} (existing entry preserved)`,
+            );
+            expansionFailedManaged.add(name);
+          } else {
+            logger.warn(
+              `[${hostId}] Skipping "${name}": unresolved env vars: ${unresolved.join(", ")}`,
+            );
+          }
           continue;
         }
         resolvedServers[name] = resolved;
@@ -304,7 +317,10 @@ export async function runMcpSync(opts: McpSyncOptions = {}): Promise<number> {
     }
 
     const resolvedConfig: CanonicalMcpConfig = { version: 1, servers: resolvedServers };
-    const plan = adapter.plan(resolvedConfig, managed);
+    // Exclude expansion-failed managed names from the managed list so the
+    // adapter does not plan a removal for them.
+    const effectiveManaged = managed.filter((m) => !expansionFailedManaged.has(m));
+    const plan = adapter.plan(resolvedConfig, effectiveManaged);
 
     if (!plan.ok) {
       logger.error(`[${hostId}] blocked: ${plan.reason}`);
@@ -334,18 +350,46 @@ export async function runMcpSync(opts: McpSyncOptions = {}): Promise<number> {
       continue;
     }
 
-    // Update managed names in the in-memory state.
-    if (plan.changes.length > 0) {
-      const removed = new Set(plan.changes.filter((c) => c.op === "remove").map((c) => c.name));
-      const addedOrUpdated = plan.changes
+    // Reconcile managed names in the in-memory state.
+    // Always compute the intended set rather than relying solely on plan.changes
+    // being non-empty — Bug 2: when a managed server was removed from canonical
+    // and the host entry was already absent, plan produces no remove change, yet
+    // the name must be purged from managed so the user can freely reuse it later.
+    {
+      // Names that are "active" for this host: present in canonical AND not
+      // excluded by the hosts allowlist.  This mirrors the adapter's own
+      // allowlist check without having to parse finalDoc.
+      const activeForHost = new Set(
+        Object.entries(effectiveConfig.servers)
+          .filter(([, srv]) => !srv.hosts || srv.hosts.includes(hostId))
+          .map(([name]) => name),
+      );
+
+      const removedByPlan = new Set(
+        plan.changes.filter((c) => c.op === "remove").map((c) => c.name),
+      );
+      const addedByPlan = plan.changes
         .filter((c) => c.op === "add" || c.op === "update")
         .map((c) => c.name);
+
       const newManaged = [
-        ...managed.filter((m) => !removed.has(m)),
-        ...addedOrUpdated.filter((n) => !managed.includes(n)),
+        // Keep previously managed names that are still active for this host
+        // (i.e. in canonical with a matching allowlist), were not removed by
+        // the plan, and whose expansion didn't fail (preserved entries stay).
+        ...managed.filter(
+          (m) => !removedByPlan.has(m) && (activeForHost.has(m) || expansionFailedManaged.has(m)),
+        ),
+        // Add names newly written by this sync that weren't tracked before.
+        ...addedByPlan.filter((n) => !managed.includes(n)),
       ];
-      state = setMcpManagedNames(state, hostId, newManaged);
-      stateChanged = true;
+
+      const oldSet = new Set(managed);
+      const newSet = new Set(newManaged);
+      const changed = oldSet.size !== newSet.size || [...oldSet].some((n) => !newSet.has(n));
+      if (changed) {
+        state = setMcpManagedNames(state, hostId, newManaged);
+        stateChanged = true;
+      }
     }
   }
 

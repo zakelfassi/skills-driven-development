@@ -803,3 +803,173 @@ describe("runMcpSync — removal after sync (fix-6)", () => {
     ).toBeUndefined();
   });
 });
+
+// ── Fix: preserve managed entry on env-expansion failure (Bug 1) ─────────────
+
+describe("runMcpSync — preserve managed entry on env-expansion failure", () => {
+  it("keeps existing host entry when managed server's env var is unset", async () => {
+    placeAll();
+
+    // First sync: add managed-srv to all hosts (no env vars)
+    writeCanonical({ "env-managed-srv": { command: "my-mcp" } });
+    await runMcpSync();
+
+    // Verify it's present
+    expect(
+      (readHostJson(".claude.json").mcpServers as Record<string, unknown>)["env-managed-srv"],
+    ).toBeDefined();
+    expect(loadMcpManagedNames(skddTmp, "claude-code")).toContain("env-managed-srv");
+
+    // Update canonical: introduce an unset env var
+    writeCanonical({
+      "env-managed-srv": {
+        command: "my-mcp",
+        env: { TOKEN: "${DEFINITELY_UNSET_MANAGED_VAR}" },
+      },
+    });
+
+    const prev = process.env.DEFINITELY_UNSET_MANAGED_VAR;
+    delete process.env.DEFINITELY_UNSET_MANAGED_VAR;
+    let code: number;
+    try {
+      code = await runMcpSync();
+    } finally {
+      if (prev !== undefined) process.env.DEFINITELY_UNSET_MANAGED_VAR = prev;
+    }
+
+    // Exit 0 — unresolved var on managed server is a warning, not an error
+    expect(code).toBe(0);
+
+    // Host entry must still exist (not removed)
+    const cc = readHostJson(".claude.json");
+    expect((cc.mcpServers as Record<string, unknown>)["env-managed-srv"]).toBeDefined();
+
+    // Still tracked as managed (so when env var is later set, it will be updated)
+    expect(loadMcpManagedNames(skddTmp, "claude-code")).toContain("env-managed-srv");
+  });
+
+  it("does not remove managed server from cursor when its env var is unset", async () => {
+    placeAll();
+
+    writeCanonical({ "cur-env-srv": { command: "cur-mcp" } });
+    await runMcpSync();
+    expect(
+      (readHostJson(".cursor/mcp.json").mcpServers as Record<string, unknown>)["cur-env-srv"],
+    ).toBeDefined();
+
+    writeCanonical({
+      "cur-env-srv": { command: "cur-mcp", env: { KEY: "${UNSET_CURSOR_VAR_XYZ}" } },
+    });
+
+    const prev = process.env.UNSET_CURSOR_VAR_XYZ;
+    delete process.env.UNSET_CURSOR_VAR_XYZ;
+    try {
+      await runMcpSync();
+    } finally {
+      if (prev !== undefined) process.env.UNSET_CURSOR_VAR_XYZ = prev;
+    }
+
+    // Entry must survive
+    expect(
+      (readHostJson(".cursor/mcp.json").mcpServers as Record<string, unknown>)["cur-env-srv"],
+    ).toBeDefined();
+  });
+
+  it("still skips new (unmanaged) server when env var is unset", async () => {
+    placeFixture("claude-code.json", ".claude.json");
+
+    writeCanonical({
+      "new-unresolved-srv": {
+        command: "mcp",
+        env: { KEY: "${UNSET_NEW_SRV_VAR}" },
+      },
+    });
+
+    const prev = process.env.UNSET_NEW_SRV_VAR;
+    delete process.env.UNSET_NEW_SRV_VAR;
+    try {
+      await runMcpSync();
+    } finally {
+      if (prev !== undefined) process.env.UNSET_NEW_SRV_VAR = prev;
+    }
+
+    // New server with unresolved var must NOT be written (original behaviour)
+    const cc = readHostJson(".claude.json");
+    expect((cc.mcpServers as Record<string, unknown>)["new-unresolved-srv"]).toBeUndefined();
+  });
+});
+
+// ── Fix: reconcile managed state when host entry already gone (Bug 2) ─────────
+
+describe("runMcpSync — reconcile managed state when host entry already gone", () => {
+  it("clears managed state for a server removed from canonical even when host entry is already absent", async () => {
+    placeAll();
+
+    // First sync: get srv into managed state
+    writeCanonical({ "stale-managed": { command: "stale-cmd" } });
+    await runMcpSync();
+    expect(loadMcpManagedNames(skddTmp, "claude-code")).toContain("stale-managed");
+
+    // Simulate the host entry having already been deleted externally
+    const cc = JSON.parse(readFileSync(join(homeTmp, ".claude.json"), "utf8")) as Record<
+      string,
+      unknown
+    >;
+    const mcpServers = cc.mcpServers as Record<string, unknown>;
+    delete mcpServers["stale-managed"];
+    writeFileSync(join(homeTmp, ".claude.json"), JSON.stringify(cc, null, 2), "utf8");
+
+    // Remove srv from canonical
+    writeCanonical({});
+
+    // Sync: no change needed (entry already gone) but managed state must be cleared
+    const code = await runMcpSync();
+    expect(code).toBe(0);
+    expect(loadMcpManagedNames(skddTmp, "claude-code")).not.toContain("stale-managed");
+  });
+
+  it("user-authored entry with same name is NOT removed after managed state is cleared", async () => {
+    placeAll();
+
+    // Sync, then manually remove host entry, remove from canonical, sync again
+    writeCanonical({ "reuse-name": { command: "original-cmd" } });
+    await runMcpSync();
+
+    // Delete host entry externally
+    const cc = JSON.parse(readFileSync(join(homeTmp, ".claude.json"), "utf8")) as Record<
+      string,
+      unknown
+    >;
+    delete (cc.mcpServers as Record<string, unknown>)["reuse-name"];
+    writeFileSync(join(homeTmp, ".claude.json"), JSON.stringify(cc, null, 2), "utf8");
+
+    // Remove from canonical → managed state should be cleared
+    writeCanonical({});
+    await runMcpSync();
+    expect(loadMcpManagedNames(skddTmp, "claude-code")).not.toContain("reuse-name");
+
+    // User authors a new entry with the same name
+    const cc2 = JSON.parse(readFileSync(join(homeTmp, ".claude.json"), "utf8")) as Record<
+      string,
+      unknown
+    >;
+    (cc2.mcpServers as Record<string, unknown>)["reuse-name"] = {
+      command: "user-authored-cmd",
+    };
+    writeFileSync(join(homeTmp, ".claude.json"), JSON.stringify(cc2, null, 2), "utf8");
+
+    // Another sync with canonical still empty: user entry must NOT be removed
+    const code = await runMcpSync();
+    expect(code).toBe(0);
+    const cc3 = JSON.parse(readFileSync(join(homeTmp, ".claude.json"), "utf8")) as Record<
+      string,
+      unknown
+    >;
+    const entry = (cc3.mcpServers as Record<string, unknown>)["reuse-name"] as Record<
+      string,
+      unknown
+    >;
+    expect(entry).toBeDefined();
+    expect(entry["command"]).toBe("user-authored-cmd");
+  });
+});
