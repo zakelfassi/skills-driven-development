@@ -1025,3 +1025,124 @@ describe("runMcpSync — reconcile managed state when host entry already gone", 
     expect(entry["command"]).toBe("user-authored-cmd");
   });
 });
+
+// ── Fix: evaluate removal/omission intent before preserving unresolved placeholders ──
+
+describe("runMcpSync — removal/omission intent checked before placeholder preservation", () => {
+  it("managed server with unset ${VAR} that is also disabled:true → host entry is REMOVED (not preserved)", async () => {
+    placeAll();
+
+    // First sync: add srv to all hosts (no env vars yet)
+    writeCanonical({ "disabled-var-srv": { command: "my-mcp" } });
+    await runMcpSync();
+    expect(
+      (readHostJson(".claude.json").mcpServers as Record<string, unknown>)["disabled-var-srv"],
+    ).toBeDefined();
+    expect(loadMcpManagedNames(skddTmp, "claude-code")).toContain("disabled-var-srv");
+
+    // Update canonical: add unset env var + disabled:true
+    writeCanonical({
+      "disabled-var-srv": {
+        command: "my-mcp",
+        env: { TOKEN: "${DEFINITELY_UNSET_REMOVAL_VAR}" },
+        disabled: true,
+      },
+    });
+
+    const prev = process.env.DEFINITELY_UNSET_REMOVAL_VAR;
+    delete process.env.DEFINITELY_UNSET_REMOVAL_VAR;
+    let code: number;
+    try {
+      code = await runMcpSync();
+    } finally {
+      if (prev !== undefined) process.env.DEFINITELY_UNSET_REMOVAL_VAR = prev;
+    }
+
+    expect(code).toBe(0);
+
+    // Host entry must be REMOVED (disabled intent wins over unset var preservation)
+    const cc = readHostJson(".claude.json");
+    expect((cc.mcpServers as Record<string, unknown>)["disabled-var-srv"]).toBeUndefined();
+
+    // Managed state must be cleared
+    expect(loadMcpManagedNames(skddTmp, "claude-code")).not.toContain("disabled-var-srv");
+  });
+
+  it("managed server with unset ${VAR} that is also excluded by hosts allowlist → host entry is REMOVED (not preserved)", async () => {
+    placeAll();
+
+    // First sync: add srv to all hosts (no hosts filter yet)
+    writeCanonical({ "excluded-var-srv": { command: "cursor-only-mcp" } });
+    await runMcpSync();
+    expect(
+      (readHostJson(".claude.json").mcpServers as Record<string, unknown>)["excluded-var-srv"],
+    ).toBeDefined();
+    expect(loadMcpManagedNames(skddTmp, "claude-code")).toContain("excluded-var-srv");
+
+    // Update canonical: add unset env var + narrow hosts to cursor only (excludes claude-code)
+    writeCanonical({
+      "excluded-var-srv": {
+        command: "cursor-only-mcp",
+        env: { KEY: "${DEFINITELY_UNSET_EXCLUDED_VAR}" },
+        hosts: ["cursor"],
+      },
+    });
+
+    const prev = process.env.DEFINITELY_UNSET_EXCLUDED_VAR;
+    delete process.env.DEFINITELY_UNSET_EXCLUDED_VAR;
+    let code: number;
+    try {
+      code = await runMcpSync();
+    } finally {
+      if (prev !== undefined) process.env.DEFINITELY_UNSET_EXCLUDED_VAR = prev;
+    }
+
+    expect(code).toBe(0);
+
+    // claude-code entry must be REMOVED (host excluded intent wins over unset var preservation)
+    const cc = readHostJson(".claude.json");
+    expect((cc.mcpServers as Record<string, unknown>)["excluded-var-srv"]).toBeUndefined();
+
+    // Managed state cleared for claude-code
+    expect(loadMcpManagedNames(skddTmp, "claude-code")).not.toContain("excluded-var-srv");
+  });
+
+  it("managed server with unset ${VAR} still intended for this host → preserved with warning (M5 regression)", async () => {
+    placeAll();
+
+    // First sync: add srv to all hosts
+    writeCanonical({ "intended-var-srv": { command: "my-mcp" } });
+    await runMcpSync();
+    expect(
+      (readHostJson(".claude.json").mcpServers as Record<string, unknown>)["intended-var-srv"],
+    ).toBeDefined();
+    expect(loadMcpManagedNames(skddTmp, "claude-code")).toContain("intended-var-srv");
+
+    // Update canonical: add unset env var, no disabled/hosts filter (still intended for all hosts)
+    writeCanonical({
+      "intended-var-srv": {
+        command: "my-mcp",
+        env: { TOKEN: "${DEFINITELY_UNSET_INTENDED_VAR}" },
+      },
+    });
+
+    const prev = process.env.DEFINITELY_UNSET_INTENDED_VAR;
+    delete process.env.DEFINITELY_UNSET_INTENDED_VAR;
+    let code: number;
+    try {
+      code = await runMcpSync();
+    } finally {
+      if (prev !== undefined) process.env.DEFINITELY_UNSET_INTENDED_VAR = prev;
+    }
+
+    // Exit 0 — still a warning, not an error
+    expect(code).toBe(0);
+
+    // Host entry must still exist (M5 preservation: transient unset var must not remove intended server)
+    const cc = readHostJson(".claude.json");
+    expect((cc.mcpServers as Record<string, unknown>)["intended-var-srv"]).toBeDefined();
+
+    // Still tracked as managed
+    expect(loadMcpManagedNames(skddTmp, "claude-code")).toContain("intended-var-srv");
+  });
+});

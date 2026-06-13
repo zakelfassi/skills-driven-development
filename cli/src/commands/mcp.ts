@@ -320,13 +320,28 @@ export async function runMcpSync(opts: McpSyncOptions = {}): Promise<number> {
         const { resolved, unresolved } = expandServerVars(server);
         if (unresolved.length > 0) {
           if (managed.includes(name)) {
-            // Already managed and present on this host: preserve the existing
-            // entry rather than letting the adapter remove it.  A transient
-            // unset env var must never trigger destructive removal.
-            logger.warn(
-              `[${hostId}] Skipping update for "${name}": unresolved env vars: ${unresolved.join(", ")} (existing entry preserved)`,
-            );
-            expansionFailedManaged.add(name);
+            // Evaluate removal/omission intent FIRST: if the server is disabled
+            // or this host is excluded by the hosts allowlist, the server is
+            // meant to be removed — do NOT preserve it via expansionFailedManaged.
+            // Only preserve when the server is still genuinely intended for this
+            // host (would be an add/update if the var were set).
+            const intendedForHost =
+              !server.disabled && (!server.hosts || server.hosts.includes(hostId));
+            if (intendedForHost) {
+              // Still intended: preserve the existing entry.  A transient unset
+              // env var must never trigger destructive removal of an active server.
+              logger.warn(
+                `[${hostId}] Skipping update for "${name}": unresolved env vars: ${unresolved.join(", ")} (existing entry preserved)`,
+              );
+              expansionFailedManaged.add(name);
+            } else {
+              // Disabled or host excluded: removal/omission is intended.
+              // Fall through without adding to expansionFailedManaged so the
+              // adapter can plan the removal.
+              logger.warn(
+                `[${hostId}] Skipping "${name}": unresolved env vars: ${unresolved.join(", ")}`,
+              );
+            }
           } else {
             logger.warn(
               `[${hostId}] Skipping "${name}": unresolved env vars: ${unresolved.join(", ")}`,
