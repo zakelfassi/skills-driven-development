@@ -361,12 +361,14 @@ export async function runMcpSync(opts: McpSyncOptions = {}): Promise<number> {
     const effectiveManaged = managed.filter((m) => !expansionFailedManaged.has(m));
 
     // Skip hosts with nothing to do: no intended servers AND no managed cleanup.
-    // A host is relevant iff it has intended servers (not excluded by the
-    // per-server hosts allowlist) OR managed names that need removal.
-    // Irrelevant hosts must not be parsed — a malformed config on an untargeted
-    // host must not cause sync to exit 1.
-    const hasIntendedServers = Object.values(resolvedConfig.servers).some(
-      (server) => !server.hosts || server.hosts.includes(hostId),
+    // A host is relevant iff it has at least one server that isIntendedForHost
+    // (passes the hosts allowlist, is not disabled-on-an-omitting-adapter, and
+    // is not a remote server on a stdio-only adapter) OR has managed names that
+    // need removal. Omitted-only hosts (where the adapter would omit every
+    // canonical server) must not be parsed — a malformed config on such a host
+    // must not cause sync to exit 1.
+    const hasIntendedServers = Object.values(resolvedConfig.servers).some((server) =>
+      isIntendedForHost(server, hostId, adapter),
     );
     if (!hasIntendedServers && effectiveManaged.length === 0) {
       continue;
@@ -530,10 +532,10 @@ export async function collectMcpPlanLines(): Promise<string[]> {
     const effectiveManaged = managed.filter((m) => !expansionFailedManaged.has(m));
 
     // Skip hosts with nothing to do (mirrors runMcpSync's host-relevance check).
-    // A malformed config on an untargeted host must not appear as "blocked" in
+    // A malformed config on an omitted-only host must not appear as "blocked" in
     // the dry-run preview when the real sync would silently skip it.
-    const hasIntendedServers = Object.values(resolvedConfig.servers).some(
-      (server) => !server.hosts || server.hosts.includes(hostId),
+    const hasIntendedServers = Object.values(resolvedConfig.servers).some((server) =>
+      isIntendedForHost(server, hostId, adapter),
     );
     if (!hasIntendedServers && effectiveManaged.length === 0) {
       continue;
