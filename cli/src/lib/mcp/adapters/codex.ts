@@ -316,6 +316,7 @@ export const codexAdapter: McpHostAdapter = {
         filePath: p,
         finalDoc: { _tomlContent: originalContent },
         warnings,
+        omitted: [],
       };
     }
 
@@ -332,6 +333,7 @@ export const codexAdapter: McpHostAdapter = {
         filePath: p,
         finalDoc: { _tomlContent: originalContent },
         warnings,
+        omitted: [],
       };
     }
 
@@ -341,6 +343,7 @@ export const codexAdapter: McpHostAdapter = {
       filePath: p,
       finalDoc: { _tomlContent: result.content },
       warnings,
+      omitted: [],
     };
   },
 

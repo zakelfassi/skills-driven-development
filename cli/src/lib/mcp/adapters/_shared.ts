@@ -184,6 +184,7 @@ export function createJsonAdapter(cfg: JsonAdapterConfig): McpHostAdapter {
       const nextServers: Record<string, unknown> = { ...currentServers };
       const changes: ServerChange[] = [];
       const warnings: string[] = [];
+      const omitted: string[] = [];
       const canonicalNames = new Set(Object.keys(canonical.servers));
 
       // Process each canonical server
@@ -206,6 +207,12 @@ export function createJsonAdapter(cfg: JsonAdapterConfig): McpHostAdapter {
           if (managed.includes(name) && name in nextServers) {
             changes.push({ op: "remove", name });
             delete nextServers[name];
+          } else if (managed.includes(name)) {
+            // Managed but host entry already absent — adapter intentionally omits
+            // this server and there is nothing to remove.  Track in omitted[] so
+            // the sync orchestrator can purge it from managed state; otherwise a
+            // later user-authored same-name entry would be clobbered.
+            omitted.push(name);
           }
           // Surface a warning when the server is skipped for a non-disabled reason.
           if (!server.disabled && cfg.onSkipped) {
@@ -252,6 +259,7 @@ export function createJsonAdapter(cfg: JsonAdapterConfig): McpHostAdapter {
         filePath: cfg.configPath(),
         finalDoc: rawDoc,
         warnings,
+        omitted,
       };
     },
 

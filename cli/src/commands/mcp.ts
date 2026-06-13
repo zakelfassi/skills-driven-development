@@ -393,13 +393,22 @@ export async function runMcpSync(opts: McpSyncOptions = {}): Promise<number> {
       const addedByPlan = plan.changes
         .filter((c) => c.op === "add" || c.op === "update")
         .map((c) => c.name);
+      // Servers the adapter intentionally decided not to write (disabled, remote
+      // on a stdio-only host, etc.) AND whose host entry was already absent.
+      // These must be dropped from managed state so that a later user-authored
+      // same-name entry is not clobbered on the next sync.
+      const omittedByPlan = new Set(plan.omitted ?? []);
 
       const newManaged = [
         // Keep previously managed names that are still active for this host
         // (i.e. in canonical with a matching allowlist), were not removed by
-        // the plan, and whose expansion didn't fail (preserved entries stay).
+        // the plan, not intentionally omitted by the adapter, and whose
+        // expansion didn't fail (preserved entries stay).
         ...managed.filter(
-          (m) => !removedByPlan.has(m) && (activeForHost.has(m) || expansionFailedManaged.has(m)),
+          (m) =>
+            !removedByPlan.has(m) &&
+            !omittedByPlan.has(m) &&
+            (activeForHost.has(m) || expansionFailedManaged.has(m)),
         ),
         // Add names newly written by this sync that weren't tracked before.
         ...addedByPlan.filter((n) => !managed.includes(n)),

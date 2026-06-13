@@ -348,13 +348,31 @@ export function buildMcpRows(globalRoot: string, opts?: BuildMcpRowsOpts): McpRo
         (c) => (c.op === "add" || c.op === "update") && c.name === name,
       );
 
-      // Fix 2: distinguish intentional skip from genuine drift.
+      // Fix 2: distinguish intentional skip, genuine drift, and name collision.
+      //
       // Adapters omit some servers by design (disabled:true on claude-code/cursor/gemini,
       // remote servers on claude-desktop). After a correct sync those servers are neither
-      // "managed" nor "present", but the plan emits no add/update for them either.
-      // Treat that as "excluded" (in-intended-state), not "drift".
+      // "managed" nor "present", and the plan emits no add/update for them.
+      // Treat that as "excluded" (intended-state), not "drift".
+      //
+      // However, when a canonical server targets a host that already has an UNMANAGED
+      // entry of the same name, the adapter emits no add/update (it skips with a warning)
+      // even though the canonical intent can never be synced until the conflict is resolved.
+      // Detect this by: server IS present, NOT managed, and plan has a warning mentioning
+      // the name — surface it as "drift" so users know they must resolve the conflict.
       if (!isManaged || !isPresent) {
-        hosts[hostId] = planAddsOrUpdatesThis ? "drift" : "excluded";
+        if (planAddsOrUpdatesThis) {
+          hosts[hostId] = "drift";
+        } else if (
+          isPresent &&
+          !isManaged &&
+          syncPlan.warnings.some((w) => w.includes(`"${name}"`))
+        ) {
+          // Unmanaged entry of the same name blocks sync — show as drift/conflict.
+          hosts[hostId] = "drift";
+        } else {
+          hosts[hostId] = "excluded";
+        }
         continue;
       }
 

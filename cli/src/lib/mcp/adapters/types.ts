@@ -26,6 +26,19 @@ export interface HostSyncPlanOk {
   filePath: string;
   finalDoc: Record<string, unknown>;
   warnings: string[];
+  /**
+   * Server names the adapter intentionally decided NOT to write on this host
+   * (e.g. disabled:true, remote server on a stdio-only host) AND whose host
+   * entry was already absent (so no `remove` change was needed either).
+   *
+   * After a successful sync the orchestrator uses this list to drop those names
+   * from managed state, so a later user-authored same-name entry is not
+   * clobbered on the next sync.
+   *
+   * Absent (undefined) is equivalent to an empty array — adapters that never
+   * produce omissions may omit this field.
+   */
+  omitted?: string[];
 }
 
 export interface HostSyncPlanErr {
