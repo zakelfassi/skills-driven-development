@@ -110,6 +110,16 @@ export function validateMcpConfig(raw: unknown): ValidationResult {
       const hosts = srv["hosts"];
       if (!Array.isArray(hosts) || hosts.some((h) => typeof h !== "string")) {
         errors.push({ server: name, message: "hosts must be an array of strings" });
+      } else {
+        const unknownHosts = (hosts as string[]).filter(
+          (h) => !MCP_HOST_IDS.includes(h as McpHostId),
+        );
+        if (unknownHosts.length > 0) {
+          errors.push({
+            server: name,
+            message: `hosts contains unknown IDs: ${unknownHosts.join(", ")}. Valid IDs: ${MCP_HOST_IDS.join(", ")}`,
+          });
+        }
       }
     }
     if ("disabled" in srv) {

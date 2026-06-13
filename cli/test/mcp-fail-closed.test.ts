@@ -21,7 +21,13 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { runMcpAdd, runMcpRemove, runMcpSync } from "../src/commands/mcp.js";
+import {
+  collectMcpPlanLines,
+  runMcpAdd,
+  runMcpList,
+  runMcpRemove,
+  runMcpSync,
+} from "../src/commands/mcp.js";
 import { saveMcpConfig } from "../src/lib/mcp/schema.js";
 
 let skddTmp: string;
@@ -242,5 +248,67 @@ describe("runMcpRemove — fail closed on invalid canonical mcp.json", () => {
   it("returns 0 when canonical is absent with --force", async () => {
     const code = await runMcpRemove("missing-server", { force: true });
     expect(code).toBe(0);
+  });
+});
+
+// ── runMcpList fail-closed ────────────────────────────────────────────────────
+
+describe("runMcpList — fail closed on invalid canonical mcp.json", () => {
+  it("exits 1 when canonical mcp.json has malformed JSON", async () => {
+    writeFileSync(join(skddTmp, "mcp.json"), "{ not valid json }", "utf8");
+    const code = await runMcpList();
+    expect(code).toBe(1);
+  });
+
+  it("exits 1 when canonical mcp.json fails schema validation (wrong version)", async () => {
+    writeFileSync(join(skddTmp, "mcp.json"), JSON.stringify({ version: 99, servers: {} }), "utf8");
+    const code = await runMcpList();
+    expect(code).toBe(1);
+  });
+
+  it("exits 1 when canonical mcp.json has duplicate server names", async () => {
+    const raw = '{"version":1,"servers":{"srv":{"command":"a"},"srv":{"command":"b"}}}';
+    writeFileSync(join(skddTmp, "mcp.json"), raw, "utf8");
+    const code = await runMcpList();
+    expect(code).toBe(1);
+  });
+
+  it("exits 0 (not 1) when canonical mcp.json is absent — absent is not invalid", async () => {
+    const code = await runMcpList();
+    expect(code).toBe(0);
+  });
+
+  it("exits 0 and lists servers when canonical mcp.json is valid", async () => {
+    writeFileSync(
+      join(skddTmp, "mcp.json"),
+      JSON.stringify({ version: 1, servers: { "my-srv": { command: "echo" } } }),
+      "utf8",
+    );
+    const code = await runMcpList();
+    expect(code).toBe(0);
+  });
+});
+
+// ── collectMcpPlanLines fail-closed ──────────────────────────────────────────
+
+describe("collectMcpPlanLines — fail closed on invalid canonical mcp.json", () => {
+  it("returns an error line (not empty) when canonical mcp.json has malformed JSON", async () => {
+    writeFileSync(join(skddTmp, "mcp.json"), "{ bad json }", "utf8");
+    const lines = await collectMcpPlanLines();
+    expect(lines.length).toBeGreaterThan(0);
+    expect(lines[0]).toMatch(/\[error\]/i);
+  });
+
+  it("returns an error line when canonical mcp.json fails schema validation", async () => {
+    writeFileSync(join(skddTmp, "mcp.json"), JSON.stringify({ version: 99, servers: {} }), "utf8");
+    const lines = await collectMcpPlanLines();
+    expect(lines.length).toBeGreaterThan(0);
+    expect(lines[0]).toMatch(/\[error\]/i);
+  });
+
+  it("returns 'no MCP servers' line (not error) when canonical mcp.json is absent", async () => {
+    const lines = await collectMcpPlanLines();
+    expect(lines.length).toBeGreaterThan(0);
+    expect(lines[0]).not.toMatch(/\[error\]/i);
   });
 });

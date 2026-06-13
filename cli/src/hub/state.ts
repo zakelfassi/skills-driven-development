@@ -8,7 +8,7 @@ import {
   type CanonicalMcpConfig,
   expandEnvPlaceholders,
   isStdio,
-  loadMcpConfig,
+  loadMcpConfigResult,
   type McpHostId,
   type McpServer,
 } from "../lib/mcp/schema.js";
@@ -55,6 +55,7 @@ export interface HubData {
   globalSkills: SkillRow[];
   mirrors: MirrorRow[];
   mcpRows: McpRow[];
+  mcpConfigError?: string;
   doctorChecks: DoctorCheck[];
 }
 
@@ -66,10 +67,24 @@ export async function loadHubData(cwd: string): Promise<HubData> {
   const globalSkills = skillsFromRegistry(loadRegistry(globalRoot), "global");
 
   const mirrors = buildMirrorRows(projectRoot);
-  const mcpRows = buildMcpRows(globalRoot);
+  let mcpConfigError: string | undefined;
+  const mcpRows = buildMcpRows(globalRoot, {
+    onConfigError: (reason) => {
+      mcpConfigError = reason;
+    },
+  });
   const { checks: doctorChecks } = await collectDoctorChecks(projectRoot, { global: false });
 
-  return { projectRoot, globalRoot, projectSkills, globalSkills, mirrors, mcpRows, doctorChecks };
+  return {
+    projectRoot,
+    globalRoot,
+    projectSkills,
+    globalSkills,
+    mirrors,
+    mcpRows,
+    mcpConfigError,
+    doctorChecks,
+  };
 }
 
 function skillsFromRegistry(registry: Registry, scope: "project" | "global"): SkillRow[] {
@@ -182,11 +197,22 @@ export interface BuildMcpRowsOpts {
   adapters?: Partial<Record<McpHostId, McpRowAdapter>>;
   /** Override how managed server names are fetched per host (default: loadMcpManagedNames). */
   loadManaged?: (hostId: McpHostId) => string[];
+  /**
+   * Called when the canonical mcp.json exists but is invalid.
+   * The hub uses this to surface an error indicator instead of silently
+   * showing an empty matrix. Not called for an absent file.
+   */
+  onConfigError?: (reason: string) => void;
 }
 
 export function buildMcpRows(globalRoot: string, opts?: BuildMcpRowsOpts): McpRow[] {
-  const config = loadMcpConfig(globalRoot);
-  if (!config) return [];
+  const result = loadMcpConfigResult(globalRoot);
+  if (result.status === "invalid") {
+    opts?.onConfigError?.(result.reason);
+    return [];
+  }
+  if (result.status === "absent") return [];
+  const config = result.config;
 
   const adapters = opts?.adapters ?? ADAPTERS;
   const loadManaged =
@@ -223,16 +249,27 @@ export function buildMcpRows(globalRoot: string, opts?: BuildMcpRowsOpts): McpRo
       // The host file holds the resolved value; passing the unexpanded canonical to
       // plan() makes it always see a diff → permanent false-positive "drift".
       // If a variable is unset, mark as "needs-env" instead of misleading "drift".
-      const { server: expandedServer, unresolved } = expandServerForPlan(server);
-      if (unresolved.length > 0) {
-        hosts[hostId] = "needs-env";
-        continue;
+      //
+      // Exception: Droid natively supports ${VAR} and stores placeholders verbatim,
+      // so the host file and canonical both contain the unexpanded form. Expanding
+      // for Droid would produce false drift when the env var is set. Mirror the same
+      // per-host rule that runMcpSync uses.
+      let planServer: McpServer;
+      if (hostId === "droid") {
+        planServer = server; // Droid: passthrough, no expansion
+      } else {
+        const { server: expandedServer, unresolved } = expandServerForPlan(server);
+        if (unresolved.length > 0) {
+          hosts[hostId] = "needs-env";
+          continue;
+        }
+        planServer = expandedServer;
       }
 
       // Build an expanded config for plan comparison (only this server's values change).
       const expandedConfig: CanonicalMcpConfig = {
         ...config,
-        servers: { ...config.servers, [name]: expandedServer },
+        servers: { ...config.servers, [name]: planServer },
       };
 
       // Content-equality check: synced requires the host entry to match canonical.

@@ -230,7 +230,12 @@ export function Hub({ data: initialData, cwd, actions, reloader }: HubProps) {
           />
         )}
         {activePane === "mcp" && (
-          <McpPane rows={data.mcpRows} selectedIndex={selectedIndex} dryRunOutput={dryRunOutput} />
+          <McpPane
+            rows={data.mcpRows}
+            selectedIndex={selectedIndex}
+            dryRunOutput={dryRunOutput}
+            configError={data.mcpConfigError}
+          />
         )}
         {activePane === "doctor" && (
           <DoctorPane

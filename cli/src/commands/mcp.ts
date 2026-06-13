@@ -5,7 +5,6 @@ import {
   type CanonicalMcpConfig,
   expandEnvPlaceholders,
   isStdio,
-  loadMcpConfig,
   loadMcpConfigResult,
   MCP_HOST_IDS,
   type McpHostId,
@@ -25,7 +24,15 @@ export interface McpListOptions {
 export async function runMcpList(opts: McpListOptions = {}): Promise<number> {
   ensureGlobalColony();
   const home = skddHome();
-  const config = loadMcpConfig(home);
+  const loadResult = loadMcpConfigResult(home);
+
+  // Fail closed: corrupt canonical must never silently appear as empty.
+  if (loadResult.status === "invalid") {
+    logger.error(`mcp.json is invalid: ${loadResult.reason}`);
+    return 1;
+  }
+
+  const config = loadResult.status === "ok" ? loadResult.config : null;
 
   if (opts.format === "json") {
     process.stdout.write(JSON.stringify(config ?? { version: 1, servers: {} }, null, 2) + "\n");
@@ -421,7 +428,14 @@ export async function runMcpSync(opts: McpSyncOptions = {}): Promise<number> {
 export async function collectMcpPlanLines(): Promise<string[]> {
   ensureGlobalColony();
   const home = skddHome();
-  const config = loadMcpConfig(home);
+  const loadResult = loadMcpConfigResult(home);
+
+  // Fail closed: surface invalid config as an error line (hub must not crash).
+  if (loadResult.status === "invalid") {
+    return [`[error] mcp.json is invalid: ${loadResult.reason}`];
+  }
+
+  const config = loadResult.status === "ok" ? loadResult.config : null;
   const state = loadState(home) ?? emptyState();
 
   const canonicalIsEmpty = !config || Object.keys(config.servers).length === 0;

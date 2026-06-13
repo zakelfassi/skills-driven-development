@@ -5,6 +5,7 @@ interface McpPaneProps {
   rows: McpRow[];
   selectedIndex: number;
   dryRunOutput?: string[];
+  configError?: string;
 }
 
 const CELL: Record<McpCellStatus, { char: string; color: string }> = {
@@ -25,7 +26,16 @@ const HOST_SHORT: Record<string, string> = {
   gemini: "GM",
 };
 
-export function McpPane({ rows, selectedIndex, dryRunOutput }: McpPaneProps) {
+export function McpPane({ rows, selectedIndex, dryRunOutput, configError }: McpPaneProps) {
+  if (configError) {
+    return (
+      <Box paddingX={1} flexDirection="column">
+        <Text color="red">⚠ mcp.json is invalid — run `skdd mcp list` to see details.</Text>
+        <Text color="gray">{configError}</Text>
+      </Box>
+    );
+  }
+
   if (rows.length === 0) {
     return (
       <Box paddingX={1}>

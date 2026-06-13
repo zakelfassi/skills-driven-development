@@ -441,3 +441,193 @@ describe("buildMcpRows — regression (unchanged behaviors)", () => {
     expect(rows).toHaveLength(0);
   });
 });
+
+// ── M5-A1: corrupt canonical config → onConfigError (not empty matrix) ───────
+
+describe("buildMcpRows — corrupt mcp.json surfaces error via onConfigError (M5-A1)", () => {
+  it("calls onConfigError with a reason when mcp.json has malformed JSON", () => {
+    writeFileSync(join(tmp, "mcp.json"), "{ not valid json }", "utf8");
+
+    let capturedError: string | undefined;
+    const rows = buildMcpRows(tmp, {
+      onConfigError: (r) => {
+        capturedError = r;
+      },
+    });
+
+    expect(rows).toHaveLength(0);
+    expect(capturedError).toBeDefined();
+    expect(capturedError).toBeTruthy();
+  });
+
+  it("calls onConfigError when mcp.json fails schema validation (wrong version)", () => {
+    writeFileSync(join(tmp, "mcp.json"), JSON.stringify({ version: 99, servers: {} }), "utf8");
+
+    let capturedError: string | undefined;
+    buildMcpRows(tmp, {
+      onConfigError: (r) => {
+        capturedError = r;
+      },
+    });
+    expect(capturedError).toBeDefined();
+  });
+
+  it("calls onConfigError when mcp.json has unknown host IDs in hosts array", () => {
+    writeFileSync(
+      join(tmp, "mcp.json"),
+      JSON.stringify({ version: 1, servers: { srv: { command: "echo", hosts: ["claude"] } } }),
+      "utf8",
+    );
+
+    let capturedError: string | undefined;
+    buildMcpRows(tmp, {
+      onConfigError: (r) => {
+        capturedError = r;
+      },
+    });
+    expect(capturedError).toBeDefined();
+  });
+
+  it("does NOT call onConfigError when mcp.json is absent (absent is not invalid)", () => {
+    // No mcp.json in tmp → absent
+    let called = false;
+    const rows = buildMcpRows(tmp, {
+      onConfigError: () => {
+        called = true;
+      },
+    });
+
+    expect(called).toBe(false);
+    expect(rows).toHaveLength(0);
+  });
+
+  it("does NOT call onConfigError when mcp.json is valid", () => {
+    const config: CanonicalMcpConfig = {
+      version: 1,
+      servers: { "my-srv": { command: "cmd" } },
+    };
+    writeConfig(tmp, config);
+
+    let called = false;
+    buildMcpRows(tmp, {
+      adapters: { "claude-code": makeAdapter({ serverNames: [] }) },
+      loadManaged: () => [],
+      onConfigError: () => {
+        called = true;
+      },
+    });
+
+    expect(called).toBe(false);
+  });
+});
+
+// ── M5-A13: droid ${VAR} passthrough — no false drift ────────────────────────
+
+describe("buildMcpRows — droid host skips env expansion (M5-A13)", () => {
+  const DROID_VAR = "SKDD_TEST_DROID_SECRET_99991";
+
+  afterEach(() => {
+    delete process.env[DROID_VAR];
+  });
+
+  it("droid server with ${VAR} in env shows 'synced' (not 'drift') when env var is set", () => {
+    // When the env var IS set, non-droid hosts would expand the value and potentially
+    // see a diff if the droid file holds the unexpanded form. The droid host must skip
+    // expansion so the plan receives the canonical ${VAR} form and correctly reports "synced".
+    process.env[DROID_VAR] = "some-secret-value";
+
+    const config: CanonicalMcpConfig = {
+      version: 1,
+      servers: {
+        "droid-srv": {
+          command: "cmd",
+          env: { API_KEY: `\${${DROID_VAR}}` },
+        },
+      },
+    };
+    writeConfig(tmp, config);
+
+    // The droid adapter receives the UNEXPANDED canonical (placeholder intact).
+    // If expansion had happened, the adapter's plan would see a diff and return an update.
+    const droidAdapter = makeAdapter({
+      serverNames: ["droid-srv"],
+      planFn: (canonical, _managed) => {
+        const srv = canonical.servers["droid-srv"] as {
+          command: string;
+          env?: Record<string, string>;
+        };
+        // Verify the placeholder was NOT expanded
+        const stillHasPlaceholder = srv.env?.API_KEY === `\${${DROID_VAR}}`;
+        // If placeholder is present → plan ok (synced); if expanded → simulate diff
+        return stillHasPlaceholder ? okPlan() : okPlan([{ op: "update", name: "droid-srv" }]);
+      },
+    });
+
+    const rows = buildMcpRows(tmp, {
+      adapters: { droid: droidAdapter },
+      loadManaged: () => ["droid-srv"],
+    });
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0].hosts["droid"]).toBe("synced");
+  });
+
+  it("droid server with ${VAR} in env does NOT show 'needs-env' even when env var is unset", () => {
+    // Droid stores ${VAR} verbatim — it's intentional, not a missing env issue.
+    // If env var is not set, non-droid hosts show 'needs-env'. Droid should NOT.
+    delete process.env[DROID_VAR];
+
+    const config: CanonicalMcpConfig = {
+      version: 1,
+      servers: {
+        "droid-srv": {
+          command: "cmd",
+          env: { API_KEY: `\${${DROID_VAR}}` },
+        },
+      },
+    };
+    writeConfig(tmp, config);
+
+    // Adapter returns no changes → synced (droid file already has the placeholder)
+    const droidAdapter = makeAdapter({
+      serverNames: ["droid-srv"],
+      planFn: (_c, _m) => okPlan(),
+    });
+
+    const rows = buildMcpRows(tmp, {
+      adapters: { droid: droidAdapter },
+      loadManaged: () => ["droid-srv"],
+    });
+
+    expect(rows[0].hosts["droid"]).toBe("synced");
+    expect(rows[0].hosts["droid"]).not.toBe("needs-env");
+  });
+
+  it("non-droid host still expands ${VAR} and shows 'needs-env' when unset", () => {
+    // Ensure the droid-specific passthrough doesn't accidentally affect other hosts.
+    delete process.env[DROID_VAR];
+
+    const config: CanonicalMcpConfig = {
+      version: 1,
+      servers: {
+        "shared-srv": {
+          command: "cmd",
+          env: { KEY: `\${${DROID_VAR}}` },
+        },
+      },
+    };
+    writeConfig(tmp, config);
+
+    const adapter = makeAdapter({
+      serverNames: ["shared-srv"],
+      planFn: (_c, _m) => okPlan(),
+    });
+
+    const rows = buildMcpRows(tmp, {
+      adapters: { "claude-code": adapter },
+      loadManaged: () => ["shared-srv"],
+    });
+
+    expect(rows[0].hosts["claude-code"]).toBe("needs-env");
+  });
+});
