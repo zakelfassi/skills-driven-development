@@ -269,6 +269,10 @@ mcp
   .option("-u, --url <url>", "URL of the remote MCP server")
   .option("--type <type>", "Remote server type: http|sse", "http")
   .option(
+    "--headers <pairs>",
+    "Comma-separated KEY=VALUE request headers for remote MCP servers (remote only), e.g. Authorization=Bearer ${TOK}",
+  )
+  .option(
     "--hosts <list>",
     "Comma-separated host IDs to target, e.g. claude-code,droid (default: all)",
   )
@@ -283,22 +287,24 @@ mcp
         env?: string;
         url?: string;
         type?: string;
+        headers?: string;
         hosts?: string;
         disabled: boolean;
         force: boolean;
       },
     ) => {
       const args = opts.args ? parseShellArgs(opts.args) : undefined;
-      const env = opts.env
-        ? Object.fromEntries(
-            opts.env.split(",").map((pair) => {
-              const idx = pair.indexOf("=");
-              return idx === -1
-                ? [pair.trim(), ""]
-                : [pair.slice(0, idx).trim(), pair.slice(idx + 1).trim()];
-            }),
-          )
-        : undefined;
+      const parseKeyValuePairs = (raw: string): Record<string, string> =>
+        Object.fromEntries(
+          raw.split(",").map((pair) => {
+            const idx = pair.indexOf("=");
+            return idx === -1
+              ? [pair.trim(), ""]
+              : [pair.slice(0, idx).trim(), pair.slice(idx + 1).trim()];
+          }),
+        );
+      const env = opts.env ? parseKeyValuePairs(opts.env) : undefined;
+      const headers = opts.headers ? parseKeyValuePairs(opts.headers) : undefined;
       const hosts = opts.hosts
         ? (opts.hosts.split(",").map((h) => h.trim()) as McpHostId[])
         : undefined;
@@ -308,6 +314,7 @@ mcp
         env,
         url: opts.url,
         type: opts.type as "http" | "sse" | undefined,
+        headers,
         hosts,
         disabled: opts.disabled || undefined,
         force: opts.force,

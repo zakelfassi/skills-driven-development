@@ -91,6 +91,12 @@ export async function runMcpAdd(name: string, opts: McpAddOptions = {}): Promise
     logger.error("Either --command (stdio) or --url (remote) is required.");
     return 1;
   }
+  if (opts.headers && Object.keys(opts.headers).length > 0 && opts.command) {
+    logger.error(
+      "--headers is only valid for remote servers (--url). Stdio servers do not support request headers.",
+    );
+    return 1;
+  }
   if (opts.hosts && opts.hosts.length > 0) {
     const invalid = opts.hosts.filter((h) => !MCP_HOST_IDS.includes(h));
     if (invalid.length > 0) {
