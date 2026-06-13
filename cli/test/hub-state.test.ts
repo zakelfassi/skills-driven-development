@@ -1221,3 +1221,82 @@ describe("buildMcpRows — adapter intent checked before needs-env (f-m9)", () =
     expect(rows[0].hosts["claude-desktop"]).not.toBe("needs-env");
   });
 });
+
+// ── f-m17: buildMirrorRows driftKind — safe vs unsafe drift ──────────────────
+
+describe("buildMirrorRows — driftKind (f-m17)", () => {
+  /** Write a minimal .skdd-sync.json recording a mirror with given mode. */
+  function writeState(
+    root: string,
+    canonical: string,
+    mirrorTarget: string,
+    mode: "symlink" | "copy",
+  ): void {
+    writeFileSync(
+      join(root, ".skdd-sync.json"),
+      JSON.stringify({
+        version: 2,
+        canonical,
+        mirrors: [{ target: mirrorTarget, mode, createdAt: "2026-01-01T00:00:00.000Z" }],
+      }),
+    );
+  }
+
+  runUnix("wrong-target symlink (recorded symlink, points elsewhere) → driftKind: safe", () => {
+    mkdirSync(join(tmp, "skills"), { recursive: true });
+    mkdirSync(join(tmp, "other-dir"), { recursive: true });
+    mkdirSync(join(tmp, ".claude"), { recursive: true });
+    // Symlink → ../other-dir (wrong target)
+    symlinkSync("../other-dir", join(tmp, ".claude/skills"), "dir");
+    writeState(tmp, "skills", ".claude/skills", "symlink");
+
+    const rows = buildMirrorRows(tmp);
+    const row = rows.find((r) => r.harness === "claude");
+    expect(row?.status).toBe("drift");
+    expect(row?.driftKind).toBe("safe");
+  });
+
+  runUnix("recorded copy mode but actual symlink exists → driftKind: safe", () => {
+    mkdirSync(join(tmp, "skills"), { recursive: true });
+    mkdirSync(join(tmp, ".claude"), { recursive: true });
+    // Symlink exists, but state says it should be a copy
+    symlinkSync("../skills", join(tmp, ".claude/skills"), "dir");
+    writeState(tmp, "skills", ".claude/skills", "copy");
+
+    const rows = buildMirrorRows(tmp);
+    const row = rows.find((r) => r.harness === "claude");
+    expect(row?.status).toBe("drift");
+    expect(row?.driftKind).toBe("safe");
+  });
+
+  it("recorded symlink mode but real directory exists (unmanaged) → driftKind: unsafe", () => {
+    mkdirSync(join(tmp, "skills"), { recursive: true });
+    // Real directory, not a symlink — unmanaged user data
+    mkdirSync(join(tmp, ".claude/skills"), { recursive: true });
+    writeState(tmp, "skills", ".claude/skills", "symlink");
+
+    const rows = buildMirrorRows(tmp);
+    const row = rows.find((r) => r.harness === "claude");
+    expect(row?.status).toBe("drift");
+    expect(row?.driftKind).toBe("unsafe");
+  });
+
+  it("ok mirror has no driftKind", () => {
+    // We can't create a real ok symlink in a unit test without Unix, but we can
+    // test that a non-drift row has no driftKind by checking the missing case.
+    const rows = buildMirrorRows(tmp); // no state → all unlinked
+    for (const row of rows) {
+      expect(row.driftKind).toBeUndefined();
+    }
+  });
+
+  it("missing mirror has no driftKind", () => {
+    mkdirSync(join(tmp, "skills"), { recursive: true });
+    writeState(tmp, "skills", ".claude/skills", "symlink");
+
+    const rows = buildMirrorRows(tmp);
+    const row = rows.find((r) => r.harness === "claude");
+    expect(row?.status).toBe("missing");
+    expect(row?.driftKind).toBeUndefined();
+  });
+});

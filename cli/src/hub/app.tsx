@@ -98,11 +98,24 @@ export function Hub({ data: initialData, cwd, actions, reloader }: HubProps) {
       });
 
     if (mirror.status === "drift") {
-      // A drifted mirror is a real directory (not a symlink) — never delete it from the hub.
-      // The user must explicitly run 'skdd link --force' to repair.
-      setActionMessage(
-        `${mirror.harness} has drift (real dir exists). Run 'skdd link --force' to repair.`,
-      );
+      if (mirror.driftKind === "safe") {
+        // Safe drift: the existing entry is a symlink (wrong target or wrong mode).
+        // runLink() can re-link non-destructively — no user data at risk.
+        setActionMessage(`Repairing ${mirror.harness}…`);
+        const repairCode = await doLink({ harness: mirror.harness, cwd });
+        if (repairCode !== 0) {
+          setActionMessage(`failed to repair ${mirror.harness} — run skdd link --force to fix`);
+        } else {
+          setActionMessage(`Repaired ${mirror.harness}`);
+        }
+        await reloadData();
+      } else {
+        // Unsafe drift: an unmanaged real directory exists — never delete it from the hub.
+        // The user must explicitly run 'skdd link --force' to repair.
+        setActionMessage(
+          `${mirror.harness} has drift (real dir exists). Run 'skdd link --force' to repair.`,
+        );
+      }
       return;
     }
     if (mirror.status === "ok") {

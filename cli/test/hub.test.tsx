@@ -836,3 +836,125 @@ describe("buildMcpRows", () => {
     expect(rows[0]?.hosts["claude-code"]).toBe("drift");
   });
 });
+
+// ── Hub keypress — safe vs unsafe mirror drift ────────────────────────────────
+
+describe("Hub keypress — safe vs unsafe mirror drift", () => {
+  const makeData = (mirrors: MirrorRow[] = []): HubData => ({
+    projectRoot: "/tmp/test",
+    globalRoot: "/tmp/global",
+    projectSkills: [],
+    globalSkills: [],
+    mirrors,
+    mcpRows: [],
+    pendingMcpRemovals: 0,
+    doctorChecks: [],
+  });
+
+  it("Enter on safe drift (driftKind:safe) calls link and shows Repaired on success", async () => {
+    const mockLink = vi.fn().mockResolvedValue(0);
+    const data = makeData([
+      {
+        harness: "claude",
+        label: "Claude Code",
+        target: ".claude/skills",
+        status: "drift",
+        driftKind: "safe",
+      } as MirrorRow,
+    ]);
+    const mockReloader = vi.fn().mockResolvedValue(data);
+
+    const { stdin, lastFrame, unmount } = render(
+      <Hub data={data} cwd="/tmp/test" actions={{ link: mockLink }} reloader={mockReloader} />,
+    );
+
+    stdin.write("2");
+    await new Promise((r) => setTimeout(r, 30));
+    stdin.write("\r");
+    await new Promise((r) => setTimeout(r, 100));
+
+    expect(mockLink).toHaveBeenCalledWith({ harness: "claude", cwd: "/tmp/test" });
+    const frame = lastFrame();
+    expect(frame).toContain("Repaired");
+    unmount();
+  });
+
+  it("Enter on safe drift where link fails shows failure message, not Repaired", async () => {
+    const mockLink = vi.fn().mockResolvedValue(1);
+    const data = makeData([
+      {
+        harness: "claude",
+        label: "Claude Code",
+        target: ".claude/skills",
+        status: "drift",
+        driftKind: "safe",
+      } as MirrorRow,
+    ]);
+    const mockReloader = vi.fn().mockResolvedValue(data);
+
+    const { stdin, lastFrame, unmount } = render(
+      <Hub data={data} cwd="/tmp/test" actions={{ link: mockLink }} reloader={mockReloader} />,
+    );
+
+    stdin.write("2");
+    await new Promise((r) => setTimeout(r, 30));
+    stdin.write("\r");
+    await new Promise((r) => setTimeout(r, 100));
+
+    expect(mockLink).toHaveBeenCalledWith({ harness: "claude", cwd: "/tmp/test" });
+    const frame = lastFrame();
+    expect(frame).toContain("failed");
+    expect(frame).not.toContain("Repaired");
+    unmount();
+  });
+
+  it("Enter on unsafe drift (driftKind:unsafe) does NOT call link, shows warning", async () => {
+    const mockLink = vi.fn().mockResolvedValue(0);
+    const data = makeData([
+      {
+        harness: "droid",
+        label: "Factory Droid",
+        target: ".factory/skills",
+        status: "drift",
+        driftKind: "unsafe",
+      } as MirrorRow,
+    ]);
+    const mockReloader = vi.fn().mockResolvedValue(data);
+
+    const { stdin, lastFrame, unmount } = render(
+      <Hub data={data} cwd="/tmp/test" actions={{ link: mockLink }} reloader={mockReloader} />,
+    );
+
+    stdin.write("2");
+    await new Promise((r) => setTimeout(r, 30));
+    stdin.write("\r");
+    await new Promise((r) => setTimeout(r, 100));
+
+    expect(mockLink).not.toHaveBeenCalled();
+    const frame = lastFrame();
+    expect(frame).toContain("drift");
+    unmount();
+  });
+
+  it("Enter on drift with no driftKind (legacy) does NOT call link, shows warning", async () => {
+    const mockLink = vi.fn().mockResolvedValue(0);
+    const data = makeData([
+      { harness: "codex", label: "OpenAI Codex", target: ".codex/skills", status: "drift" },
+    ]);
+    const mockReloader = vi.fn().mockResolvedValue(data);
+
+    const { stdin, lastFrame, unmount } = render(
+      <Hub data={data} cwd="/tmp/test" actions={{ link: mockLink }} reloader={mockReloader} />,
+    );
+
+    stdin.write("2");
+    await new Promise((r) => setTimeout(r, 30));
+    stdin.write("\r");
+    await new Promise((r) => setTimeout(r, 100));
+
+    expect(mockLink).not.toHaveBeenCalled();
+    const frame = lastFrame();
+    expect(frame).toContain("drift");
+    unmount();
+  });
+});

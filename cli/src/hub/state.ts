@@ -39,6 +39,14 @@ export interface MirrorRow {
   label: string;
   target: string;
   status: "ok" | "drift" | "missing" | "unlinked";
+  /**
+   * Only set when status === "drift".
+   * "safe"   – the existing mirror is a symlink (wrong target) or a recorded managed
+   *            copy that is currently a symlink; runLink() can repair it non-destructively.
+   * "unsafe" – an unmanaged real directory exists where a symlink was expected;
+   *            must not be auto-deleted (user data at risk).
+   */
+  driftKind?: "safe" | "unsafe";
 }
 
 export type McpCellStatus = "synced" | "drift" | "excluded" | "unavailable" | "needs-env";
@@ -134,20 +142,20 @@ export function buildMirrorRows(root: string): MirrorRow[] {
     const mirrorTarget = join(root, profile.skillsDir);
     const recorded = state?.mirrors.find((m) => m.target.includes(profile.skillsDir));
 
-    let status: MirrorRow["status"];
+    let statusResult: Pick<MirrorRow, "status" | "driftKind">;
     if (!recorded) {
-      status = "unlinked";
+      statusResult = { status: "unlinked" };
     } else if (!existsSync(mirrorTarget)) {
-      status = "missing";
+      statusResult = { status: "missing" };
     } else {
-      status = checkMirrorStatus(mirrorTarget, recorded, canonicalPath);
+      statusResult = checkMirrorStatus(mirrorTarget, recorded, canonicalPath);
     }
 
     rows.push({
       harness: h,
       label: profile.label ?? h,
       target: profile.skillsDir,
-      status,
+      ...statusResult,
     });
   }
   return rows;
@@ -157,20 +165,29 @@ function checkMirrorStatus(
   target: string,
   mirror: SyncMirror,
   canonicalPath: string,
-): MirrorRow["status"] {
+): Pick<MirrorRow, "status" | "driftKind"> {
   try {
     const stat = lstatSync(target);
-    if (mirror.mode === "symlink" && !stat.isSymbolicLink()) return "drift";
-    if (mirror.mode === "copy" && stat.isSymbolicLink()) return "drift";
+    if (mirror.mode === "symlink" && !stat.isSymbolicLink()) {
+      // Real directory where a symlink was expected — unmanaged user data, unsafe to auto-repair.
+      return { status: "drift", driftKind: "unsafe" };
+    }
+    if (mirror.mode === "copy" && stat.isSymbolicLink()) {
+      // Recorded as copy but a symlink exists — runLink() can safely switch it back.
+      return { status: "drift", driftKind: "safe" };
+    }
     if (mirror.mode === "symlink") {
       // Verify the symlink still points at the canonical skills dir (mirrors doctor's logic).
       const linkTarget = readlinkSync(target);
       const expected = relative(dirname(target), canonicalPath);
-      if (linkTarget !== expected) return "drift";
+      if (linkTarget !== expected) {
+        // Wrong-target symlink — runLink() can re-link it non-destructively.
+        return { status: "drift", driftKind: "safe" };
+      }
     }
-    return "ok";
+    return { status: "ok" };
   } catch {
-    return "missing";
+    return { status: "missing" };
   }
 }
 
