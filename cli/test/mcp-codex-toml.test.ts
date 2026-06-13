@@ -21,7 +21,12 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { parse as parseToml } from "smol-toml";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { codexAdapter, findBlockExtent, spliceBlocks } from "../src/lib/mcp/adapters/codex.js";
+import {
+  codexAdapter,
+  findBlockExtent,
+  findDottedKeyLines,
+  spliceBlocks,
+} from "../src/lib/mcp/adapters/codex.js";
 import type { CanonicalMcpConfig, McpHostId, McpServer } from "../src/lib/mcp/schema.js";
 
 const FIXTURES_DIR = join(__dirname, "fixtures", "mcp");
@@ -1834,5 +1839,263 @@ describe("codexAdapter — TOML table header whitespace normalization (M17)", ()
     expect(plan2.ok).toBe(true);
     if (!plan2.ok) throw new Error(plan2.reason);
     expect(plan2.changes).toHaveLength(0);
+  });
+});
+
+// ── Dotted-key form (ownership-leak regression) ───────────────────────────────
+
+describe("findDottedKeyLines", () => {
+  it("returns [] when name is absent", () => {
+    const lines = ["[settings]", 'model = "o3"'];
+    expect(findDottedKeyLines(lines, "foo")).toEqual([]);
+  });
+
+  it("finds dotted-key assignments at root level", () => {
+    const lines = [
+      'mcp_servers.foo.command = "cmd"',
+      'mcp_servers.foo.args = ["--verbose"]',
+      'mcp_servers.bar.command = "other"',
+    ];
+    expect(findDottedKeyLines(lines, "foo")).toEqual([0, 1]);
+  });
+
+  it("finds dotted-key assignments inside [mcp_servers] section", () => {
+    const lines = [
+      "[mcp_servers]",
+      'foo.command = "cmd"',
+      'foo.args = ["--a"]',
+      'bar.command = "other"',
+    ];
+    expect(findDottedKeyLines(lines, "foo")).toEqual([1, 2]);
+  });
+
+  it("finds inline-table assignment at root level", () => {
+    const lines = ['mcp_servers.foo = { command = "cmd" }'];
+    expect(findDottedKeyLines(lines, "foo")).toEqual([0]);
+  });
+
+  it("does not collect table header lines", () => {
+    const lines = ["[mcp_servers.foo]", 'command = "cmd"'];
+    // Header itself is NOT a dotted-key assignment; the field line below is not
+    // collected because it's inside the table block (currentTableSegs = ["mcp_servers","foo"])
+    // and has keySegs = ["command"], giving fullPath = ["mcp_servers","foo","command"] — match!
+    // But that's inside a table-block context, so it would be handled by findBlockExtent.
+    // We still expect findDottedKeyLines to NOT return the header line (0).
+    const result = findDottedKeyLines(lines, "foo");
+    expect(result).not.toContain(0); // header line must not appear
+  });
+
+  it("does not collect assignments for a different server", () => {
+    const lines = ['mcp_servers.bar.command = "cmd"', 'mcp_servers.baz.command = "cmd"'];
+    expect(findDottedKeyLines(lines, "foo")).toEqual([]);
+  });
+});
+
+describe("spliceBlocks: dotted-key form", () => {
+  it("removes dotted-key server at root level (re-parse valid, server gone)", () => {
+    const content = [
+      "# Codex config",
+      'model = "o3"',
+      'mcp_servers.foo.command = "cmd"',
+      'mcp_servers.foo.args = ["--verbose"]',
+      "[shell]",
+      'shell = "zsh"',
+    ].join("\n");
+
+    const result = spliceBlocks(content, ["foo"], []);
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error(result.reason);
+
+    const parsed = parseToml(result.content);
+    // Server must be gone
+    const servers = (parsed as Record<string, unknown>).mcp_servers;
+    expect(servers).toBeUndefined();
+    // Surrounding content preserved
+    expect(result.content).toContain("# Codex config");
+    expect(result.content).toContain("[shell]");
+    expect(result.content).toContain('shell = "zsh"');
+  });
+
+  it("removes dotted-key server inside [mcp_servers] section", () => {
+    const content = [
+      "[mcp_servers]",
+      'foo.command = "cmd"',
+      'foo.args = ["--a"]',
+      'bar.command = "other"',
+    ].join("\n");
+
+    const result = spliceBlocks(content, ["foo"], []);
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error(result.reason);
+
+    const parsed = parseToml(result.content) as Record<string, unknown>;
+    const servers = parsed.mcp_servers as Record<string, unknown> | undefined;
+    expect(servers?.["foo"]).toBeUndefined();
+    // bar must survive
+    expect(result.content).toContain("bar.command");
+  });
+
+  it("updates dotted-key server (replaces with table block)", () => {
+    const content = [
+      "# before",
+      'mcp_servers.foo.command = "old"',
+      'mcp_servers.foo.args = ["--old"]',
+      "[other]",
+      "y = 1",
+    ].join("\n");
+
+    const result = spliceBlocks(content, [], [["foo", { command: "new-cmd" }]]);
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error(result.reason);
+
+    expect(result.content).not.toContain('command = "old"');
+    expect(result.content).toContain("[mcp_servers.foo]");
+    expect(result.content).toContain('command = "new-cmd"');
+    expect(result.content).toContain("[other]");
+    expect(() => parseToml(result.content)).not.toThrow();
+  });
+
+  it("returns ok:false with clear message when removal can't locate representation", () => {
+    // mcp_servers is an inline table — parseToml sees "foo" in existingNames but
+    // findBlockExtent and findDottedKeyLines can't locate individual-line handles.
+    const content = 'mcp_servers = { foo = { command = "cmd" } }\n';
+
+    const result = spliceBlocks(content, ["foo"], []);
+    expect(result.ok).toBe(false);
+    if (result.ok) throw new Error("expected blocked");
+    expect(result.reason).toMatch(/cannot safely remove/);
+    expect(result.reason).toContain('"foo"');
+    expect(result.reason).toMatch(/manual cleanup/);
+  });
+
+  it("normal table-block server still removes as before", () => {
+    const content = ["[mcp_servers.foo]", 'command = "cmd"', "[other]", "z = 1"].join("\n");
+
+    const result = spliceBlocks(content, ["foo"], []);
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error(result.reason);
+    expect(result.content).not.toContain("mcp_servers.foo");
+    expect(result.content).toContain("[other]");
+    expect(() => parseToml(result.content)).not.toThrow();
+  });
+
+  it("mixed file: dotted-key removal preserves unmanaged content", () => {
+    const content = [
+      "# header comment",
+      'mcp_servers.foo.command = "managed"',
+      'mcp_servers.unmanaged.command = "keep-me"',
+      "[settings]",
+      'theme = "dark"',
+    ].join("\n");
+
+    // Only remove "foo"; "unmanaged" is not in toRemove
+    const result = spliceBlocks(content, ["foo"], []);
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error(result.reason);
+
+    const parsed = parseToml(result.content) as Record<string, unknown>;
+    const servers = parsed.mcp_servers as Record<string, unknown> | undefined;
+    expect(servers?.["foo"]).toBeUndefined();
+    expect(servers?.["unmanaged"]).toBeDefined();
+    expect(result.content).toContain("[settings]");
+    expect(result.content).toContain("# header comment");
+    expect(() => parseToml(result.content)).not.toThrow();
+  });
+});
+
+describe("codexAdapter: dotted-key form (ownership-leak regression)", () => {
+  function makeCodexDir(): string {
+    const dir = join(fakeTmp, ".codex");
+    mkdirSync(dir, { recursive: true });
+    return dir;
+  }
+
+  it("plan: dotted-key removal produces remove change and valid clean result", () => {
+    const dir = makeCodexDir();
+    const content = [
+      "# Codex config",
+      'mcp_servers.foo.command = "cmd"',
+      'mcp_servers.foo.args = ["--verbose"]',
+      "[shell]",
+      'shell = "zsh"',
+    ].join("\n");
+    writeFileSync(join(dir, "config.toml"), content, "utf8");
+
+    const plan = codexAdapter.plan(makeCanonical(), ["foo"]);
+    expect(plan.ok).toBe(true);
+    if (!plan.ok) throw new Error(plan.reason);
+    expect(plan.changes).toEqual([{ op: "remove", name: "foo" }]);
+
+    const finalContent = plan.finalDoc._tomlContent as string;
+    const parsed = parseToml(finalContent) as Record<string, unknown>;
+    expect(parsed.mcp_servers).toBeUndefined();
+    expect(finalContent).toContain("[shell]");
+    expect(() => parseToml(finalContent)).not.toThrow();
+  });
+
+  it("plan: dotted-key server blocked when representation is unlocatable (no silent leak)", () => {
+    const dir = makeCodexDir();
+    // inline-table form — findBlockExtent and findDottedKeyLines both fail
+    const content = 'mcp_servers = { foo = { command = "cmd" } }\n';
+    writeFileSync(join(dir, "config.toml"), content, "utf8");
+
+    const plan = codexAdapter.plan(makeCanonical(), ["foo"]);
+    expect(plan.ok).toBe(false);
+    if (plan.ok) throw new Error("expected blocked");
+    expect(plan.reason).toMatch(/cannot safely remove/);
+  });
+
+  it("plan: normal table-block server still removes as before (regression guard)", () => {
+    const dir = makeCodexDir();
+    const content = [
+      "# other config",
+      "[mcp_servers.foo]",
+      'command = "cmd"',
+      "[settings]",
+      'model = "o3"',
+    ].join("\n");
+    writeFileSync(join(dir, "config.toml"), content, "utf8");
+
+    const plan = codexAdapter.plan(makeCanonical(), ["foo"]);
+    expect(plan.ok).toBe(true);
+    if (!plan.ok) throw new Error(plan.reason);
+    expect(plan.changes).toEqual([{ op: "remove", name: "foo" }]);
+
+    const finalContent = plan.finalDoc._tomlContent as string;
+    expect(finalContent).not.toContain("mcp_servers.foo");
+    expect(finalContent).toContain("[settings]");
+    expect(() => parseToml(finalContent)).not.toThrow();
+  });
+
+  it("plan: mixed dotted-key + table-block + unmanaged — unmanaged content preserved", () => {
+    const dir = makeCodexDir();
+    const content = [
+      "# header",
+      'mcp_servers.managed_dotted.command = "managed"',
+      "[mcp_servers.managed_block]",
+      'command = "block"',
+      "[mcp_servers.user_owned]",
+      'command = "user"',
+      "[settings]",
+      'model = "o3"',
+    ].join("\n");
+    writeFileSync(join(dir, "config.toml"), content, "utf8");
+
+    // Remove both managed servers; user_owned is NOT in managed list
+    const plan = codexAdapter.plan(makeCanonical(), ["managed_dotted", "managed_block"]);
+    expect(plan.ok).toBe(true);
+    if (!plan.ok) throw new Error(plan.reason);
+
+    const changeNames = plan.changes.map((c) => c.name).sort();
+    expect(changeNames).toEqual(["managed_block", "managed_dotted"]);
+
+    const finalContent = plan.finalDoc._tomlContent as string;
+    const parsed = parseToml(finalContent) as Record<string, unknown>;
+    const servers = parsed.mcp_servers as Record<string, unknown> | undefined;
+    expect(servers?.["managed_dotted"]).toBeUndefined();
+    expect(servers?.["managed_block"]).toBeUndefined();
+    expect(servers?.["user_owned"]).toBeDefined();
+    expect(finalContent).toContain("[settings]");
+    expect(() => parseToml(finalContent)).not.toThrow();
   });
 });

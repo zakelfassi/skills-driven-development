@@ -243,6 +243,86 @@ export function findBlockExtent(lines: string[], name: string): [number, number]
 }
 
 /**
+ * Find line indices of dotted-key assignments that belong to a given server
+ * in the mcp_servers table.
+ *
+ * Handles configurations where the server is represented using dotted-key form
+ * rather than a `[mcp_servers.<name>]` table block. For example:
+ *   mcp_servers.foo.command = "cmd"        (root section)
+ *   foo.command = "cmd"                    (inside [mcp_servers] section)
+ *   mcp_servers.foo = { command = "cmd" }  (inline table, root section)
+ *
+ * Tracks the current explicit table context so that shortened dotted paths
+ * inside `[mcp_servers]` are resolved correctly.
+ *
+ * Exported for unit testing.
+ */
+export function findDottedKeyLines(lines: string[], name: string): number[] {
+  const indices: number[] = [];
+  let currentTableSegs: string[] = [];
+
+  for (let i = 0; i < lines.length; i++) {
+    const stripped = stripInlineComment(lines[i]).trim();
+
+    // Array-of-tables header — update context, don't collect
+    if (stripped.startsWith("[[") && stripped.endsWith("]]")) {
+      const inner = stripped.slice(2, -2);
+      currentTableSegs = parseTomlKeySegments(inner) ?? [];
+      continue;
+    }
+
+    // Table header — update context, don't collect
+    if (stripped.startsWith("[") && stripped.endsWith("]") && !stripped.startsWith("[[")) {
+      const inner = stripped.slice(1, -1);
+      currentTableSegs = parseTomlKeySegments(inner) ?? [];
+      continue;
+    }
+
+    // Skip blank lines and comment-only lines
+    if (stripped === "" || stripped.startsWith("#")) continue;
+
+    // Find the first unquoted '=' to locate the key/value boundary
+    let eqIdx = -1;
+    let inDbl = false;
+    let inSng = false;
+    for (let j = 0; j < stripped.length; j++) {
+      const ch = stripped[j];
+      if (inDbl) {
+        if (ch === "\\") {
+          j++;
+          continue;
+        }
+        if (ch === '"') inDbl = false;
+      } else if (inSng) {
+        if (ch === "'") inSng = false;
+      } else if (ch === '"') {
+        inDbl = true;
+      } else if (ch === "'") {
+        inSng = true;
+      } else if (ch === "=") {
+        eqIdx = j;
+        break;
+      }
+    }
+    if (eqIdx < 0) continue;
+
+    const rawKey = stripped.slice(0, eqIdx).trim();
+    const keySegs = parseTomlKeySegments(rawKey);
+    if (!keySegs || keySegs.length === 0) continue;
+
+    // Full path = current table context + line key segments
+    const fullPath = [...currentTableSegs, ...keySegs];
+
+    // Collect if the assignment belongs to mcp_servers.<name>
+    if (fullPath.length >= 2 && fullPath[0] === "mcp_servers" && fullPath[1] === name) {
+      indices.push(i);
+    }
+  }
+
+  return indices;
+}
+
+/**
  * Serialize a single canonical server entry to a TOML block string.
  * `disabled:true` maps to `enabled = false`.
  */
@@ -305,11 +385,33 @@ export function spliceBlocks(
   const extents: Array<[number, number]> = [];
   const seenStarts = new Set<number>();
 
+  const toRemoveSet = new Set(toRemove);
+
   for (const name of allNames) {
     const extent = findBlockExtent(lines, name);
     if (extent && !seenStarts.has(extent[0])) {
       seenStarts.add(extent[0]);
       extents.push(extent);
+    } else if (!extent) {
+      // No table-block header found. Try dotted-key form.
+      const dottedIndices = findDottedKeyLines(lines, name);
+      if (dottedIndices.length > 0) {
+        for (const idx of dottedIndices) {
+          if (!seenStarts.has(idx)) {
+            seenStarts.add(idx);
+            extents.push([idx, idx + 1]);
+          }
+        }
+      } else if (toRemoveSet.has(name)) {
+        // Planned removal but cannot locate the server's TOML representation
+        // (not a table block, not dotted-key lines). Refuse silently dropping
+        // ownership — surface a clear error so the operator can clean up manually.
+        return {
+          ok: false,
+          reason: `skdd: cannot safely remove managed server "${name}" — its TOML representation could not be located; manual cleanup needed`,
+        };
+      }
+      // For toUpsert with no existing representation: new add, nothing to remove.
     }
   }
 
