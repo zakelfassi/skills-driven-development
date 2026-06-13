@@ -6,10 +6,10 @@ Entries are retroactively reconstructed from git history for versions before thi
 
 ## [1.0.0] — 2026-06-12
 
-> **Why 1.0.0?** The CLI's public API surface (`init`, `validate`, `forge`, `list`, `show`, `link`, `doctor`, `import`, `mcp`, `hub`) is now stable and intentionally committed. Semver discipline starts here: breaking changes will require a major bump. This release ships the global colony, 9-harness MCP sync (including Factory Droid), and the `skdd hub` Ink TUI dashboard — the features that complete the 0.x roadmap.
+> **Why 1.0.0?** The CLI's public API surface (`init`, `validate`, `forge`, `list`, `show`, `link`, `doctor`, `import`, `mcp`, `hub`) is now stable and intentionally committed. Semver discipline starts here: breaking changes will require a major bump. This release ships the global colony, 9-harness skill mirrors and global colony support (including Factory Droid), plus MCP sync across 7 hosts, and the `skdd hub` Ink TUI dashboard — the features that complete the 0.x roadmap.
 
 ### Added
-- **`skdd hub`** — Ink TUI dashboard showing active skills, harness mirrors, MCP host matrix, and doctor status in one live view. Navigate with arrow keys; toggle MCP links with `l`; inspect dry-run plans in-pane.
+- **`skdd hub`** — Ink TUI dashboard showing active skills, harness mirrors, MCP host matrix, and doctor status in one live view. Navigate with arrow keys; toggle mirror links with Enter; sync MCP servers with s; inspect dry-run plans with d.
 - **Global colony** (`--global`) — per-harness global skills directories (`~/.skdd/skills` + harness mirrors) and a global colony root (`lib/global.ts`). `--global` flag threaded through `init`, `link`, `doctor`, `list`, `forge`, and `import`.
 - **`skdd mcp`** subcommands — `list`, `add`, `remove`, `sync`. Canonical `mcp.json` schema with env-variable expansion and managed-server state. Full suite of MCP host adapters: `claude-code`, `claude-desktop`, `droid`, `cursor`, `opencode`, `gemini` (7 hosts), plus a Codex TOML adapter with comment-preserving block splice.
 - **Factory Droid harness** — detection markers and harness profile added to `lib/harness.ts`.
