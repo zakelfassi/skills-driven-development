@@ -68,6 +68,19 @@ export async function runImport(
   const cwd = resolve(opts.cwd ?? process.cwd());
   const root = opts.global ? skddHome() : target ? resolve(cwd, target) : cwd;
 
+  // Global mode always uses ~/.skdd/skills as its canonical directory.
+  // Accepting --canonical in global mode would cause the consolidation step to
+  // write into ~/.skdd/<custom-dir> while runLinkGlobal hard-codes ~/.skdd/skills,
+  // leaving harness mirrors pointing at an empty default dir. Reject early instead
+  // of silently producing a misaligned colony.
+  if (opts.global && opts.canonical !== undefined) {
+    logger.error(
+      `--canonical cannot be used with --global: global mode always uses ~/.skdd/skills as the canonical directory.`,
+    );
+    logger.dim(`Remove --canonical or omit --global to use a custom canonical directory.`);
+    return 1;
+  }
+
   // Bootstrap the global colony before the existence check so that
   // `skdd import -g` (including --apply) can run on a fresh machine where
   // ~/.skdd doesn't exist yet — mirrors init -g and the mcp commands.

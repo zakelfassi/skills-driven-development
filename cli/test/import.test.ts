@@ -369,6 +369,17 @@ describe("runImport", () => {
     expect(existsSync(join(tmp, "skills/hello/scripts/deploy.sh"))).toBe(true);
   });
 
+  it("--canonical custom (project mode) works as before — guard does not affect project import", async () => {
+    mkdirSync(join(tmp, "custom", "hello"), { recursive: true });
+    writeFileSync(join(tmp, "custom", "hello", "SKILL.md"), HELLO_SKILL);
+    const code = await runImport(undefined, { cwd: tmp, canonical: "custom", json: true });
+    restoreConsole();
+    expect(code).toBe(0);
+    const payload = JSON.parse(logs[0]!);
+    expect(payload.canonical).toBe("custom");
+    expect(payload.totalSkills).toBe(1);
+  });
+
   it("errors when the target directory does not exist", async () => {
     const code = await runImport("does-not-exist", { cwd: tmp, json: true });
     restoreConsole();
@@ -497,6 +508,37 @@ describe("runImport — global mode colony bootstrap", () => {
       expect(allLogs).toMatch(/skdd link -g --force/);
     },
   );
+
+  it("import -g --canonical custom exits non-zero with clear error (global mode rejects --canonical)", async () => {
+    const code = await runImport(undefined, { global: true, canonical: "custom", json: false });
+    restoreConsole();
+    expect(code).toBe(1);
+    const allLogs = logs.join("\n");
+    expect(allLogs).toMatch(/--canonical.*--global|global.*--canonical/i);
+    expect(allLogs).toMatch(/~\/.skdd\/skills/);
+  });
+
+  it("import -g --canonical custom --apply exits non-zero before any FS writes (no partial colony)", async () => {
+    const skddFreshHome = join(skddParent, ".skdd-fresh");
+    const code = await runImport(undefined, {
+      global: true,
+      canonical: "custom",
+      apply: true,
+      json: false,
+    });
+    restoreConsole();
+    expect(code).toBe(1);
+    // Colony should NOT have been bootstrapped (no FS side-effects before the guard)
+    expect(existsSync(join(skddFreshHome, "custom"))).toBe(false);
+    const allLogs = logs.join("\n");
+    expect(allLogs).toMatch(/--canonical.*--global|global.*--canonical/i);
+  });
+
+  it("import -g without --canonical still works normally (guard does not affect standard global import)", async () => {
+    const code = await runImport(undefined, { global: true, json: true });
+    restoreConsole();
+    expect(code).toBe(0);
+  });
 
   it("import -g (scan only) on a fresh SKDD_HOME bootstraps colony and returns 0", async () => {
     const skddFreshHome = join(skddParent, ".skdd-fresh");
