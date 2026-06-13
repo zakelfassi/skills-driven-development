@@ -393,12 +393,16 @@ export async function runMcpSync(opts: McpSyncOptions = {}): Promise<number> {
     // and the host entry was already absent, plan produces no remove change, yet
     // the name must be purged from managed so the user can freely reuse it later.
     {
-      // Names that are "active" for this host: present in canonical AND not
-      // excluded by the hosts allowlist.  This mirrors the adapter's own
-      // allowlist check without having to parse finalDoc.
+      // Names that are "active" for this host: present in canonical, not
+      // disabled, and not excluded by the hosts allowlist.  This mirrors the
+      // adapter's own allowlist check without having to parse finalDoc.
+      // NOTE: disabled servers must NOT be considered active — even when their
+      // host entry is already absent (so the adapter plans no remove op), the
+      // managed name must still be purged so a later user-authored same-name
+      // entry is not clobbered on the next sync.
       const activeForHost = new Set(
         Object.entries(effectiveConfig.servers)
-          .filter(([, srv]) => !srv.hosts || srv.hosts.includes(hostId))
+          .filter(([, srv]) => !srv.disabled && (!srv.hosts || srv.hosts.includes(hostId)))
           .map(([name]) => name),
       );
 

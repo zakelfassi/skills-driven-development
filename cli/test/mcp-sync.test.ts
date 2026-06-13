@@ -25,7 +25,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { runMcpSync } from "../src/commands/mcp.js";
 import { type CanonicalMcpConfig, loadMcpConfig, saveMcpConfig } from "../src/lib/mcp/schema.js";
 import { loadMcpManagedNames } from "../src/lib/mcp/state.js";
-import { loadState } from "../src/lib/sync-state.js";
+import { loadState, statePath } from "../src/lib/sync-state.js";
 
 const FIXTURES_DIR = join(__dirname, "fixtures", "mcp");
 
@@ -1144,5 +1144,139 @@ describe("runMcpSync — removal/omission intent checked before placeholder pres
 
     // Still tracked as managed
     expect(loadMcpManagedNames(skddTmp, "claude-code")).toContain("intended-var-srv");
+  });
+});
+
+// ── Fix: purge managed state for disabled/excluded servers when host entry already absent ──
+
+describe("runMcpSync — purge managed state even when host entry is already absent", () => {
+  it("disabled server with unset ${VAR}: managed state cleared even when host entry is already absent", async () => {
+    placeAll();
+
+    // First sync: add srv to all hosts (no env vars, not disabled)
+    writeCanonical({ "stale-disabled-srv": { command: "my-mcp" } });
+    await runMcpSync();
+    expect(
+      (readHostJson(".claude.json").mcpServers as Record<string, unknown>)["stale-disabled-srv"],
+    ).toBeDefined();
+    expect(loadMcpManagedNames(skddTmp, "claude-code")).toContain("stale-disabled-srv");
+
+    // Manually remove the host entry (simulate external deletion)
+    const cc = JSON.parse(readFileSync(join(homeTmp, ".claude.json"), "utf8")) as Record<
+      string,
+      unknown
+    >;
+    delete (cc.mcpServers as Record<string, unknown>)["stale-disabled-srv"];
+    writeFileSync(join(homeTmp, ".claude.json"), JSON.stringify(cc, null, 2), "utf8");
+
+    // Update canonical: add unset env var + disabled:true
+    writeCanonical({
+      "stale-disabled-srv": {
+        command: "my-mcp",
+        env: { TOKEN: "${DEFINITELY_UNSET_STALE_DISABLED_VAR}" },
+        disabled: true,
+      },
+    });
+
+    const prev = process.env.DEFINITELY_UNSET_STALE_DISABLED_VAR;
+    delete process.env.DEFINITELY_UNSET_STALE_DISABLED_VAR;
+    let code: number;
+    try {
+      code = await runMcpSync();
+    } finally {
+      if (prev !== undefined) process.env.DEFINITELY_UNSET_STALE_DISABLED_VAR = prev;
+    }
+
+    expect(code).toBe(0);
+
+    // Managed state must be PURGED (disabled intent wins even though host entry was already absent)
+    expect(loadMcpManagedNames(skddTmp, "claude-code")).not.toContain("stale-disabled-srv");
+  });
+
+  it("host-excluded server with unset ${VAR}: managed state cleared even when host entry is already absent", async () => {
+    placeAll();
+
+    // First sync: add srv to all hosts (no hosts filter yet)
+    writeCanonical({ "stale-excluded-srv": { command: "cursor-only-mcp" } });
+    await runMcpSync();
+    expect(
+      (readHostJson(".claude.json").mcpServers as Record<string, unknown>)["stale-excluded-srv"],
+    ).toBeDefined();
+    expect(loadMcpManagedNames(skddTmp, "claude-code")).toContain("stale-excluded-srv");
+
+    // Manually remove the claude-code host entry (simulate external deletion)
+    const cc = JSON.parse(readFileSync(join(homeTmp, ".claude.json"), "utf8")) as Record<
+      string,
+      unknown
+    >;
+    delete (cc.mcpServers as Record<string, unknown>)["stale-excluded-srv"];
+    writeFileSync(join(homeTmp, ".claude.json"), JSON.stringify(cc, null, 2), "utf8");
+
+    // Update canonical: add unset env var + narrow hosts to cursor only (excludes claude-code)
+    writeCanonical({
+      "stale-excluded-srv": {
+        command: "cursor-only-mcp",
+        env: { KEY: "${DEFINITELY_UNSET_STALE_EXCLUDED_VAR}" },
+        hosts: ["cursor"],
+      },
+    });
+
+    const prev = process.env.DEFINITELY_UNSET_STALE_EXCLUDED_VAR;
+    delete process.env.DEFINITELY_UNSET_STALE_EXCLUDED_VAR;
+    let code: number;
+    try {
+      code = await runMcpSync();
+    } finally {
+      if (prev !== undefined) process.env.DEFINITELY_UNSET_STALE_EXCLUDED_VAR = prev;
+    }
+
+    expect(code).toBe(0);
+
+    // claude-code managed state must be PURGED (host-excluded intent wins even though entry was already absent)
+    expect(loadMcpManagedNames(skddTmp, "claude-code")).not.toContain("stale-excluded-srv");
+  });
+});
+
+// ── Smoke: runMcpSync with malformed mcp section in .skdd-sync.json ──────────
+
+describe("runMcpSync — malformed mcp sync-state (defense-in-depth)", () => {
+  it("runs without throwing and exits 0 when .skdd-sync.json has mcp:{} (missing hosts)", async () => {
+    placeFixture("claude-code.json", ".claude.json");
+    writeCanonical({ srv: { command: "cmd" } });
+
+    // Pre-seed a malformed state with mcp:{}
+    writeFileSync(
+      statePath(skddTmp),
+      JSON.stringify({ version: 2, canonical: "skills", mirrors: [], mcp: {} }),
+    );
+
+    let code: number;
+    expect(async () => {
+      code = await runMcpSync();
+    }).not.toThrow();
+    code = await runMcpSync();
+    expect(code).toBe(0);
+
+    // Should still sync the server normally
+    const cc = readHostJson(".claude.json");
+    expect((cc.mcpServers as Record<string, unknown>)["srv"]).toBeDefined();
+  });
+
+  it("runs without throwing and exits 0 when .skdd-sync.json has mcp:{hosts:null}", async () => {
+    placeFixture("claude-code.json", ".claude.json");
+    writeCanonical({ srv: { command: "cmd" } });
+
+    // Pre-seed a malformed state with mcp:{hosts:null}
+    writeFileSync(
+      statePath(skddTmp),
+      JSON.stringify({ version: 2, canonical: "skills", mirrors: [], mcp: { hosts: null } }),
+    );
+
+    const code = await runMcpSync();
+    expect(code).toBe(0);
+
+    // Server synced despite malformed state
+    const cc = readHostJson(".claude.json");
+    expect((cc.mcpServers as Record<string, unknown>)["srv"]).toBeDefined();
   });
 });

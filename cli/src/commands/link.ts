@@ -75,7 +75,13 @@ export async function runLink(opts: LinkOptions = {}): Promise<number> {
       // Unmanaged real dirs (not in sync state) stay blocked to protect user data.
       const mirrorEntry = state.mirrors.find((m) => m.target === profile.skillsDir);
       const isManagedCopy = mirrorEntry?.mode === "copy";
-      result = ensureMirror(canonicalPath, mirrorAbs, mode, { force: opts.force || isManagedCopy });
+      // Use the RECORDED mirror mode for managed copies — not the current requested
+      // mode — so that a copy stays a copy even when the caller passes mode:'auto'
+      // (which resolves to 'symlink' on Unix).
+      const effectiveMode = isManagedCopy ? "copy" : mode;
+      result = ensureMirror(canonicalPath, mirrorAbs, effectiveMode, {
+        force: opts.force || isManagedCopy,
+      });
     } catch (err) {
       logger.error(`${profile.skillsDir}: ${(err as Error).message}`);
       errorCount++;
@@ -172,7 +178,13 @@ async function runLinkGlobal(opts: LinkOptions): Promise<number> {
       // Unmanaged real dirs (not in sync state) stay blocked to protect user data.
       const mirrorEntry = state.mirrors.find((m) => m.target === mirrorAbs);
       const isManagedCopy = mirrorEntry?.mode === "copy";
-      result = ensureMirror(canonicalPath, mirrorAbs, mode, { force: opts.force || isManagedCopy });
+      // Use the RECORDED mirror mode for managed copies — not the current requested
+      // mode — so that a copy stays a copy even when the caller passes mode:'auto'
+      // (which resolves to 'symlink' on Unix).
+      const effectiveMode = isManagedCopy ? "copy" : mode;
+      result = ensureMirror(canonicalPath, mirrorAbs, effectiveMode, {
+        force: opts.force || isManagedCopy,
+      });
     } catch (err) {
       logger.error(`${mirrorAbs}: ${(err as Error).message}`);
       errorCount++;
