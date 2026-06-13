@@ -306,6 +306,7 @@ async function applyConsolidation(
   let moved = 0;
   let removed = 0;
   let skipped = 0;
+  const skippedNames = new Set<string>();
   for (const [name, es] of byName) {
     // With no name collisions, every entry in this group shares the same hash. So it's
     // either already in canonical (do nothing but clean up harness copies) or needs to
@@ -318,10 +319,15 @@ async function applyConsolidation(
       const source = es[0]!;
       const sourceSkillDir = dirname(source.absPath);
       if (existsSync(destSkillDir)) {
-        // Canonical already has a skill with this name but it wasn't in our scan (e.g., the
-        // canonical dir doesn't exist yet but was detected via .colony.json). Skip to be safe.
+        // Canonical destination exists but was not picked up as a canonical scan entry
+        // (e.g., the SKILL.md has a different/missing frontmatter name, or is an empty dir).
+        // Leave the harness source in place so the user can resolve manually.
         skipped++;
-        if (!opts.json) logger.dim(`  ${name} — already at ${report.canonical}/${name}/, skipping`);
+        skippedNames.add(name);
+        if (!opts.json)
+          logger.dim(
+            `  ${name} — destination ${report.canonical}/${name}/ already exists; left harness copy in place for manual review`,
+          );
       } else {
         cpSync(sourceSkillDir, destSkillDir, { recursive: true });
         moved++;
@@ -333,6 +339,9 @@ async function applyConsolidation(
     }
 
     // Remove non-canonical copies (harness-dir real directories — symlinks were realpath-deduped).
+    // Skip removal for names whose destination was occupied — those harness sources were left
+    // in place intentionally so the user can resolve the conflict manually.
+    if (skippedNames.has(name)) continue;
     for (const e of es) {
       if (e.origin === "canonical") continue;
       const skillDir = dirname(e.absPath);
@@ -355,7 +364,7 @@ async function applyConsolidation(
     );
   }
 
-  if (opts.skipLink) return 0;
+  if (opts.skipLink) return skipped > 0 ? 1 : 0;
 
   // Try to remove any harness skill-dirs that are now empty so the non-forced runLink
   // below can replace them with clean symlinks. Dirs that still contain unrecognized

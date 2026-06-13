@@ -214,6 +214,35 @@ describe("runImport", () => {
     expect(existsSync(join(tmp, ".cursor/skills/hello/SKILL.md"))).toBe(true);
   });
 
+  runUnix(
+    "--apply preserves harness source when canonical destination dir is occupied (not in scan)",
+    async () => {
+      // Harness has a valid skill named "hello"
+      writeSkill(join(tmp, ".claude/skills/hello"), HELLO_SKILL);
+      // Canonical destination dir already exists but contains a SKILL.md with a different
+      // frontmatter name — so it won't appear as the canonical entry for "hello" during scan.
+      mkdirSync(join(tmp, "skills/hello"), { recursive: true });
+      writeFileSync(
+        join(tmp, "skills/hello/SKILL.md"),
+        `---\nname: hello-v2\ndescription: Different name.\n---\n\n# Hello V2\n`,
+      );
+
+      const code = await runImport(undefined, { cwd: tmp, apply: true, skipLink: true });
+      restoreConsole();
+
+      // Non-zero exit: there is an unresolved item requiring manual review
+      expect(code).not.toBe(0);
+      // Harness source MUST still exist (not deleted)
+      expect(existsSync(join(tmp, ".claude/skills/hello/SKILL.md"))).toBe(true);
+      // The occupied canonical dir should still have its original content
+      expect(existsSync(join(tmp, "skills/hello/SKILL.md"))).toBe(true);
+      // Informative message emitted
+      const allLogs = logs.join("\n");
+      expect(allLogs).toMatch(/destination.*already exists/);
+      expect(allLogs).toMatch(/manual review/);
+    },
+  );
+
   it("errors when the target directory does not exist", async () => {
     const code = await runImport("does-not-exist", { cwd: tmp, json: true });
     restoreConsole();
