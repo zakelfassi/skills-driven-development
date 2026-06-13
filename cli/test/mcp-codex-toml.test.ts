@@ -905,6 +905,163 @@ describe("codexAdapter — CODEX_HOME env override", () => {
   });
 });
 
+// ── Fix: trim leading whitespace when detecting Codex TOML block boundaries ──
+
+describe("codexAdapter — indented table header after managed block (leading-whitespace fix)", () => {
+  it("findBlockExtent: recognizes indented table header as block boundary", () => {
+    const lines = [
+      "[mcp_servers.x]",
+      'command = "tool"',
+      '  [projects."/p"]', // indented table header
+      'path = "/p"',
+    ];
+    // Block for x should end at line 2 (the indented header), not extend to EOF
+    expect(findBlockExtent(lines, "x")).toEqual([0, 2]);
+  });
+
+  it("spliceBlocks: updating a managed block preserves indented table that follows it", () => {
+    const content = [
+      "[settings]",
+      'foo = "bar"',
+      "",
+      "[mcp_servers.x]",
+      'command = "old"',
+      "",
+      '  [projects."/p"]',
+      'path = "/p"',
+      "",
+    ].join("\n");
+    const newServer: McpServer = { command: "new-cmd" };
+    const result = spliceBlocks(content, [], [["x", newServer]]);
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error(result.reason);
+    // Old block removed, new block appended
+    expect(result.content).not.toContain('command = "old"');
+    expect(result.content).toContain('command = "new-cmd"');
+    // The indented projects table must be preserved verbatim
+    expect(result.content).toContain('  [projects."/p"]');
+    expect(result.content).toContain('path = "/p"');
+    // Unrelated settings must survive
+    expect(result.content).toContain("[settings]");
+    expect(result.content).toContain('foo = "bar"');
+  });
+
+  it("spliceBlocks: removing a managed block preserves indented table that follows it", () => {
+    const content = [
+      "[settings]",
+      'foo = "bar"',
+      "[mcp_servers.x]",
+      'command = "old"',
+      '  [projects."/p"]',
+      'path = "/p"',
+    ].join("\n");
+    const result = spliceBlocks(content, ["x"], []);
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error(result.reason);
+    // Managed block removed
+    expect(result.content).not.toContain("[mcp_servers.x]");
+    expect(result.content).not.toContain('command = "old"');
+    // Indented projects table preserved verbatim
+    expect(result.content).toContain('  [projects."/p"]');
+    expect(result.content).toContain('path = "/p"');
+    // Unrelated settings preserved
+    expect(result.content).toContain("[settings]");
+  });
+
+  it("spliceBlocks: comment and blank lines before indented table are preserved", () => {
+    const content = [
+      "[mcp_servers.x]",
+      'command = "old"',
+      "# section comment",
+      "",
+      '  [projects."/p"]',
+      'path = "/p"',
+    ].join("\n");
+    const newServer: McpServer = { command: "new" };
+    const result = spliceBlocks(content, [], [["x", newServer]]);
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error(result.reason);
+    // Comment line that was BETWEEN the block end and the indented table:
+    // The block ends at "# section comment" (non-table line), so the comment
+    // and blank line are preserved as part of the trailing content.
+    expect(result.content).toContain('  [projects."/p"]');
+    expect(result.content).toContain('path = "/p"');
+  });
+
+  it("spliceBlocks: re-parse gate holds when indented table follows managed block", () => {
+    const content = ["[mcp_servers.x]", 'command = "old"', '  [projects."/p"]', 'path = "/p"'].join(
+      "\n",
+    );
+    const newServer: McpServer = { command: "new-cmd" };
+    const result = spliceBlocks(content, [], [["x", newServer]]);
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error(result.reason);
+    // The result must parse as valid TOML
+    expect(() => parseToml(result.content)).not.toThrow();
+  });
+
+  it("codexAdapter.plan: update preserves indented table that follows managed block", () => {
+    // Write a config.toml with managed block followed by an indented table
+    const dir = join(fakeTmp, ".codex");
+    mkdirSync(dir, { recursive: true });
+    const content = [
+      "# Codex config",
+      "[mcp_servers.x]",
+      'command = "old"',
+      "",
+      '  [projects."/p"]',
+      'path = "/p"',
+      "",
+    ].join("\n");
+    writeFileSync(join(dir, "config.toml"), content, "utf8");
+
+    const canonical = makeCanonical({ x: { command: "new-cmd" } });
+    const plan = codexAdapter.plan(canonical, ["x"]);
+    expect(plan.ok).toBe(true);
+    if (!plan.ok) throw new Error(plan.reason);
+    expect(plan.changes).toEqual([{ op: "update", name: "x" }]);
+    const result = plan.finalDoc._tomlContent as string;
+
+    // Old block gone
+    expect(result).not.toContain('command = "old"');
+    // New block present
+    expect(result).toContain('command = "new-cmd"');
+    // Indented projects table preserved verbatim (no truncation)
+    expect(result).toContain('  [projects."/p"]');
+    expect(result).toContain('path = "/p"');
+    // Must parse as valid TOML
+    expect(() => parseToml(result)).not.toThrow();
+  });
+
+  it("codexAdapter.plan: remove preserves indented table that follows managed block", () => {
+    const dir = join(fakeTmp, ".codex");
+    mkdirSync(dir, { recursive: true });
+    const content = [
+      "# Codex config",
+      "[mcp_servers.x]",
+      'command = "old"',
+      '  [projects."/p"]',
+      'path = "/p"',
+    ].join("\n");
+    writeFileSync(join(dir, "config.toml"), content, "utf8");
+
+    const canonical = makeCanonical(); // empty — remove x
+    const plan = codexAdapter.plan(canonical, ["x"]);
+    expect(plan.ok).toBe(true);
+    if (!plan.ok) throw new Error(plan.reason);
+    expect(plan.changes).toEqual([{ op: "remove", name: "x" }]);
+    const result = plan.finalDoc._tomlContent as string;
+
+    // Managed block gone
+    expect(result).not.toContain("[mcp_servers.x]");
+    // Indented projects table preserved (no truncation)
+    expect(result).toContain('  [projects."/p"]');
+    expect(result).toContain('path = "/p"');
+    // Must parse as valid TOML
+    expect(() => parseToml(result)).not.toThrow();
+  });
+});
+
 // ── Fix 2 parity: deep-equal content check (codex) ───────────────────────────
 
 describe("codexAdapter — content-equality no-op (fix-2 parity)", () => {

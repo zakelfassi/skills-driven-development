@@ -75,7 +75,7 @@ export function findBlockExtent(lines: string[], name: string): [number, number]
 
   let endIdx = lines.length;
   for (let i = startIdx + 1; i < lines.length; i++) {
-    const trimmed = lines[i].trimEnd();
+    const trimmed = lines[i].trim();
     if (trimmed.startsWith("[") && !trimmed.startsWith(subPrefix)) {
       endIdx = i;
       break;
