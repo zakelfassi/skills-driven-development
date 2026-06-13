@@ -261,7 +261,9 @@ export interface McpSyncOptions {
  * Exits 1 if any host was blocked (malformed config), 0 otherwise.
  */
 export async function runMcpSync(opts: McpSyncOptions = {}): Promise<number> {
-  ensureGlobalColony();
+  if (!opts.dryRun) {
+    ensureGlobalColony();
+  }
   const home = skddHome();
   const loadResult = loadMcpConfigResult(home);
 
@@ -452,7 +454,6 @@ export async function runMcpSync(opts: McpSyncOptions = {}): Promise<number> {
  * render the plan inside the MCP pane rather than behind the TUI output.
  */
 export async function collectMcpPlanLines(): Promise<string[]> {
-  ensureGlobalColony();
   const home = skddHome();
   const loadResult = loadMcpConfigResult(home);
 
