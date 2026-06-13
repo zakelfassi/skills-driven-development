@@ -1,7 +1,7 @@
 import { existsSync, lstatSync, readFileSync, readlinkSync } from "node:fs";
 import { dirname, isAbsolute, join, relative, resolve } from "node:path";
-import { skddHome } from "../lib/global.js";
-import { detectAllHarnesses } from "../lib/harness.js";
+import { globalSkillsDir, skddHome } from "../lib/global.js";
+import { detectAllHarnesses, HARNESSES, type Harness } from "../lib/harness.js";
 import { logger, pc } from "../lib/logger.js";
 import { loadRegistry, type Registry, registryExists } from "../lib/registry.js";
 import { findSkills, type ParsedSkill, parseSkill } from "../lib/skill.js";
@@ -47,7 +47,11 @@ export async function collectDoctorChecks(
   const parsedSkills = checkSkillsDir(root, canonical, canonicalPath, checks);
   checkValidation(parsedSkills, checks);
   checkRegistry(root, parsedSkills, canonical, checks);
-  checkMirrors(root, canonicalPath, checks);
+  if (opts.global) {
+    checkGlobalMirrors(canonicalPath, checks);
+  } else {
+    checkMirrors(root, canonicalPath, checks);
+  }
   if (!opts.global) {
     checkInstructions(root, checks);
   }
@@ -253,6 +257,77 @@ function checkRegistry(
       status: "warn",
       message: `${missingFromDisk.length} registry entry/entries with no SKILL.md on disk: ${missingFromDisk.join(", ")}`,
       hint: "Restore the files or remove the entries from .skills-registry.md.",
+    });
+  }
+}
+
+/**
+ * Global-mode mirror check: for each harness whose global parent dir exists
+ * (e.g. ~/.factory, ~/.claude), verify that the global skills dir is linked
+ * to the canonical global skills path per .skdd-sync.json.
+ */
+function checkGlobalMirrors(canonicalPath: string, checks: DoctorCheck[]): void {
+  const home = skddHome();
+  const state = loadState(home);
+
+  // Collect harnesses whose global parent dir exists on disk.
+  const existingHarnesses: Harness[] = [];
+  for (const id of Object.keys(HARNESSES) as Harness[]) {
+    const targetDir = globalSkillsDir(id); // e.g. /home/user/.factory/skills
+    const parentDir = dirname(targetDir); // e.g. /home/user/.factory
+    if (existsSync(parentDir)) {
+      existingHarnesses.push(id);
+    }
+  }
+
+  if (existingHarnesses.length === 0) {
+    checks.push({
+      section: "Mirrors",
+      status: "ok",
+      message: "no harness global dirs detected — nothing to mirror",
+    });
+    return;
+  }
+
+  const linkedTargets = new Set(state?.mirrors.map((m) => m.target) ?? []);
+  const unlinked: string[] = [];
+
+  for (const id of existingHarnesses) {
+    const targetDir = globalSkillsDir(id);
+    if (!linkedTargets.has(targetDir)) {
+      unlinked.push(id);
+      continue;
+    }
+    // Verify the recorded mirror is still healthy.
+    const mirror = state!.mirrors.find((m) => m.target === targetDir)!;
+    const result = verifyMirror(targetDir, mirror.mode, canonicalPath);
+    if (!result.ok) {
+      checks.push({
+        section: "Mirrors",
+        status: "error",
+        message: `${targetDir}: ${result.reason}`,
+        hint: "Run 'skdd link -g' (or 'skdd link -g --force') to repair.",
+      });
+    }
+  }
+
+  if (unlinked.length > 0) {
+    checks.push({
+      section: "Mirrors",
+      status: "warn",
+      message: `${unlinked.length} global harness dir(s) exist but are not linked to global skills: ${unlinked.join(", ")}`,
+      hint: "Run 'skdd link -g' to mirror the global skills into each harness dir.",
+    });
+    return;
+  }
+
+  const okCount = existingHarnesses.length - unlinked.length;
+  const hasErrors = checks.some((c) => c.section === "Mirrors" && c.status === "error");
+  if (!hasErrors) {
+    checks.push({
+      section: "Mirrors",
+      status: "ok",
+      message: `${okCount} global harness mirror(s) in sync (${existingHarnesses.join(", ")})`,
     });
   }
 }
