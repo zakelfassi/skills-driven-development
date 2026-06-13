@@ -1,18 +1,17 @@
-import { createHash, randomBytes } from "node:crypto";
+import { createHash } from "node:crypto";
 import {
   cpSync,
   existsSync,
   lstatSync,
   mkdirSync,
-  readdirSync,
   readFileSync,
-  readlinkSync,
   realpathSync,
   rmdirSync,
   rmSync,
 } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
 import matter from "gray-matter";
+import { dirTreeHash } from "../lib/dir-tree-hash.js";
 import { ensureGlobalColony, globalSkillsDir, skddHome } from "../lib/global.js";
 import { HARNESSES, type Harness } from "../lib/harness.js";
 import { logger, pc } from "../lib/logger.js";
@@ -285,60 +284,6 @@ function printHumanReport(report: ImportReport): void {
   if (report.duplicates.length === 0 && report.nameCollisions.length === 0) {
     logger.success("No duplicates or name collisions found.");
   }
-}
-
-/**
- * Compute a stable hash over the entire file tree rooted at `dir`.
- * Files and directories are visited in sorted order so the result is deterministic.
- *
- * Conservative equivalence — the hash captures:
- *   - Regular files (path + content)
- *   - Symlinks (path + link target)
- *   - Directory presence, including empty directories (path marker emitted before recursion)
- *   - Any unsupported/special entry (block device, char device, socket, FIFO, etc.) causes
- *     the result to be randomised so the directory is NEVER considered identical to another;
- *     the bias is always "when in doubt, do not delete".
- *
- * Returns a 16-char hex digest.
- */
-function dirTreeHash(dir: string): string {
-  const hash = createHash("sha256");
-  let hasSpecialEntry = false;
-
-  function walk(d: string, rel: string) {
-    const entries = readdirSync(d, { withFileTypes: true });
-    entries.sort((a, b) => a.name.localeCompare(b.name));
-    for (const entry of entries) {
-      const entryRel = rel ? `${rel}/${entry.name}` : entry.name;
-      const entryAbs = join(d, entry.name);
-      if (entry.isDirectory()) {
-        // Emit a dir marker so that an empty directory is distinguished from its absence.
-        hash.update(`dir:${entryRel}\n`);
-        walk(entryAbs, entryRel);
-      } else if (entry.isSymbolicLink()) {
-        const target = readlinkSync(entryAbs);
-        hash.update(`symlink:${entryRel}\n${target}\n`);
-      } else if (entry.isFile()) {
-        hash.update(`file:${entryRel}\n`);
-        hash.update(readFileSync(entryAbs));
-        hash.update("\n");
-      } else {
-        // Unsupported entry type (block/char device, socket, FIFO, etc.).
-        // Mark as non-comparable; the dir must be preserved for manual review.
-        hasSpecialEntry = true;
-      }
-    }
-  }
-
-  walk(dir, "");
-
-  if (hasSpecialEntry) {
-    // Hash in random bytes to guarantee the digest is unique and can never match
-    // any other directory, including itself on a second call.
-    hash.update(randomBytes(16));
-  }
-
-  return hash.digest("hex").slice(0, 16);
 }
 
 async function applyConsolidation(

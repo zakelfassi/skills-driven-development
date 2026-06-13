@@ -1300,3 +1300,96 @@ describe("buildMirrorRows — driftKind (f-m17)", () => {
     expect(row?.driftKind).toBeUndefined();
   });
 });
+
+// ── f-m17-hub-copy-drift: copy mirror stale-content detection ────────────────
+
+describe("buildMirrorRows — copy mirror stale-content detection (f-m17-hub-copy-drift)", () => {
+  /** Write a minimal .skdd-sync.json recording a copy-mode mirror. */
+  function writeCopyState(root: string, canonical: string, mirrorTarget: string): void {
+    writeFileSync(
+      join(root, ".skdd-sync.json"),
+      JSON.stringify({
+        version: 2,
+        canonical,
+        mirrors: [{ target: mirrorTarget, mode: "copy", createdAt: "2026-01-01T00:00:00.000Z" }],
+      }),
+    );
+  }
+
+  it("copy mirror whose contents match canonical → ok", () => {
+    // Canonical skills dir with one skill file
+    mkdirSync(join(tmp, "skills/my-skill"), { recursive: true });
+    writeFileSync(join(tmp, "skills/my-skill/SKILL.md"), "# My Skill\n", "utf8");
+
+    // Copy dir with identical content
+    mkdirSync(join(tmp, ".claude/skills/my-skill"), { recursive: true });
+    writeFileSync(join(tmp, ".claude/skills/my-skill/SKILL.md"), "# My Skill\n", "utf8");
+
+    writeCopyState(tmp, "skills", ".claude/skills");
+
+    const rows = buildMirrorRows(tmp);
+    const row = rows.find((r) => r.harness === "claude");
+
+    expect(row?.status).toBe("ok");
+    expect(row?.driftKind).toBeUndefined();
+  });
+
+  it("copy mirror stale — canonical has an extra file → drift (safe)", () => {
+    // Canonical skills dir with two skill files
+    mkdirSync(join(tmp, "skills/my-skill"), { recursive: true });
+    writeFileSync(join(tmp, "skills/my-skill/SKILL.md"), "# My Skill\n", "utf8");
+    writeFileSync(join(tmp, "skills/my-skill/extra.md"), "extra content\n", "utf8");
+
+    // Copy dir only has the first file (stale — missing extra.md)
+    mkdirSync(join(tmp, ".claude/skills/my-skill"), { recursive: true });
+    writeFileSync(join(tmp, ".claude/skills/my-skill/SKILL.md"), "# My Skill\n", "utf8");
+
+    writeCopyState(tmp, "skills", ".claude/skills");
+
+    const rows = buildMirrorRows(tmp);
+    const row = rows.find((r) => r.harness === "claude");
+
+    expect(row?.status).toBe("drift");
+    expect(row?.driftKind).toBe("safe");
+  });
+
+  it("copy mirror stale — canonical file has updated content → drift (safe)", () => {
+    mkdirSync(join(tmp, "skills/my-skill"), { recursive: true });
+    writeFileSync(join(tmp, "skills/my-skill/SKILL.md"), "# Updated Skill\n", "utf8");
+
+    mkdirSync(join(tmp, ".claude/skills/my-skill"), { recursive: true });
+    writeFileSync(join(tmp, ".claude/skills/my-skill/SKILL.md"), "# Old Skill\n", "utf8");
+
+    writeCopyState(tmp, "skills", ".claude/skills");
+
+    const rows = buildMirrorRows(tmp);
+    const row = rows.find((r) => r.harness === "claude");
+
+    expect(row?.status).toBe("drift");
+    expect(row?.driftKind).toBe("safe");
+  });
+
+  runUnix("symlink mirror still reports ok when pointing at canonical → unchanged behavior", () => {
+    mkdirSync(join(tmp, "skills"), { recursive: true });
+    mkdirSync(join(tmp, ".claude"), { recursive: true });
+    // Correct symlink → ../skills
+    symlinkSync("../skills", join(tmp, ".claude/skills"), "dir");
+
+    writeFileSync(
+      join(tmp, ".skdd-sync.json"),
+      JSON.stringify({
+        version: 2,
+        canonical: "skills",
+        mirrors: [
+          { target: ".claude/skills", mode: "symlink", createdAt: "2026-01-01T00:00:00.000Z" },
+        ],
+      }),
+    );
+
+    const rows = buildMirrorRows(tmp);
+    const row = rows.find((r) => r.harness === "claude");
+
+    expect(row?.status).toBe("ok");
+    expect(row?.driftKind).toBeUndefined();
+  });
+});

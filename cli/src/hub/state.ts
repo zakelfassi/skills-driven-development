@@ -1,6 +1,7 @@
 import { existsSync, lstatSync, readlinkSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
 import { collectDoctorChecks, type DoctorCheck } from "../commands/doctor.js";
+import { dirTreeHash } from "../lib/dir-tree-hash.js";
 import { skddHome } from "../lib/global.js";
 import { HARNESSES, type Harness } from "../lib/harness.js";
 import { ADAPTERS, type HostReadResult, type HostSyncPlan } from "../lib/mcp/adapters/index.js";
@@ -182,6 +183,14 @@ function checkMirrorStatus(
       const expected = relative(dirname(target), canonicalPath);
       if (linkTarget !== expected) {
         // Wrong-target symlink — runLink() can re-link it non-destructively.
+        return { status: "drift", driftKind: "safe" };
+      }
+    }
+    if (mirror.mode === "copy") {
+      // Verify the copy is still in sync with the canonical skills tree.
+      // After a manual edit under canonical skills/, the COPY can be stale while the
+      // hub would otherwise show ok. Compare trees; if contents diverge, mark drift.
+      if (dirTreeHash(target) !== dirTreeHash(canonicalPath)) {
         return { status: "drift", driftKind: "safe" };
       }
     }
