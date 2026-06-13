@@ -13,13 +13,22 @@
  *        Fix: consult the plan; if the plan emits no add/update for this server, treat
  *        it as "excluded" (in-intended-state), not "drift".
  */
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { platform, tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { buildMcpRows, type McpRowAdapter } from "../src/hub/state.js";
+import {
+  buildMcpRows,
+  buildMirrorRows,
+  loadHubData,
+  type McpRowAdapter,
+} from "../src/hub/state.js";
+import { SKDD_HOME_ENV } from "../src/lib/global.js";
 import type { HostReadResult, HostSyncPlan, ServerChange } from "../src/lib/mcp/adapters/types.js";
 import type { CanonicalMcpConfig } from "../src/lib/mcp/schema.js";
+
+const skipOnWindows = platform() === "win32";
+const runUnix = skipOnWindows ? it.skip : it;
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -712,5 +721,141 @@ describe("buildMcpRows — empty canonical + managed names → pending removals 
 
     expect(pendingCalled).toBe(false);
     expect(configErrorCalled).toBe(true);
+  });
+});
+
+// ── f-m7-hub-mirror-accuracy: symlink target verification ────────────────────
+
+describe("buildMirrorRows — symlink pointing at non-canonical target → 'drift'", () => {
+  /** Write a minimal .skdd-sync.json state recording a symlink mirror. */
+  function writeState(root: string, canonical: string, mirrorTarget: string): void {
+    writeFileSync(
+      join(root, ".skdd-sync.json"),
+      JSON.stringify({
+        version: 2,
+        canonical,
+        mirrors: [{ target: mirrorTarget, mode: "symlink", createdAt: "2026-01-01T00:00:00.000Z" }],
+      }),
+    );
+  }
+
+  runUnix("symlink pointing at a non-canonical target → status is 'drift'", () => {
+    // Set up: canonical skills dir + a decoy dir
+    mkdirSync(join(tmp, "skills"), { recursive: true });
+    mkdirSync(join(tmp, "other-dir"), { recursive: true });
+    mkdirSync(join(tmp, ".claude"), { recursive: true });
+    // Symlink → ../other-dir (wrong — should be ../skills)
+    symlinkSync("../other-dir", join(tmp, ".claude/skills"), "dir");
+    writeState(tmp, "skills", ".claude/skills");
+
+    const rows = buildMirrorRows(tmp);
+    const claudeRow = rows.find((r) => r.harness === "claude");
+
+    expect(claudeRow).toBeDefined();
+    expect(claudeRow!.status).toBe("drift");
+  });
+
+  runUnix("symlink pointing at the canonical target → status is 'ok'", () => {
+    mkdirSync(join(tmp, "skills"), { recursive: true });
+    mkdirSync(join(tmp, ".claude"), { recursive: true });
+    // Symlink → ../skills (correct)
+    symlinkSync("../skills", join(tmp, ".claude/skills"), "dir");
+    writeState(tmp, "skills", ".claude/skills");
+
+    const rows = buildMirrorRows(tmp);
+    const claudeRow = rows.find((r) => r.harness === "claude");
+
+    expect(claudeRow).toBeDefined();
+    expect(claudeRow!.status).toBe("ok");
+  });
+
+  it("regular directory (not a symlink) recorded as symlink → 'drift'", () => {
+    mkdirSync(join(tmp, "skills"), { recursive: true });
+    // Create a real directory instead of a symlink
+    mkdirSync(join(tmp, ".claude/skills"), { recursive: true });
+    writeState(tmp, "skills", ".claude/skills");
+
+    const rows = buildMirrorRows(tmp);
+    const claudeRow = rows.find((r) => r.harness === "claude");
+
+    expect(claudeRow?.status).toBe("drift");
+  });
+
+  it("target missing → 'missing'", () => {
+    mkdirSync(join(tmp, "skills"), { recursive: true });
+    // Don't create .claude/skills
+    writeState(tmp, "skills", ".claude/skills");
+
+    const rows = buildMirrorRows(tmp);
+    const claudeRow = rows.find((r) => r.harness === "claude");
+
+    expect(claudeRow?.status).toBe("missing");
+  });
+
+  it("no recorded mirror → 'unlinked'", () => {
+    const rows = buildMirrorRows(tmp);
+    const claudeRow = rows.find((r) => r.harness === "claude");
+    expect(claudeRow?.status).toBe("unlinked");
+  });
+});
+
+// ── f-m7-hub-mirror-accuracy: malformed registry → error state ───────────────
+
+describe("loadHubData — malformed registry → registryError set, does not throw", () => {
+  let skddTmp: string;
+
+  beforeEach(() => {
+    skddTmp = mkdtempSync(join(tmpdir(), "skdd-hub-reg-global-"));
+  });
+
+  afterEach(() => {
+    delete process.env[SKDD_HOME_ENV];
+    rmSync(skddTmp, { recursive: true, force: true });
+  });
+
+  it("malformed project .skills-registry.json → registryError set, projectSkills empty", async () => {
+    writeFileSync(join(tmp, ".skills-registry.json"), "{ not valid json }", "utf8");
+    process.env[SKDD_HOME_ENV] = skddTmp;
+
+    const data = await loadHubData(tmp);
+
+    expect(data.registryError).toBeDefined();
+    expect(data.registryError).toMatch(/project registry/);
+    expect(data.projectSkills).toHaveLength(0);
+    // global registry was clean (empty skddTmp) → no global error
+    expect(data.registryError).not.toMatch(/global registry/);
+  });
+
+  it("malformed global .skills-registry.json → registryError set, globalSkills empty", async () => {
+    writeFileSync(join(skddTmp, ".skills-registry.json"), "{ not valid json }", "utf8");
+    process.env[SKDD_HOME_ENV] = skddTmp;
+
+    const data = await loadHubData(tmp);
+
+    expect(data.registryError).toBeDefined();
+    expect(data.registryError).toMatch(/global registry/);
+    expect(data.globalSkills).toHaveLength(0);
+  });
+
+  it("both registries malformed → registryError contains both messages", async () => {
+    writeFileSync(join(tmp, ".skills-registry.json"), "{ not valid json }", "utf8");
+    writeFileSync(join(skddTmp, ".skills-registry.json"), "{ not valid json }", "utf8");
+    process.env[SKDD_HOME_ENV] = skddTmp;
+
+    const data = await loadHubData(tmp);
+
+    expect(data.registryError).toBeDefined();
+    expect(data.registryError).toMatch(/project registry/);
+    expect(data.registryError).toMatch(/global registry/);
+    expect(data.projectSkills).toHaveLength(0);
+    expect(data.globalSkills).toHaveLength(0);
+  });
+
+  it("valid registry → no registryError", async () => {
+    process.env[SKDD_HOME_ENV] = skddTmp;
+
+    const data = await loadHubData(tmp);
+
+    expect(data.registryError).toBeUndefined();
   });
 });

@@ -1,5 +1,5 @@
-import { existsSync, lstatSync } from "node:fs";
-import { join } from "node:path";
+import { existsSync, lstatSync, readlinkSync } from "node:fs";
+import { dirname, join, relative, resolve } from "node:path";
 import { collectDoctorChecks, type DoctorCheck } from "../commands/doctor.js";
 import { skddHome } from "../lib/global.js";
 import { HARNESSES, type Harness } from "../lib/harness.js";
@@ -56,6 +56,8 @@ export interface HubData {
   mirrors: MirrorRow[];
   mcpRows: McpRow[];
   mcpConfigError?: string;
+  /** Set when a project or global .skills-registry.json is malformed and could not be loaded. */
+  registryError?: string;
   /** Total managed MCP entries pending removal when the canonical registry is empty. */
   pendingMcpRemovals: number;
   doctorChecks: DoctorCheck[];
@@ -65,8 +67,23 @@ export async function loadHubData(cwd: string): Promise<HubData> {
   const projectRoot = cwd;
   const globalRoot = skddHome();
 
-  const projectSkills = skillsFromRegistry(loadRegistry(projectRoot), "project");
-  const globalSkills = skillsFromRegistry(loadRegistry(globalRoot), "global");
+  const registryErrors: string[] = [];
+  let projectSkills: SkillRow[] = [];
+  let globalSkills: SkillRow[] = [];
+
+  try {
+    projectSkills = skillsFromRegistry(loadRegistry(projectRoot), "project");
+  } catch (err) {
+    registryErrors.push(`project registry: ${err instanceof Error ? err.message : String(err)}`);
+  }
+
+  try {
+    globalSkills = skillsFromRegistry(loadRegistry(globalRoot), "global");
+  } catch (err) {
+    registryErrors.push(`global registry: ${err instanceof Error ? err.message : String(err)}`);
+  }
+
+  const registryError = registryErrors.length > 0 ? registryErrors.join("; ") : undefined;
 
   const mirrors = buildMirrorRows(projectRoot);
   let mcpConfigError: string | undefined;
@@ -89,6 +106,7 @@ export async function loadHubData(cwd: string): Promise<HubData> {
     mirrors,
     mcpRows,
     mcpConfigError,
+    registryError,
     pendingMcpRemovals,
     doctorChecks,
   };
@@ -103,9 +121,11 @@ function skillsFromRegistry(registry: Registry, scope: "project" | "global"): Sk
   }));
 }
 
-function buildMirrorRows(root: string): MirrorRow[] {
+export function buildMirrorRows(root: string): MirrorRow[] {
   const state = loadState(root);
   const rows: MirrorRow[] = [];
+  // Resolve canonical path once — used by symlink verification below.
+  const canonicalPath = state ? resolve(root, state.canonical) : resolve(root, "skills");
 
   const harnessKeys = Object.keys(HARNESSES) as Harness[];
   for (const h of harnessKeys) {
@@ -119,7 +139,7 @@ function buildMirrorRows(root: string): MirrorRow[] {
     } else if (!existsSync(mirrorTarget)) {
       status = "missing";
     } else {
-      status = checkMirrorStatus(mirrorTarget, recorded);
+      status = checkMirrorStatus(mirrorTarget, recorded, canonicalPath);
     }
 
     rows.push({
@@ -132,11 +152,21 @@ function buildMirrorRows(root: string): MirrorRow[] {
   return rows;
 }
 
-function checkMirrorStatus(target: string, mirror: SyncMirror): MirrorRow["status"] {
+function checkMirrorStatus(
+  target: string,
+  mirror: SyncMirror,
+  canonicalPath: string,
+): MirrorRow["status"] {
   try {
     const stat = lstatSync(target);
     if (mirror.mode === "symlink" && !stat.isSymbolicLink()) return "drift";
     if (mirror.mode === "copy" && stat.isSymbolicLink()) return "drift";
+    if (mirror.mode === "symlink") {
+      // Verify the symlink still points at the canonical skills dir (mirrors doctor's logic).
+      const linkTarget = readlinkSync(target);
+      const expected = relative(dirname(target), canonicalPath);
+      if (linkTarget !== expected) return "drift";
+    }
     return "ok";
   } catch {
     return "missing";
