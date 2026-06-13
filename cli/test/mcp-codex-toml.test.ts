@@ -25,6 +25,7 @@ import {
   codexAdapter,
   findBlockExtent,
   findDottedKeyLines,
+  findOrphanedSubtableExtents,
   spliceBlocks,
 } from "../src/lib/mcp/adapters/codex.js";
 import type { CanonicalMcpConfig, McpHostId, McpServer } from "../src/lib/mcp/schema.js";
@@ -2096,6 +2097,323 @@ describe("codexAdapter: dotted-key form (ownership-leak regression)", () => {
     expect(servers?.["managed_block"]).toBeUndefined();
     expect(servers?.["user_owned"]).toBeDefined();
     expect(finalContent).toContain("[settings]");
+    expect(() => parseToml(finalContent)).not.toThrow();
+  });
+});
+
+// ── Fix: nested subtable removal (M18 nested-subtable) ───────────────────────
+
+describe("findOrphanedSubtableExtents", () => {
+  it("returns [] when there are no nested subtables", () => {
+    const lines = ["[mcp_servers.foo]", 'command = "x"'];
+    expect(findOrphanedSubtableExtents(lines, "foo", [])).toEqual([]);
+  });
+
+  it("returns [] when all nested subtables are within the covered range", () => {
+    // [mcp_servers.foo] at 0, sub-table at 2 — both within [0, 4)
+    const lines = [
+      "[mcp_servers.foo]",
+      'command = "x"',
+      "[mcp_servers.foo.tools.search]",
+      "enabled = true",
+    ];
+    expect(findOrphanedSubtableExtents(lines, "foo", [[0, 4]])).toEqual([]);
+  });
+
+  it("finds an orphaned nested subtable separated from parent by another table", () => {
+    // [mcp_servers.foo] block covers [0, 3); [mcp_servers.foo.tools.search] at line 4 is orphaned
+    const lines = [
+      "[mcp_servers.foo]", // 0
+      'command = "x"', // 1
+      "[other]", // 2 — causes findBlockExtent to stop, extent = [0,2)
+      "y = 1", // 3
+      "[mcp_servers.foo.tools.search]", // 4 — orphaned
+      "enabled = true", // 5
+      "[settings]", // 6
+    ];
+    const result = findOrphanedSubtableExtents(lines, "foo", [[0, 2]]);
+    expect(result).toEqual([[4, 6]]);
+  });
+
+  it("finds multiple orphaned subtables", () => {
+    const lines = [
+      "[mcp_servers.foo]", // 0
+      'command = "x"', // 1
+      "[other]", // 2
+      "y = 1", // 3
+      "[mcp_servers.foo.tools.a]", // 4
+      "enabled = true", // 5
+      "[something_else]", // 6
+      "z = 2", // 7
+      "[mcp_servers.foo.tools.b]", // 8
+      "enabled = false", // 9
+    ];
+    const result = findOrphanedSubtableExtents(lines, "foo", [[0, 2]]);
+    expect(result).toEqual([
+      [4, 6],
+      [8, 10],
+    ]);
+  });
+
+  it("does not collect sub-tables of a different server", () => {
+    const lines = ["[other]", "y = 1", "[mcp_servers.bar.tools.search]", "enabled = true"];
+    expect(findOrphanedSubtableExtents(lines, "foo", [])).toEqual([]);
+  });
+
+  it("handles orphaned subtable with quoted server name", () => {
+    const lines = [
+      `[mcp_servers."a.b"]`, // 0
+      'command = "x"', // 1
+      "[other]", // 2
+      "y = 1", // 3
+      `[mcp_servers."a.b".tools.search]`, // 4
+      "enabled = true", // 5
+    ];
+    const result = findOrphanedSubtableExtents(lines, "a.b", [[0, 2]]);
+    expect(result).toEqual([[4, 6]]);
+  });
+});
+
+describe("spliceBlocks: nested subtable (orphaned, separated from parent)", () => {
+  it("removes [mcp_servers.foo] AND orphaned [mcp_servers.foo.tools.search] — parseToml no longer lists foo", () => {
+    const content = [
+      "[settings]",
+      'model = "o3"',
+      "[mcp_servers.foo]",
+      'command = "managed"',
+      "[other]",
+      "y = 1",
+      "[mcp_servers.foo.tools.search]",
+      "enabled = true",
+      "[tail]",
+      "z = 2",
+    ].join("\n");
+
+    const result = spliceBlocks(content, ["foo"], []);
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error(result.reason);
+
+    // parseToml must not list foo
+    const parsed = parseToml(result.content) as Record<string, unknown>;
+    const servers = parsed.mcp_servers as Record<string, unknown> | undefined;
+    expect(servers?.["foo"]).toBeUndefined();
+
+    // Both blocks must be gone
+    expect(result.content).not.toContain("[mcp_servers.foo]");
+    expect(result.content).not.toContain("[mcp_servers.foo.tools.search]");
+
+    // Unrelated sections preserved
+    expect(result.content).toContain("[settings]");
+    expect(result.content).toContain("[other]");
+    expect(result.content).toContain("[tail]");
+    expect(() => parseToml(result.content)).not.toThrow();
+  });
+
+  it("removes dotted-key-only server AND orphaned nested subtable", () => {
+    const content = [
+      'mcp_servers.foo.command = "managed"',
+      'mcp_servers.foo.args = ["--a"]',
+      "[other]",
+      "y = 1",
+      "[mcp_servers.foo.tools.search]",
+      "enabled = true",
+      "[settings]",
+      'model = "o3"',
+    ].join("\n");
+
+    const result = spliceBlocks(content, ["foo"], []);
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error(result.reason);
+
+    const parsed = parseToml(result.content) as Record<string, unknown>;
+    const servers = parsed.mcp_servers as Record<string, unknown> | undefined;
+    expect(servers?.["foo"]).toBeUndefined();
+
+    expect(result.content).not.toContain("[mcp_servers.foo.tools.search]");
+    expect(result.content).toContain("[other]");
+    expect(result.content).toContain("[settings]");
+    expect(() => parseToml(result.content)).not.toThrow();
+  });
+
+  it("preserves unmanaged servers and their subtables when removing a different server", () => {
+    const content = [
+      "[mcp_servers.foo]",
+      'command = "managed"',
+      "[other]",
+      "y = 1",
+      "[mcp_servers.foo.tools.search]",
+      "enabled = true",
+      "[mcp_servers.user_owned]",
+      'command = "user"',
+      "[mcp_servers.user_owned.tools.inspect]",
+      "enabled = true",
+    ].join("\n");
+
+    const result = spliceBlocks(content, ["foo"], []);
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error(result.reason);
+
+    // foo and its subtable gone
+    const parsed = parseToml(result.content) as Record<string, unknown>;
+    const servers = parsed.mcp_servers as Record<string, unknown> | undefined;
+    expect(servers?.["foo"]).toBeUndefined();
+
+    // user_owned and its subtable preserved
+    expect(servers?.["user_owned"]).toBeDefined();
+    expect(result.content).toContain("[mcp_servers.user_owned]");
+    expect(result.content).toContain("[mcp_servers.user_owned.tools.inspect]");
+    expect(() => parseToml(result.content)).not.toThrow();
+  });
+
+  it("re-parse gate holds after removing server with orphaned subtable", () => {
+    const content = [
+      "[mcp_servers.foo]",
+      'command = "x"',
+      "[between]",
+      "a = 1",
+      "[mcp_servers.foo.opts]",
+      "debug = true",
+    ].join("\n");
+
+    const result = spliceBlocks(content, ["foo"], []);
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error(result.reason);
+    expect(() => parseToml(result.content)).not.toThrow();
+  });
+
+  it("returns ok:false BLOCKED when server still appears after removal attempt", () => {
+    // mcp_servers is an inline table with a nested subtable that can't be spliced individually.
+    // The inline table leaves foo visible; the orphaned subtable can be spliced but the
+    // inline table portion of foo remains — ownership check fires.
+    const content = [
+      'mcp_servers = { foo = { command = "x" } }',
+      "[mcp_servers.foo.tools.search]",
+      "enabled = true",
+    ].join("\n");
+
+    const result = spliceBlocks(content, ["foo"], []);
+    expect(result.ok).toBe(false);
+    if (result.ok) throw new Error("expected blocked");
+    expect(result.reason).toMatch(/cannot safely remove|still present/);
+    expect(result.reason).toContain('"foo"');
+  });
+});
+
+describe("codexAdapter: nested subtable removal (M18)", () => {
+  function makeCodexDir(): string {
+    const dir = join(fakeTmp, ".codex");
+    mkdirSync(dir, { recursive: true });
+    return dir;
+  }
+
+  it("plan: removes [mcp_servers.foo] AND separated [mcp_servers.foo.tools.search] — parseToml no longer lists foo", () => {
+    const dir = makeCodexDir();
+    const content = [
+      "# Codex config",
+      "[mcp_servers.foo]",
+      'command = "managed"',
+      "[other]",
+      "y = 1",
+      "[mcp_servers.foo.tools.search]",
+      "enabled = true",
+      "[settings]",
+      'model = "o3"',
+    ].join("\n");
+    writeFileSync(join(dir, "config.toml"), content, "utf8");
+
+    const plan = codexAdapter.plan(makeCanonical(), ["foo"]);
+    expect(plan.ok).toBe(true);
+    if (!plan.ok) throw new Error(plan.reason);
+    expect(plan.changes).toEqual([{ op: "remove", name: "foo" }]);
+
+    const finalContent = plan.finalDoc._tomlContent as string;
+    const parsed = parseToml(finalContent) as Record<string, unknown>;
+    const servers = parsed.mcp_servers as Record<string, unknown> | undefined;
+    expect(servers?.["foo"]).toBeUndefined();
+
+    expect(finalContent).not.toContain("[mcp_servers.foo]");
+    expect(finalContent).not.toContain("[mcp_servers.foo.tools.search]");
+    expect(finalContent).toContain("[other]");
+    expect(finalContent).toContain("[settings]");
+    expect(() => parseToml(finalContent)).not.toThrow();
+  });
+
+  it("plan: dotted-key server with separated nested subtable — both removed, parseToml no longer lists foo", () => {
+    const dir = makeCodexDir();
+    const content = [
+      "# config",
+      'mcp_servers.foo.command = "managed"',
+      "[other]",
+      "y = 1",
+      "[mcp_servers.foo.tools.search]",
+      "enabled = true",
+      "[settings]",
+      'model = "o3"',
+    ].join("\n");
+    writeFileSync(join(dir, "config.toml"), content, "utf8");
+
+    const plan = codexAdapter.plan(makeCanonical(), ["foo"]);
+    expect(plan.ok).toBe(true);
+    if (!plan.ok) throw new Error(plan.reason);
+    expect(plan.changes).toEqual([{ op: "remove", name: "foo" }]);
+
+    const finalContent = plan.finalDoc._tomlContent as string;
+    const parsed = parseToml(finalContent) as Record<string, unknown>;
+    const servers = parsed.mcp_servers as Record<string, unknown> | undefined;
+    expect(servers?.["foo"]).toBeUndefined();
+
+    expect(finalContent).not.toContain("[mcp_servers.foo.tools.search]");
+    expect(finalContent).toContain("[other]");
+    expect(finalContent).toContain("[settings]");
+    expect(() => parseToml(finalContent)).not.toThrow();
+  });
+
+  it("plan: unmanaged servers and their subtables are preserved", () => {
+    const dir = makeCodexDir();
+    const content = [
+      "[mcp_servers.managed]",
+      'command = "managed"',
+      "[other]",
+      "y = 1",
+      "[mcp_servers.managed.tools.search]",
+      "enabled = true",
+      "[mcp_servers.user_owned]",
+      'command = "user"',
+      "[mcp_servers.user_owned.tools.inspect]",
+      "enabled = true",
+    ].join("\n");
+    writeFileSync(join(dir, "config.toml"), content, "utf8");
+
+    const plan = codexAdapter.plan(makeCanonical(), ["managed"]);
+    expect(plan.ok).toBe(true);
+    if (!plan.ok) throw new Error(plan.reason);
+
+    const finalContent = plan.finalDoc._tomlContent as string;
+    const parsed = parseToml(finalContent) as Record<string, unknown>;
+    const servers = parsed.mcp_servers as Record<string, unknown> | undefined;
+    expect(servers?.["managed"]).toBeUndefined();
+    expect(servers?.["user_owned"]).toBeDefined();
+    expect(finalContent).toContain("[mcp_servers.user_owned]");
+    expect(finalContent).toContain("[mcp_servers.user_owned.tools.inspect]");
+    expect(() => parseToml(finalContent)).not.toThrow();
+  });
+
+  it("plan: re-parse gate holds after removal of server with orphaned subtable", () => {
+    const dir = makeCodexDir();
+    const content = [
+      "[mcp_servers.foo]",
+      'command = "x"',
+      "[between]",
+      "a = 1",
+      "[mcp_servers.foo.opts]",
+      "debug = true",
+    ].join("\n");
+    writeFileSync(join(dir, "config.toml"), content, "utf8");
+
+    const plan = codexAdapter.plan(makeCanonical(), ["foo"]);
+    expect(plan.ok).toBe(true);
+    if (!plan.ok) throw new Error(plan.reason);
+    const finalContent = plan.finalDoc._tomlContent as string;
     expect(() => parseToml(finalContent)).not.toThrow();
   });
 });

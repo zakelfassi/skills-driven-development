@@ -323,6 +323,84 @@ export function findDottedKeyLines(lines: string[], name: string): number[] {
 }
 
 /**
+ * Find extents for nested subtable blocks `[mcp_servers.<name>.*]` that fall
+ * OUTSIDE any of the already-covered line ranges.
+ *
+ * These arise when the parent server block and one of its sub-tables are
+ * separated by an unrelated TOML section, e.g.:
+ *
+ *   [mcp_servers.foo]              ← covered by findBlockExtent → [0, 3)
+ *   command = "x"
+ *   [other]                        ← causes findBlockExtent to stop
+ *   y = 1
+ *   [mcp_servers.foo.tools.search] ← orphaned — returned here
+ *   enabled = true
+ *
+ * Exported for unit testing.
+ */
+export function findOrphanedSubtableExtents(
+  lines: string[],
+  name: string,
+  coveredRanges: ReadonlyArray<[number, number]>,
+): Array<[number, number]> {
+  const rootSegments = ["mcp_servers", name];
+  const results: Array<[number, number]> = [];
+
+  function isCovered(idx: number): boolean {
+    return coveredRanges.some(([s, e]) => idx >= s && idx < e);
+  }
+
+  let i = 0;
+  while (i < lines.length) {
+    if (isCovered(i)) {
+      i++;
+      continue;
+    }
+
+    const stripped = stripInlineComment(lines[i]).trim();
+
+    if (stripped.startsWith("[") && !stripped.startsWith("[[") && stripped.endsWith("]")) {
+      const inner = stripped.slice(1, -1);
+      const segs = parseTomlKeySegments(inner);
+
+      if (
+        segs !== null &&
+        segs.length > rootSegments.length &&
+        rootSegments.every((s, j) => s === segs[j])
+      ) {
+        // Found an orphaned nested subtable of `name`
+        const startIdx = i;
+        let endIdx = lines.length;
+        for (let j = i + 1; j < lines.length; j++) {
+          const t = stripInlineComment(lines[j]).trim();
+          if (t.startsWith("[")) {
+            if (!t.startsWith("[[") && t.endsWith("]")) {
+              const inner2 = t.slice(1, -1);
+              const segs2 = parseTomlKeySegments(inner2);
+              if (
+                segs2 !== null &&
+                segs2.length > segs.length &&
+                segs.every((s, k) => s === segs2[k])
+              ) {
+                continue; // sub-sub-table stays in this block
+              }
+            }
+            endIdx = j;
+            break;
+          }
+        }
+        results.push([startIdx, endIdx]);
+        i = endIdx;
+        continue;
+      }
+    }
+    i++;
+  }
+
+  return results;
+}
+
+/**
  * Serialize a single canonical server entry to a TOML block string.
  * `disabled:true` maps to `enabled = false`.
  */
@@ -415,9 +493,45 @@ export function spliceBlocks(
     }
   }
 
-  // Remove blocks descending by start index so earlier removals don't shift later indices.
-  extents.sort((a, b) => b[0] - a[0]);
-  for (const [start, end] of extents) {
+  // Second pass: find any orphaned nested subtable blocks for each name.
+  // These are [mcp_servers.<name>.*] headers that appear OUTSIDE the extents
+  // already collected above (e.g., when the parent block and a sub-table are
+  // separated by an unrelated TOML section).
+  const coveredSoFar: Array<[number, number]> = [...extents];
+  for (const name of allNames) {
+    const orphaned = findOrphanedSubtableExtents(lines, name, coveredSoFar);
+    for (const ext of orphaned) {
+      if (!seenStarts.has(ext[0])) {
+        seenStarts.add(ext[0]);
+        extents.push(ext);
+        coveredSoFar.push(ext);
+      }
+    }
+  }
+
+  // Merge overlapping or nested extents. This can arise when findDottedKeyLines
+  // adds single-line extents for fields inside a [mcp_servers.foo.*] subtable
+  // that findOrphanedSubtableExtents also covers as a block. Without merging,
+  // the overlapping extents produce incorrect splice results.
+  extents.sort((a, b) => a[0] - b[0]); // ascending for merge
+  const mergedExtents: Array<[number, number]> = [];
+  for (const ext of extents) {
+    if (mergedExtents.length === 0) {
+      mergedExtents.push([ext[0], ext[1]]);
+    } else {
+      const last = mergedExtents[mergedExtents.length - 1];
+      if (ext[0] < last[1]) {
+        // Overlapping: expand the last extent to cover both
+        if (ext[1] > last[1]) last[1] = ext[1];
+      } else {
+        mergedExtents.push([ext[0], ext[1]]);
+      }
+    }
+  }
+
+  // Remove merged blocks descending by start index so earlier removals don't shift later indices.
+  mergedExtents.sort((a, b) => b[0] - a[0]);
+  for (const [start, end] of mergedExtents) {
     lines.splice(start, end - start);
   }
 
@@ -437,10 +551,29 @@ export function spliceBlocks(
   }
 
   // Re-parse gate: if the splice produced invalid TOML, abort.
+  let reparsedDoc: unknown;
   try {
-    parseToml(content);
+    reparsedDoc = parseToml(content);
   } catch (e) {
     return { ok: false, reason: `Post-splice re-parse failed: ${String(e)}` };
+  }
+
+  // Ownership verification: confirm that every server in toRemove is truly
+  // gone from the re-parsed config. If any still appears (e.g., due to an
+  // inline-table form we couldn't splice line-by-line), return BLOCKED rather
+  // than silently retaining stale ownership.
+  if (toRemove.length > 0 && typeof reparsedDoc === "object" && reparsedDoc !== null) {
+    const servers = (reparsedDoc as Record<string, unknown>).mcp_servers;
+    if (typeof servers === "object" && servers !== null) {
+      for (const name of toRemove) {
+        if (name in (servers as Record<string, unknown>)) {
+          return {
+            ok: false,
+            reason: `skdd: managed server "${name}" still present in config after removal attempt; manual cleanup needed`,
+          };
+        }
+      }
+    }
   }
 
   return { ok: true, content };
