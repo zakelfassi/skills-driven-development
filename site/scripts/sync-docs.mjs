@@ -70,8 +70,9 @@ function stripLeadingH1(body) {
 // Returns null when the link should be left verbatim (absolute URLs, etc.).
 export function rewriteMdLinkTarget(path, hash = "") {
   // Skip absolute URLs (https://, http://, mailto:, ftp://, etc.),
-  // protocol-relative URLs (//), and anything that isn't a repo-relative path.
-  if (/^[a-z][a-z\d+\-.]*:|^\/\//i.test(path)) return null;
+  // protocol-relative URLs (//), root-absolute paths (/foo.md),
+  // and anything that isn't a repo-relative path.
+  if (/^[a-z][a-z\d+\-.]*:|^\/\//i.test(path) || path.startsWith("/")) return null;
   return `${path}/${hash}`;
 }
 

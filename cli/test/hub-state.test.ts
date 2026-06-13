@@ -845,6 +845,78 @@ describe("buildMcpRows — narrowed allowlist pending removal (f-m8)", () => {
     expect(rows[0].hosts["claude-code"]).toBe("excluded");
   });
 
+  it("M17: malformed allowlist-excluded host with no managed entry → excluded, read() NOT called", () => {
+    // A host excluded by allowlist whose config is malformed should NOT be read when
+    // there is no managed entry for that server. Parsing a malformed but irrelevant
+    // host config is unnecessary and was causing false drift before the fix.
+    const config: CanonicalMcpConfig = {
+      version: 1,
+      servers: {
+        "narrowed-srv": {
+          command: "cmd",
+          hosts: ["droid" as import("../src/lib/mcp/schema.js").McpHostId],
+        },
+      },
+    };
+    writeConfig(tmp, config);
+
+    let readCalled = false;
+    const malformedExcludedAdapter: McpRowAdapter = {
+      omitsDisabled: true,
+      available: () => true,
+      read: (): HostReadResult => {
+        readCalled = true;
+        return { ok: false, reason: "malformed host config" };
+      },
+      plan: (_c, _m) => okPlan(),
+    };
+
+    const rows = buildMcpRows(tmp, {
+      adapters: { "claude-code": malformedExcludedAdapter },
+      loadManaged: () => [], // no managed entry on claude-code
+    });
+
+    expect(rows[0].hosts["claude-code"]).toBe("excluded");
+    expect(readCalled).toBe(false); // read() must NOT be called
+  });
+
+  it("M17: allowlist-excluded host WITH pending managed removal + malformed config → drift (M12-A5 holds)", () => {
+    // Even though the host is excluded by allowlist, when there IS a managed entry
+    // (pending removal), the hub must still read the host config to surface the drift.
+    // M12-A5: a malformed config with pending managed cleanup → show drift so users
+    // know a sync is needed to clean up the stale entry.
+    const config: CanonicalMcpConfig = {
+      version: 1,
+      servers: {
+        "narrowed-srv": {
+          command: "cmd",
+          hosts: ["droid" as import("../src/lib/mcp/schema.js").McpHostId],
+        },
+      },
+    };
+    writeConfig(tmp, config);
+
+    let readCalled = false;
+    const malformedExcludedAdapter: McpRowAdapter = {
+      omitsDisabled: true,
+      available: () => true,
+      read: (): HostReadResult => {
+        readCalled = true;
+        return { ok: false, reason: "malformed host config" };
+      },
+      plan: (_c, _m) => okPlan(),
+    };
+
+    const rows = buildMcpRows(tmp, {
+      adapters: { "claude-code": malformedExcludedAdapter },
+      loadManaged: (hostId) => (hostId === "claude-code" ? ["narrowed-srv"] : []),
+    });
+
+    // Pending removal + malformed config → drift
+    expect(rows[0].hosts["claude-code"]).toBe("drift");
+    expect(readCalled).toBe(true); // read() WAS called — managed cleanup pending
+  });
+
   it("narrowing on one host does not affect other hosts in the allowlist", () => {
     // Server targets droid only. droid itself should be synced; claude-code is excluded+managed+present → drift.
     const config: CanonicalMcpConfig = {

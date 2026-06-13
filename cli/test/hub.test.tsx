@@ -957,4 +957,40 @@ describe("Hub keypress — safe vs unsafe mirror drift", () => {
     expect(frame).toContain("drift");
     unmount();
   });
+
+  it("e2e: Enter on stale COPY mirror (driftKind:safe from f-m17-hub-copy-drift) triggers refresh via runLink", async () => {
+    // End-to-end coverage for the copy-drift → repair path:
+    // f-m17-hub-copy-drift marks stale copy mirrors as { status:"drift", driftKind:"safe" }.
+    // f-m17-hub-repair-drift wires Enter on safe drift to call link (runLink).
+    // This test confirms the full path: stale copy mirror row → Enter → runLink → Repaired.
+    const mockLink = vi.fn().mockResolvedValue(0);
+    const data = makeData([
+      {
+        harness: "claude",
+        label: "Claude Code",
+        target: ".claude/skills",
+        status: "drift",
+        driftKind: "safe",
+        // Represents a recorded COPY mirror whose tree hash diverged from canonical
+        // (i.e. what buildMirrorRows returns after f-m17-hub-copy-drift detects staleness).
+      } as MirrorRow,
+    ]);
+    const mockReloader = vi.fn().mockResolvedValue(data);
+
+    const { stdin, lastFrame, unmount } = render(
+      <Hub data={data} cwd="/tmp/test" actions={{ link: mockLink }} reloader={mockReloader} />,
+    );
+
+    // Switch to mirrors pane
+    stdin.write("2");
+    await new Promise((r) => setTimeout(r, 30));
+    // Press Enter — safe drift triggers runLink (refresh the stale copy)
+    stdin.write("\r");
+    await new Promise((r) => setTimeout(r, 100));
+
+    expect(mockLink).toHaveBeenCalledWith({ harness: "claude", cwd: "/tmp/test" });
+    const frame = lastFrame();
+    expect(frame).toContain("Repaired");
+    unmount();
+  });
 });

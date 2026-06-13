@@ -324,11 +324,15 @@ export function buildMcpRows(globalRoot: string, opts?: BuildMcpRowsOpts): McpRo
         // Show it as "drift" (pending-removal) so users know action is needed, rather
         // than hiding it as "excluded" and silently letting the stale entry linger.
         // A truly excluded server that is NOT present (already cleaned up) stays "excluded".
+        //
+        // M17 fix: check managed state BEFORE calling adapter.read() so a malformed
+        // but irrelevant excluded host config is never parsed. Only read the host
+        // config when there is a pending managed removal to surface.
         const excludedAdapter = adapters[hostId];
         if (excludedAdapter && excludedAdapter.available()) {
-          const excludedRead = excludedAdapter.read();
           const excludedManaged = loadManaged(hostId);
           if (excludedManaged.includes(name)) {
+            const excludedRead = excludedAdapter.read();
             if (!excludedRead.ok || excludedRead.serverNames.includes(name)) {
               // Malformed config with pending managed cleanup, OR server still
               // present → sync will block on the config or plan a removal →
@@ -339,6 +343,7 @@ export function buildMcpRows(globalRoot: string, opts?: BuildMcpRowsOpts): McpRo
             // Managed but already absent from a readable config → cleaned up →
             // fall through to "excluded".
           }
+          // Not managed → no cleanup pending → no need to read host config.
         }
         hosts[hostId] = "excluded";
         continue;

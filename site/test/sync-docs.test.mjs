@@ -41,6 +41,22 @@ describe("rewriteMdLinkTarget", () => {
   it("returns null for ftp:// URLs", () => {
     assert.equal(rewriteMdLinkTarget("ftp://example.com/file"), null);
   });
+
+  it("returns null for root-absolute paths (/foo.md)", () => {
+    assert.equal(rewriteMdLinkTarget("/foo"), null);
+  });
+
+  it("returns null for root-absolute nested paths (/docs/bar.md)", () => {
+    assert.equal(rewriteMdLinkTarget("/docs/bar"), null);
+  });
+
+  it("still rewrites a relative path without leading dot (foo.md)", () => {
+    assert.equal(rewriteMdLinkTarget("foo"), "foo/");
+  });
+
+  it("still rewrites a relative path with leading dot (./foo.md)", () => {
+    assert.equal(rewriteMdLinkTarget("./foo"), "./foo/");
+  });
 });
 
 describe("rewriteRelativeLinks", () => {
@@ -86,5 +102,20 @@ describe("rewriteRelativeLinks", () => {
   it("does not rewrite non-.md links", () => {
     const body = "See [image](./foo.png) and [site](https://example.com).";
     assert.equal(rewriteRelativeLinks(body), body);
+  });
+
+  it("leaves a root-absolute .md link verbatim", () => {
+    const body = "See [page](/foo.md) here.";
+    assert.equal(rewriteRelativeLinks(body), body);
+  });
+
+  it("leaves a root-absolute nested .md link verbatim", () => {
+    const body = "Read [docs](/docs/bar.md) for details.";
+    assert.equal(rewriteRelativeLinks(body), body);
+  });
+
+  it("rewrites relative links but leaves root-absolute links untouched in same body", () => {
+    const body = "Local: [a](./a.md). Root: [b](/b.md).";
+    assert.equal(rewriteRelativeLinks(body), "Local: [a](./a/). Root: [b](/b.md).");
   });
 });
