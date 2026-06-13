@@ -1237,6 +1237,162 @@ describe("runMcpSync — purge managed state even when host entry is already abs
   });
 });
 
+// ── Fix: purge stale MCP ownership when unresolved entry is already absent ────
+//
+// Scenario: managed server + unset ${VAR} + isIntendedForHost=true
+//   • host entry PRESENT  → preserved + still managed  (M5 guarantee holds)
+//   • host entry ABSENT   → ownership PURGED           (stale-ownership fix)
+
+describe("runMcpSync — stale ownership purged when unresolved entry is already absent", () => {
+  it("managed server with unset ${VAR}, host entry PRESENT → preserved and still managed (M5 regression)", async () => {
+    placeAll();
+
+    // First sync: add srv to all hosts (no env vars)
+    writeCanonical({ "stale-owned-present": { command: "my-mcp" } });
+    await runMcpSync();
+    expect(
+      (readHostJson(".claude.json").mcpServers as Record<string, unknown>)["stale-owned-present"],
+    ).toBeDefined();
+    expect(loadMcpManagedNames(skddTmp, "claude-code")).toContain("stale-owned-present");
+
+    // Update canonical: add unset env var (still intended for all hosts)
+    writeCanonical({
+      "stale-owned-present": {
+        command: "my-mcp",
+        env: { TOKEN: "${DEFINITELY_UNSET_STALE_OWNED_PRESENT}" },
+      },
+    });
+
+    const prev = process.env.DEFINITELY_UNSET_STALE_OWNED_PRESENT;
+    delete process.env.DEFINITELY_UNSET_STALE_OWNED_PRESENT;
+    let code: number;
+    try {
+      code = await runMcpSync();
+    } finally {
+      if (prev !== undefined) process.env.DEFINITELY_UNSET_STALE_OWNED_PRESENT = prev;
+    }
+
+    expect(code).toBe(0);
+
+    // Host entry must still exist (M5: transient unset var must not remove intended server)
+    expect(
+      (readHostJson(".claude.json").mcpServers as Record<string, unknown>)["stale-owned-present"],
+    ).toBeDefined();
+
+    // Must still be managed
+    expect(loadMcpManagedNames(skddTmp, "claude-code")).toContain("stale-owned-present");
+  });
+
+  it("managed server with unset ${VAR}, host entry ABSENT → managed state PURGED (stale-ownership fix)", async () => {
+    placeAll();
+
+    // First sync: add srv to all hosts
+    writeCanonical({ "stale-owned-absent": { command: "my-mcp" } });
+    await runMcpSync();
+    expect(
+      (readHostJson(".claude.json").mcpServers as Record<string, unknown>)["stale-owned-absent"],
+    ).toBeDefined();
+    expect(loadMcpManagedNames(skddTmp, "claude-code")).toContain("stale-owned-absent");
+
+    // Externally delete the host entry (simulate external tool or manual removal)
+    const cc = JSON.parse(readFileSync(join(homeTmp, ".claude.json"), "utf8")) as Record<
+      string,
+      unknown
+    >;
+    delete (cc.mcpServers as Record<string, unknown>)["stale-owned-absent"];
+    writeFileSync(join(homeTmp, ".claude.json"), JSON.stringify(cc, null, 2), "utf8");
+
+    // Update canonical: add unset env var, still intended for this host (not disabled, no hosts filter)
+    writeCanonical({
+      "stale-owned-absent": {
+        command: "my-mcp",
+        env: { TOKEN: "${DEFINITELY_UNSET_STALE_OWNED_ABSENT}" },
+      },
+    });
+
+    const prev = process.env.DEFINITELY_UNSET_STALE_OWNED_ABSENT;
+    delete process.env.DEFINITELY_UNSET_STALE_OWNED_ABSENT;
+    let code: number;
+    try {
+      code = await runMcpSync();
+    } finally {
+      if (prev !== undefined) process.env.DEFINITELY_UNSET_STALE_OWNED_ABSENT = prev;
+    }
+
+    expect(code).toBe(0);
+
+    // Managed state must be PURGED: entry was absent so stale ownership must not linger
+    expect(loadMcpManagedNames(skddTmp, "claude-code")).not.toContain("stale-owned-absent");
+  });
+
+  it("user-authored same-name entry is NOT overwritten after stale ownership is purged", async () => {
+    placeAll();
+
+    // First sync: add srv to all hosts
+    writeCanonical({ "stale-owned-user": { command: "my-mcp" } });
+    await runMcpSync();
+
+    // Externally delete the host entry
+    const cc = JSON.parse(readFileSync(join(homeTmp, ".claude.json"), "utf8")) as Record<
+      string,
+      unknown
+    >;
+    delete (cc.mcpServers as Record<string, unknown>)["stale-owned-user"];
+    writeFileSync(join(homeTmp, ".claude.json"), JSON.stringify(cc, null, 2), "utf8");
+
+    // Update canonical: add unset env var, still intended for this host
+    writeCanonical({
+      "stale-owned-user": {
+        command: "my-mcp",
+        env: { TOKEN: "${DEFINITELY_UNSET_STALE_OWNED_USER}" },
+      },
+    });
+
+    const prev = process.env.DEFINITELY_UNSET_STALE_OWNED_USER;
+    delete process.env.DEFINITELY_UNSET_STALE_OWNED_USER;
+    try {
+      await runMcpSync();
+    } finally {
+      if (prev !== undefined) process.env.DEFINITELY_UNSET_STALE_OWNED_USER = prev;
+    }
+
+    // Ownership purged
+    expect(loadMcpManagedNames(skddTmp, "claude-code")).not.toContain("stale-owned-user");
+
+    // User authors their own entry with the same name
+    const ccAfter = JSON.parse(readFileSync(join(homeTmp, ".claude.json"), "utf8")) as Record<
+      string,
+      unknown
+    >;
+    (ccAfter.mcpServers as Record<string, unknown>)["stale-owned-user"] = {
+      command: "user-cmd",
+      args: ["--user-flag"],
+    };
+    writeFileSync(join(homeTmp, ".claude.json"), JSON.stringify(ccAfter, null, 2), "utf8");
+
+    // Now set the env var and sync again (canonical still has same server with resolved var)
+    process.env.DEFINITELY_UNSET_STALE_OWNED_USER = "real-token";
+    let code2: number;
+    try {
+      code2 = await runMcpSync();
+    } finally {
+      delete process.env.DEFINITELY_UNSET_STALE_OWNED_USER;
+    }
+    expect(code2).toBe(0);
+
+    // User's entry must NOT be overwritten (skdd does not own this name after purge)
+    const ccFinal = JSON.parse(readFileSync(join(homeTmp, ".claude.json"), "utf8")) as Record<
+      string,
+      unknown
+    >;
+    const userSrv = (ccFinal.mcpServers as Record<string, unknown>)["stale-owned-user"] as Record<
+      string,
+      unknown
+    >;
+    expect(userSrv?.command).toBe("user-cmd");
+  });
+});
+
 // ── Smoke: runMcpSync with malformed mcp section in .skdd-sync.json ──────────
 
 describe("runMcpSync — malformed mcp sync-state (defense-in-depth)", () => {

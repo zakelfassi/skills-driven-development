@@ -315,6 +315,16 @@ export async function runMcpSync(opts: McpSyncOptions = {}): Promise<number> {
     // Track managed servers whose expansion failed so we can preserve their
     // host entries instead of letting the adapter plan a removal for them.
     const expansionFailedManaged = new Set<string>();
+    // Lazily read the current host server names to check entry presence when
+    // deciding whether to preserve stale ownership for unresolved-var servers.
+    let hostServerNamesCache: string[] | null = null;
+    const getHostServerNames = (): string[] => {
+      if (hostServerNamesCache === null) {
+        const readResult = adapter.read();
+        hostServerNamesCache = readResult.ok ? readResult.serverNames : [];
+      }
+      return hostServerNamesCache;
+    };
     for (const [name, server] of Object.entries(effectiveConfig.servers)) {
       if (isDroid) {
         // Droid natively supports ${VAR} — write placeholders through as-is.
@@ -331,12 +341,22 @@ export async function runMcpSync(opts: McpSyncOptions = {}): Promise<number> {
             // (droid/opencode/codex: omitsDisabled=false) — preserve the existing
             // entry.  A transient unset env var must never trigger destructive removal.
             if (isIntendedForHost(server, hostId, adapter)) {
-              // Still intended (or disabled-on-native-persist-host): keep the existing
-              // entry.  Do NOT let a transient unset env var trigger destructive removal.
-              logger.warn(
-                `[${hostId}] Skipping update for "${name}": unresolved env vars: ${unresolved.join(", ")} (existing entry preserved)`,
-              );
-              expansionFailedManaged.add(name);
+              // Still intended (or disabled-on-native-persist-host): preserve ONLY
+              // when the host entry is actually PRESENT. If the entry is already
+              // absent, purge ownership so a later user-authored same-name entry is
+              // not clobbered once the var is set (stale-ownership fix).
+              if (getHostServerNames().includes(name)) {
+                logger.warn(
+                  `[${hostId}] Skipping update for "${name}": unresolved env vars: ${unresolved.join(", ")} (existing entry preserved)`,
+                );
+                expansionFailedManaged.add(name);
+              } else {
+                // Host entry already absent: don't preserve stale ownership.
+                // Let reconciliation drop it from managed state.
+                logger.warn(
+                  `[${hostId}] Skipping "${name}": unresolved env vars: ${unresolved.join(", ")} (entry absent, ownership will be purged)`,
+                );
+              }
             } else {
               // Host-excluded or disabled-on-omitting-host: removal/omission is intended.
               // Removal does not need resolved env values — let the adapter plan it.
@@ -507,6 +527,15 @@ export async function collectMcpPlanLines(): Promise<string[]> {
     // Mirror the same expansionFailedManaged logic as runMcpSync so the hub
     // dry-run preview matches actual sync behavior exactly.
     const expansionFailedManaged = new Set<string>();
+    // Lazily read the current host server names (mirrors runMcpSync stale-ownership fix).
+    let hostServerNamesCache: string[] | null = null;
+    const getHostServerNames = (): string[] => {
+      if (hostServerNamesCache === null) {
+        const readResult = adapter.read();
+        hostServerNamesCache = readResult.ok ? readResult.serverNames : [];
+      }
+      return hostServerNamesCache;
+    };
     for (const [name, server] of Object.entries(effectiveConfig.servers)) {
       if (isDroid) {
         resolvedServers[name] = server;
@@ -514,9 +543,15 @@ export async function collectMcpPlanLines(): Promise<string[]> {
         const { resolved, unresolved } = expandServerVars(server);
         if (unresolved.length > 0) {
           if (managed.includes(name) && isIntendedForHost(server, hostId, adapter)) {
-            // Still intended (or disabled-on-native-persist-host): keep the existing
-            // entry. Do NOT let a transient unset env var trigger a removal line.
-            expansionFailedManaged.add(name);
+            // Still intended (or disabled-on-native-persist-host): preserve ONLY
+            // when the host entry is actually PRESENT (mirrors runMcpSync fix).
+            if (getHostServerNames().includes(name)) {
+              expansionFailedManaged.add(name);
+            } else {
+              lines.push(
+                `[${hostId}] skip "${name}": unresolved ${unresolved.join(", ")} (entry absent, ownership will be purged)`,
+              );
+            }
           } else {
             lines.push(`[${hostId}] skip "${name}": unresolved ${unresolved.join(", ")}`);
           }
