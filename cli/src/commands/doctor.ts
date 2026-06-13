@@ -428,7 +428,7 @@ function verifyMirror(
     if (targetHash !== canonicalHash) {
       return {
         ok: false,
-        reason: "copy is stale — contents differ from canonical (re-run skdd link -g)",
+        reason: "copy is stale — contents differ from canonical",
       };
     }
     return { ok: true };
