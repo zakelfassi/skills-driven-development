@@ -327,10 +327,7 @@ export async function runMcpSync(opts: McpSyncOptions = {}): Promise<number> {
             // In all other cases — including disabled servers on native-persist hosts
             // (droid/opencode/codex: omitsDisabled=false) — preserve the existing
             // entry.  A transient unset env var must never trigger destructive removal.
-            const hostExcluded = server.hosts != null && !server.hosts.includes(hostId);
-            const disabledOnOmittingHost = server.disabled === true && adapter.omitsDisabled;
-            const intendedForHost = !hostExcluded && !disabledOnOmittingHost;
-            if (intendedForHost) {
+            if (isIntendedForHost(server, hostId, adapter)) {
               // Still intended (or disabled-on-native-persist-host): keep the existing
               // entry.  Do NOT let a transient unset env var trigger destructive removal.
               logger.warn(
@@ -444,6 +441,27 @@ export async function runMcpSync(opts: McpSyncOptions = {}): Promise<number> {
   return exitCode;
 }
 
+// -- Shared env-expansion helper ----------------------------------------------
+
+/**
+ * Determine whether a server is "intended" for a host when env expansion fails.
+ *
+ * Returns true when the server is NOT host-excluded AND NOT disabled on an
+ * adapter that omits disabled entries (omitsDisabled=true). When true, a
+ * transient env-expansion failure must NOT trigger removal of an existing
+ * managed entry — the entry should be preserved until the var is set or the
+ * server is explicitly removed from the canonical config.
+ */
+function isIntendedForHost(
+  server: McpServer,
+  hostId: McpHostId,
+  adapter: { omitsDisabled: boolean },
+): boolean {
+  const hostExcluded = server.hosts != null && !server.hosts.includes(hostId);
+  const disabledOnOmittingHost = server.disabled === true && adapter.omitsDisabled;
+  return !hostExcluded && !disabledOnOmittingHost;
+}
+
 // -- collectMcpPlanLines -------------------------------------------------------
 
 /**
@@ -488,13 +506,22 @@ export async function collectMcpPlanLines(): Promise<string[]> {
     const isDroid = hostId === "droid";
 
     const resolvedServers: Record<string, McpServer> = {};
+    // Mirror the same expansionFailedManaged logic as runMcpSync so the hub
+    // dry-run preview matches actual sync behavior exactly.
+    const expansionFailedManaged = new Set<string>();
     for (const [name, server] of Object.entries(effectiveConfig.servers)) {
       if (isDroid) {
         resolvedServers[name] = server;
       } else {
         const { resolved, unresolved } = expandServerVars(server);
         if (unresolved.length > 0) {
-          lines.push(`[${hostId}] skip "${name}": unresolved ${unresolved.join(", ")}`);
+          if (managed.includes(name) && isIntendedForHost(server, hostId, adapter)) {
+            // Still intended (or disabled-on-native-persist-host): keep the existing
+            // entry. Do NOT let a transient unset env var trigger a removal line.
+            expansionFailedManaged.add(name);
+          } else {
+            lines.push(`[${hostId}] skip "${name}": unresolved ${unresolved.join(", ")}`);
+          }
           continue;
         }
         resolvedServers[name] = resolved;
@@ -502,7 +529,10 @@ export async function collectMcpPlanLines(): Promise<string[]> {
     }
 
     const resolvedConfig: CanonicalMcpConfig = { version: 1, servers: resolvedServers };
-    const plan = adapter.plan(resolvedConfig, managed);
+    // Exclude expansion-failed managed names so the adapter does not plan
+    // a removal for them (matching runMcpSync's effectiveManaged logic).
+    const effectiveManaged = managed.filter((m) => !expansionFailedManaged.has(m));
+    const plan = adapter.plan(resolvedConfig, effectiveManaged);
 
     if (!plan.ok) {
       lines.push(`[${hostId}] blocked: ${plan.reason}`);
