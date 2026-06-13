@@ -181,6 +181,11 @@ export interface JsonAdapterConfig {
    * adapters that keep the entry with a disabled marker (droid, opencode).
    */
   omitsDisabled?: boolean;
+  /**
+   * Whether this adapter supports remote (HTTP/SSE) MCP servers. Defaults to
+   * true. Set to false for stdio-only hosts (e.g. Claude Desktop).
+   */
+  acceptsRemote?: boolean;
 }
 
 /**
@@ -227,6 +232,7 @@ export function createJsonAdapter(cfg: JsonAdapterConfig): McpHostAdapter {
     id: cfg.id,
     label: cfg.label,
     omitsDisabled: cfg.omitsDisabled ?? true,
+    acceptsRemote: cfg.acceptsRemote ?? true,
     configPath: cfg.configPath,
     available: cfg.available,
     read: readImpl,

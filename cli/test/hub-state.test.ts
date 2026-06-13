@@ -57,13 +57,21 @@ function okPlan(changes: ServerChange[] = []): HostSyncPlan {
  * - `planFn` receives the canonical config passed to adapter.plan() and can
  *   inspect it to assert env expansion happened.
  * - `serverNames` is what the host file currently contains.
+ * - `omitsDisabled` mirrors the real adapter capability (default: true for
+ *   omitting-hosts like claude-code/cursor/gemini; false for persist-hosts).
+ * - `acceptsRemote` mirrors the real adapter capability (default: true;
+ *   false for stdio-only hosts like claude-desktop).
  */
 function makeAdapter(opts: {
   serverNames?: string[];
   planFn?: (canonical: CanonicalMcpConfig, managed: string[]) => HostSyncPlan;
   available?: boolean;
+  omitsDisabled?: boolean;
+  acceptsRemote?: boolean;
 }): McpRowAdapter {
   return {
+    omitsDisabled: opts.omitsDisabled ?? true,
+    acceptsRemote: opts.acceptsRemote,
     available: () => opts.available ?? true,
     read: (): HostReadResult => ({
       ok: true,
@@ -1003,5 +1011,178 @@ describe("loadHubData — malformed registry → registryError set, does not thr
     const data = await loadHubData(tmp);
 
     expect(data.registryError).toBeUndefined();
+  });
+});
+
+// ── f-m9-hub-needs-env: adapter intent before needs-env ──────────────────────
+
+describe("buildMcpRows — adapter intent checked before needs-env (f-m9)", () => {
+  const UNSET_VAR = "SKDD_TEST_M9_SECRET_77773";
+
+  afterEach(() => {
+    delete process.env[UNSET_VAR];
+  });
+
+  it("disabled server + unset env on omitting-host (omitsDisabled=true) → excluded, NOT needs-env", () => {
+    // Server is disabled; on a host like claude-code that omits disabled entries,
+    // the adapter would skip the entry regardless of whether env vars are set.
+    // The hub should show 'excluded' (adapter-intent), not 'needs-env'.
+    delete process.env[UNSET_VAR];
+
+    const config: CanonicalMcpConfig = {
+      version: 1,
+      servers: {
+        "disabled-env-srv": {
+          command: "cmd",
+          env: { KEY: `\${${UNSET_VAR}}` },
+          disabled: true,
+        },
+      },
+    };
+    writeConfig(tmp, config);
+
+    // Adapter omits disabled entries; plan returns no add (server is intentionally absent)
+    const adapter = makeAdapter({
+      serverNames: [],
+      planFn: (_c, _m) => okPlan(),
+      omitsDisabled: true,
+    });
+
+    const rows = buildMcpRows(tmp, {
+      adapters: { "claude-code": adapter },
+      loadManaged: () => [],
+    });
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0].hosts["claude-code"]).toBe("excluded");
+    expect(rows[0].hosts["claude-code"]).not.toBe("needs-env");
+  });
+
+  it("disabled server + unset env + managed+present → drift (pending removal), NOT needs-env", () => {
+    // Server is disabled on an omitting-host; still present in host config (not yet removed).
+    // Adapter would remove it on next sync — show as 'drift', not 'needs-env'.
+    delete process.env[UNSET_VAR];
+
+    const config: CanonicalMcpConfig = {
+      version: 1,
+      servers: {
+        "disabled-env-srv": {
+          command: "cmd",
+          env: { KEY: `\${${UNSET_VAR}}` },
+          disabled: true,
+        },
+      },
+    };
+    writeConfig(tmp, config);
+
+    // Adapter plans a removal (entry is still in host config)
+    const adapter = makeAdapter({
+      serverNames: ["disabled-env-srv"],
+      planFn: (_c, _m) => okPlan([{ op: "remove", name: "disabled-env-srv" }]),
+      omitsDisabled: true,
+    });
+
+    const rows = buildMcpRows(tmp, {
+      adapters: { "claude-code": adapter },
+      loadManaged: () => ["disabled-env-srv"],
+    });
+
+    expect(rows[0].hosts["claude-code"]).toBe("drift");
+    expect(rows[0].hosts["claude-code"]).not.toBe("needs-env");
+  });
+
+  it("remote server + unset url on stdio-only host (acceptsRemote=false) → excluded, NOT needs-env", () => {
+    // Claude Desktop is stdio-only; remote servers are skipped regardless of URL value.
+    // When the URL has an unresolved placeholder, hub should show 'excluded', not 'needs-env'.
+    delete process.env[UNSET_VAR];
+
+    const config: CanonicalMcpConfig = {
+      version: 1,
+      servers: {
+        "remote-env-srv": {
+          url: `https://mcp.example.com/\${${UNSET_VAR}}/endpoint`,
+          type: "http",
+        },
+      },
+    };
+    writeConfig(tmp, config);
+
+    // Adapter skips remote servers; plan returns no add
+    const adapter = makeAdapter({
+      serverNames: [],
+      planFn: (_c, _m) => okPlan(),
+      omitsDisabled: true,
+      acceptsRemote: false, // stdio-only host (e.g. claude-desktop)
+    });
+
+    const rows = buildMcpRows(tmp, {
+      adapters: { "claude-desktop": adapter },
+      loadManaged: () => [],
+    });
+
+    expect(rows[0].hosts["claude-desktop"]).toBe("excluded");
+    expect(rows[0].hosts["claude-desktop"]).not.toBe("needs-env");
+  });
+
+  it("genuinely intended server + unset env on normal host → still needs-env", () => {
+    // A non-disabled stdio server targeted at a host that supports it: if env vars
+    // are missing, the server cannot be synced → should still show 'needs-env'.
+    delete process.env[UNSET_VAR];
+
+    const config: CanonicalMcpConfig = {
+      version: 1,
+      servers: {
+        "intended-srv": {
+          command: "cmd",
+          env: { KEY: `\${${UNSET_VAR}}` },
+        },
+      },
+    };
+    writeConfig(tmp, config);
+
+    const adapter = makeAdapter({
+      serverNames: [],
+      planFn: (_c, _m) => okPlan([{ op: "add", name: "intended-srv" }]),
+      omitsDisabled: true,
+    });
+
+    const rows = buildMcpRows(tmp, {
+      adapters: { "claude-code": adapter },
+      loadManaged: () => [],
+    });
+
+    expect(rows[0].hosts["claude-code"]).toBe("needs-env");
+  });
+
+  it("disabled server on persist-host (omitsDisabled=false) + unset env → still needs-env", () => {
+    // On droid/opencode/codex (omitsDisabled=false), a disabled server is kept in
+    // the host config with a native disabled marker. The server IS still intended
+    // (it needs to be written as disabled), so unresolved env → needs-env.
+    delete process.env[UNSET_VAR];
+
+    const config: CanonicalMcpConfig = {
+      version: 1,
+      servers: {
+        "disabled-env-srv": {
+          command: "cmd",
+          env: { KEY: `\${${UNSET_VAR}}` },
+          disabled: true,
+        },
+      },
+    };
+    writeConfig(tmp, config);
+
+    const adapter = makeAdapter({
+      serverNames: [],
+      planFn: (_c, _m) => okPlan([{ op: "add", name: "disabled-env-srv" }]),
+      omitsDisabled: false, // persist-host (droid, opencode, codex)
+    });
+
+    const rows = buildMcpRows(tmp, {
+      adapters: { opencode: adapter },
+      loadManaged: () => [],
+    });
+
+    expect(rows[0].hosts["opencode"]).toBe("needs-env");
   });
 });

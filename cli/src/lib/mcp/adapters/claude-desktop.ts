@@ -33,6 +33,8 @@ function onSkipped(name: string, server: McpServer): string | undefined {
 export const claudeDesktopAdapter = createJsonAdapter({
   id: "claude-desktop",
   label: "Claude Desktop",
+  // Claude Desktop is stdio-only; remote MCP servers are not natively supported.
+  acceptsRemote: false,
   configPath() {
     return join(
       homedir(),

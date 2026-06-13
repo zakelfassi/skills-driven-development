@@ -1,6 +1,7 @@
 import { ensureGlobalColony, skddHome } from "../lib/global.js";
 import { logger } from "../lib/logger.js";
 import { ADAPTERS } from "../lib/mcp/adapters/index.js";
+import { isIntendedForHost } from "../lib/mcp/intent.js";
 import {
   type CanonicalMcpConfig,
   expandEnvPlaceholders,
@@ -442,25 +443,6 @@ export async function runMcpSync(opts: McpSyncOptions = {}): Promise<number> {
 }
 
 // -- Shared env-expansion helper ----------------------------------------------
-
-/**
- * Determine whether a server is "intended" for a host when env expansion fails.
- *
- * Returns true when the server is NOT host-excluded AND NOT disabled on an
- * adapter that omits disabled entries (omitsDisabled=true). When true, a
- * transient env-expansion failure must NOT trigger removal of an existing
- * managed entry — the entry should be preserved until the var is set or the
- * server is explicitly removed from the canonical config.
- */
-function isIntendedForHost(
-  server: McpServer,
-  hostId: McpHostId,
-  adapter: { omitsDisabled: boolean },
-): boolean {
-  const hostExcluded = server.hosts != null && !server.hosts.includes(hostId);
-  const disabledOnOmittingHost = server.disabled === true && adapter.omitsDisabled;
-  return !hostExcluded && !disabledOnOmittingHost;
-}
 
 // -- collectMcpPlanLines -------------------------------------------------------
 

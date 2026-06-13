@@ -4,6 +4,7 @@ import { collectDoctorChecks, type DoctorCheck } from "../commands/doctor.js";
 import { skddHome } from "../lib/global.js";
 import { HARNESSES, type Harness } from "../lib/harness.js";
 import { ADAPTERS, type HostReadResult, type HostSyncPlan } from "../lib/mcp/adapters/index.js";
+import { isIntendedForHost } from "../lib/mcp/intent.js";
 import {
   type CanonicalMcpConfig,
   expandEnvPlaceholders,
@@ -224,6 +225,10 @@ function expandServerForPlan(server: McpServer): { server: McpServer; unresolved
 
 /** Minimal adapter surface needed by buildMcpRows — enables injection in tests. */
 export interface McpRowAdapter {
+  /** Whether this adapter omits disabled entries (true) or persists them natively (false). */
+  omitsDisabled: boolean;
+  /** Whether this adapter supports remote MCP servers. Defaults to true when absent. */
+  acceptsRemote?: boolean;
   available(): boolean;
   read(): HostReadResult;
   plan(canonical: CanonicalMcpConfig, managed: string[]): HostSyncPlan;
@@ -342,10 +347,23 @@ export function buildMcpRows(globalRoot: string, opts?: BuildMcpRowsOpts): McpRo
       } else {
         const { server: expandedServer, unresolved } = expandServerForPlan(server);
         if (unresolved.length > 0) {
-          hosts[hostId] = "needs-env";
-          continue;
+          // Before flagging needs-env, check whether the adapter actually intends
+          // to include this server. If not (disabled on an omitting-host like
+          // claude-code/cursor/gemini, or remote on a stdio-only host like
+          // claude-desktop), env resolution is irrelevant — the adapter will
+          // omit/remove the entry regardless of placeholder values. Fall through
+          // with the unexpanded server so the plan-based logic determines the
+          // real status (excluded / drift-pending-removal).
+          // Only show needs-env for servers genuinely intended for this host.
+          if (isIntendedForHost(server, hostId, adapter)) {
+            hosts[hostId] = "needs-env";
+            continue;
+          }
+          // Not intended → env values don't affect the outcome; use unexpanded.
+          planServer = server;
+        } else {
+          planServer = expandedServer;
         }
-        planServer = expandedServer;
       }
 
       // Build an expanded config for plan comparison (only this server's values change).

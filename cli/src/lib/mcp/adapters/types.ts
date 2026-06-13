@@ -81,6 +81,15 @@ export interface McpHostAdapter {
    * "still-present, preserve existing entry" (false).
    */
   omitsDisabled: boolean;
+  /**
+   * True when this adapter supports remote (HTTP/SSE) MCP servers.
+   * False for stdio-only hosts (e.g. Claude Desktop). Defaults to true when absent.
+   *
+   * Used by isIntendedForHost to determine whether a remote server with
+   * unresolved env vars should be flagged as `needs-env` or treated as
+   * intentionally omitted (the adapter would skip it regardless of env values).
+   */
+  acceptsRemote?: boolean;
   /** Absolute path to the host config file, homedir-aware. */
   configPath(): string;
   /** True when this adapter is usable (platform check + existence heuristic). */
