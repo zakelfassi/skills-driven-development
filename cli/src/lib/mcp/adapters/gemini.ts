@@ -13,8 +13,11 @@ function toNativeEntry(server: McpServer): unknown | null {
     if (server.env && Object.keys(server.env).length > 0) e.env = server.env;
     return e;
   }
-  // remote: {url}
-  return { url: server.url };
+  // remote: canonical type 'http' → httpUrl (Streamable HTTP), 'sse'/absent → url (SSE)
+  const urlKey = server.type === "http" ? "httpUrl" : "url";
+  const e: Record<string, unknown> = { [urlKey]: server.url };
+  if (server.headers && Object.keys(server.headers).length > 0) e.headers = server.headers;
+  return e;
 }
 
 /**

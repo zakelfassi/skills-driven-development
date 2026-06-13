@@ -13,8 +13,10 @@ function toNativeEntry(server: McpServer): unknown | null {
     if (server.env && Object.keys(server.env).length > 0) e.env = server.env;
     return e;
   }
-  // remote: just url (type is inferred by Cursor)
-  return { url: server.url };
+  // remote: {url, headers?} (type is inferred by Cursor)
+  const e: Record<string, unknown> = { url: server.url };
+  if (server.headers && Object.keys(server.headers).length > 0) e.headers = server.headers;
+  return e;
 }
 
 /**

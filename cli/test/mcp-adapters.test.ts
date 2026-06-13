@@ -585,6 +585,84 @@ describe("cursor adapter specifics", () => {
     expect(entry["url"]).toBe("https://mcp.example.com");
     expect(entry["type"]).toBeUndefined();
   });
+
+  it("emits headers on remote entry", () => {
+    placeFixture("cursor.json", ".cursor/mcp.json");
+    const canonical: CanonicalMcpConfig = {
+      version: 1,
+      servers: {
+        "auth-srv": {
+          url: "https://mcp.example.com",
+          headers: { Authorization: "Bearer tok123" },
+        },
+      },
+    };
+    const plan = cursorAdapter.plan(canonical, []);
+    expect(plan.ok).toBe(true);
+    if (!plan.ok) return;
+    const entry = (plan.finalDoc["mcpServers"] as Record<string, unknown>)["auth-srv"] as Record<
+      string,
+      unknown
+    >;
+    expect(entry["url"]).toBe("https://mcp.example.com");
+    expect(entry["headers"]).toEqual({ Authorization: "Bearer tok123" });
+  });
+
+  it("preserves ${VAR} placeholders in remote header values", () => {
+    placeFixture("cursor.json", ".cursor/mcp.json");
+    const canonical: CanonicalMcpConfig = {
+      version: 1,
+      servers: {
+        "env-auth-srv": {
+          url: "https://mcp.example.com",
+          headers: { Authorization: "Bearer ${MY_TOKEN}" },
+        },
+      },
+    };
+    const plan = cursorAdapter.plan(canonical, []);
+    expect(plan.ok).toBe(true);
+    if (!plan.ok) return;
+    const entry = (plan.finalDoc["mcpServers"] as Record<string, unknown>)[
+      "env-auth-srv"
+    ] as Record<string, unknown>;
+    expect((entry["headers"] as Record<string, string>)["Authorization"]).toBe(
+      "Bearer ${MY_TOKEN}",
+    );
+  });
+
+  it("remote with headers: second plan with same headers is a no-op (content-equal round-trip)", () => {
+    placeFixture("cursor.json", ".cursor/mcp.json");
+    const filePath = join(fakeTmp, ".cursor/mcp.json");
+    const canonical: CanonicalMcpConfig = {
+      version: 1,
+      servers: {
+        "auth-srv": {
+          url: "https://mcp.example.com",
+          headers: { Authorization: "Bearer tok123" },
+        },
+      },
+    };
+    // First apply
+    const plan1 = cursorAdapter.plan(canonical, []);
+    expect(plan1.ok).toBe(true);
+    if (!plan1.ok) return;
+    cursorAdapter.apply(plan1);
+
+    // Second plan — server is now managed
+    const plan2 = cursorAdapter.plan(canonical, ["auth-srv"]);
+    expect(plan2.ok).toBe(true);
+    if (!plan2.ok) return;
+    // Content-equal → no changes
+    expect(plan2.changes).toHaveLength(0);
+    // File not modified again
+    const contentAfter = readFileSync(filePath, "utf8");
+    const parsed = JSON.parse(contentAfter) as Record<string, unknown>;
+    const entry = (parsed["mcpServers"] as Record<string, unknown>)["auth-srv"] as Record<
+      string,
+      unknown
+    >;
+    expect(entry["headers"]).toEqual({ Authorization: "Bearer tok123" });
+  });
 });
 
 describe("opencode adapter specifics", () => {
@@ -644,6 +722,85 @@ describe("opencode adapter specifics", () => {
     expect(plan.finalDoc).toHaveProperty("mcp");
     expect(plan.finalDoc).not.toHaveProperty("mcpServers");
   });
+
+  it("emits headers on remote entry", () => {
+    placeFixture("opencode.json", ".config/opencode/opencode.json");
+    const canonical: CanonicalMcpConfig = {
+      version: 1,
+      servers: {
+        "auth-remote": {
+          url: "https://mcp.example.com",
+          headers: { Authorization: "Bearer tok", "X-Api-Key": "secret" },
+        },
+      },
+    };
+    const plan = opencodeAdapter.plan(canonical, []);
+    expect(plan.ok).toBe(true);
+    if (!plan.ok) return;
+    const entry = (plan.finalDoc["mcp"] as Record<string, unknown>)["auth-remote"] as Record<
+      string,
+      unknown
+    >;
+    expect(entry["type"]).toBe("remote");
+    expect(entry["url"]).toBe("https://mcp.example.com");
+    expect(entry["headers"]).toEqual({ Authorization: "Bearer tok", "X-Api-Key": "secret" });
+  });
+
+  it("preserves ${VAR} placeholders in remote header values", () => {
+    placeFixture("opencode.json", ".config/opencode/opencode.json");
+    const canonical: CanonicalMcpConfig = {
+      version: 1,
+      servers: {
+        "env-remote": {
+          url: "https://mcp.example.com",
+          headers: { Authorization: "Bearer ${MY_TOKEN}" },
+        },
+      },
+    };
+    const plan = opencodeAdapter.plan(canonical, []);
+    expect(plan.ok).toBe(true);
+    if (!plan.ok) return;
+    const entry = (plan.finalDoc["mcp"] as Record<string, unknown>)["env-remote"] as Record<
+      string,
+      unknown
+    >;
+    expect((entry["headers"] as Record<string, string>)["Authorization"]).toBe(
+      "Bearer ${MY_TOKEN}",
+    );
+  });
+
+  it("remote with headers: second plan with same headers is a no-op (content-equal round-trip)", () => {
+    placeFixture("opencode.json", ".config/opencode/opencode.json");
+    const filePath = join(fakeTmp, ".config/opencode/opencode.json");
+    const canonical: CanonicalMcpConfig = {
+      version: 1,
+      servers: {
+        "auth-remote": {
+          url: "https://mcp.example.com",
+          headers: { Authorization: "Bearer tok" },
+        },
+      },
+    };
+    // First apply
+    const plan1 = opencodeAdapter.plan(canonical, []);
+    expect(plan1.ok).toBe(true);
+    if (!plan1.ok) return;
+    opencodeAdapter.apply(plan1);
+
+    // Second plan — server is now managed
+    const plan2 = opencodeAdapter.plan(canonical, ["auth-remote"]);
+    expect(plan2.ok).toBe(true);
+    if (!plan2.ok) return;
+    expect(plan2.changes).toHaveLength(0);
+
+    const contentAfter = readFileSync(filePath, "utf8");
+    const parsed = JSON.parse(contentAfter) as Record<string, unknown>;
+    const entry = (parsed["mcp"] as Record<string, unknown>)["auth-remote"] as Record<
+      string,
+      unknown
+    >;
+    expect(entry["headers"]).toEqual({ Authorization: "Bearer tok" });
+  });
 });
 
 describe("gemini adapter specifics", () => {
@@ -669,6 +826,140 @@ describe("gemini adapter specifics", () => {
     expect(plan.finalDoc).toHaveProperty("general");
     expect(plan.finalDoc).toHaveProperty("security");
     expect(plan.finalDoc).toHaveProperty("ui");
+  });
+
+  it("maps type 'http' remote to httpUrl field (Streamable HTTP transport)", () => {
+    placeFixture("gemini.json", ".gemini/settings.json");
+    const canonical: CanonicalMcpConfig = {
+      version: 1,
+      servers: { "http-srv": { url: "https://mcp.example.com/mcp", type: "http" } },
+    };
+    const plan = geminiAdapter.plan(canonical, []);
+    expect(plan.ok).toBe(true);
+    if (!plan.ok) return;
+    const entry = (plan.finalDoc["mcpServers"] as Record<string, unknown>)["http-srv"] as Record<
+      string,
+      unknown
+    >;
+    expect(entry["httpUrl"]).toBe("https://mcp.example.com/mcp");
+    expect(entry["url"]).toBeUndefined();
+  });
+
+  it("maps type 'sse' remote to url field (SSE transport)", () => {
+    placeFixture("gemini.json", ".gemini/settings.json");
+    const canonical: CanonicalMcpConfig = {
+      version: 1,
+      servers: { "sse-srv": { url: "https://mcp.example.com/sse", type: "sse" } },
+    };
+    const plan = geminiAdapter.plan(canonical, []);
+    expect(plan.ok).toBe(true);
+    if (!plan.ok) return;
+    const entry = (plan.finalDoc["mcpServers"] as Record<string, unknown>)["sse-srv"] as Record<
+      string,
+      unknown
+    >;
+    expect(entry["url"]).toBe("https://mcp.example.com/sse");
+    expect(entry["httpUrl"]).toBeUndefined();
+  });
+
+  it("maps absent type remote to url field (defaults to SSE)", () => {
+    placeFixture("gemini.json", ".gemini/settings.json");
+    const canonical: CanonicalMcpConfig = {
+      version: 1,
+      servers: { "default-srv": { url: "https://mcp.example.com" } },
+    };
+    const plan = geminiAdapter.plan(canonical, []);
+    expect(plan.ok).toBe(true);
+    if (!plan.ok) return;
+    const entry = (plan.finalDoc["mcpServers"] as Record<string, unknown>)["default-srv"] as Record<
+      string,
+      unknown
+    >;
+    expect(entry["url"]).toBe("https://mcp.example.com");
+    expect(entry["httpUrl"]).toBeUndefined();
+  });
+
+  it("emits headers on http remote entry", () => {
+    placeFixture("gemini.json", ".gemini/settings.json");
+    const canonical: CanonicalMcpConfig = {
+      version: 1,
+      servers: {
+        "auth-http": {
+          url: "https://mcp.example.com/mcp",
+          type: "http",
+          headers: { Authorization: "Bearer tok" },
+        },
+      },
+    };
+    const plan = geminiAdapter.plan(canonical, []);
+    expect(plan.ok).toBe(true);
+    if (!plan.ok) return;
+    const entry = (plan.finalDoc["mcpServers"] as Record<string, unknown>)["auth-http"] as Record<
+      string,
+      unknown
+    >;
+    expect(entry["httpUrl"]).toBe("https://mcp.example.com/mcp");
+    expect(entry["headers"]).toEqual({ Authorization: "Bearer tok" });
+  });
+
+  it("emits headers on sse remote entry", () => {
+    placeFixture("gemini.json", ".gemini/settings.json");
+    const canonical: CanonicalMcpConfig = {
+      version: 1,
+      servers: {
+        "auth-sse": {
+          url: "https://mcp.example.com/sse",
+          type: "sse",
+          headers: { Authorization: "Bearer ${SSE_TOKEN}" },
+        },
+      },
+    };
+    const plan = geminiAdapter.plan(canonical, []);
+    expect(plan.ok).toBe(true);
+    if (!plan.ok) return;
+    const entry = (plan.finalDoc["mcpServers"] as Record<string, unknown>)["auth-sse"] as Record<
+      string,
+      unknown
+    >;
+    expect(entry["url"]).toBe("https://mcp.example.com/sse");
+    expect((entry["headers"] as Record<string, string>)["Authorization"]).toBe(
+      "Bearer ${SSE_TOKEN}",
+    );
+  });
+
+  it("http remote with headers: second plan with same data is a no-op (round-trip)", () => {
+    placeFixture("gemini.json", ".gemini/settings.json");
+    const filePath = join(fakeTmp, ".gemini/settings.json");
+    const canonical: CanonicalMcpConfig = {
+      version: 1,
+      servers: {
+        "auth-http": {
+          url: "https://mcp.example.com/mcp",
+          type: "http",
+          headers: { Authorization: "Bearer tok" },
+        },
+      },
+    };
+    // First apply
+    const plan1 = geminiAdapter.plan(canonical, []);
+    expect(plan1.ok).toBe(true);
+    if (!plan1.ok) return;
+    geminiAdapter.apply(plan1);
+
+    // Second plan — server is now managed
+    const plan2 = geminiAdapter.plan(canonical, ["auth-http"]);
+    expect(plan2.ok).toBe(true);
+    if (!plan2.ok) return;
+    expect(plan2.changes).toHaveLength(0);
+
+    const contentAfter = readFileSync(filePath, "utf8");
+    const parsed = JSON.parse(contentAfter) as Record<string, unknown>;
+    const entry = (parsed["mcpServers"] as Record<string, unknown>)["auth-http"] as Record<
+      string,
+      unknown
+    >;
+    expect(entry["httpUrl"]).toBe("https://mcp.example.com/mcp");
+    expect(entry["headers"]).toEqual({ Authorization: "Bearer tok" });
   });
 });
 

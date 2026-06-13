@@ -18,11 +18,13 @@ function toNativeEntry(server: McpServer): unknown {
     return e;
   }
   // remote
-  return {
+  const e: Record<string, unknown> = {
     type: "remote",
     url: server.url,
     enabled: server.disabled !== true,
   };
+  if (server.headers && Object.keys(server.headers).length > 0) e.headers = server.headers;
+  return e;
 }
 
 /**

@@ -810,6 +810,28 @@ describe("codexAdapter — remote server http_headers (fix: emit credentials)", 
     const content = plan.finalDoc._tomlContent as string;
     expect(content).not.toContain("http_headers");
   });
+
+  it("remote server with headers: round-trip is a no-op (content-equality accounts for headers)", () => {
+    placeFixture();
+    const canonical = makeCanonical({
+      remote_auth: {
+        url: "https://api.example.com/mcp",
+        type: "http",
+        headers: { Authorization: "Bearer ${MY_TOKEN}" },
+      },
+    });
+    // First apply
+    const plan1 = codexAdapter.plan(canonical, []);
+    expect(plan1.ok).toBe(true);
+    if (!plan1.ok) throw new Error();
+    codexAdapter.apply(plan1);
+
+    // Second plan with same canonical as managed — must be a no-op
+    const plan2 = codexAdapter.plan(canonical, ["remote_auth"]);
+    expect(plan2.ok).toBe(true);
+    if (!plan2.ok) throw new Error();
+    expect(plan2.changes).toHaveLength(0);
+  });
 });
 
 // ── Fix: CODEX_HOME env override ─────────────────────────────────────────────
