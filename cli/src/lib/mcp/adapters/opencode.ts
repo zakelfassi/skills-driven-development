@@ -2,7 +2,7 @@ import { existsSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { isStdio, type McpServer } from "../schema.js";
-import { createJsonAdapter } from "./_shared.js";
+import { createJsonAdapter, stripJsonc } from "./_shared.js";
 
 function toNativeEntry(server: McpServer): unknown {
   // OpenCode's native schema differs from the others:
@@ -48,4 +48,9 @@ export const opencodeAdapter = createJsonAdapter({
   },
   mcpKey: "mcp",
   toNativeEntry,
+  // OpenCode accepts JSONC (comments + trailing commas) per opencode.ai/docs/config.
+  // Strip JSONC extensions before parsing so user configs with comments are not
+  // wrongly rejected. Writes use JSON.stringify (comments are lost on apply but
+  // all unmanaged keys/servers are preserved via the merge-not-overwrite logic).
+  parseRaw: (text) => JSON.parse(stripJsonc(text)),
 });

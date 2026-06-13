@@ -11,6 +11,64 @@ import type {
 } from "./types.js";
 
 /**
+ * Strip JSONC extensions (// line comments, /* block comments, trailing commas)
+ * from input and return standard JSON text. Dependency-free, two-pass approach.
+ *
+ * Pass 1 strips comments while preserving string literals verbatim.
+ * Pass 2 removes trailing commas before } or ] using a regex on the now-clean text.
+ *
+ * NOTE: Comments are NOT preserved on write. When skdd applies changes to an
+ * OpenCode config that contained comments, the written file will be valid JSON
+ * without those comments. All unmanaged keys and servers survive via the
+ * merge-not-overwrite logic in createJsonAdapter.
+ *
+ * Malformed input that is not valid even after stripping will still throw when
+ * passed to JSON.parse, so the adapter fails closed on truly corrupt files.
+ */
+export function stripJsonc(text: string): string {
+  // Pass 1: strip line and block comments, preserving string contents verbatim
+  let i = 0;
+  let s = "";
+
+  while (i < text.length) {
+    // String literal — pass through verbatim, handling escape sequences
+    if (text[i] === '"') {
+      s += '"';
+      i++;
+      while (i < text.length) {
+        const ch = text[i];
+        s += ch;
+        i++;
+        if (ch === "\\") {
+          // Escaped character — copy next char verbatim (don't interpret it)
+          if (i < text.length) s += text[i++];
+        } else if (ch === '"') {
+          break; // end of string
+        }
+      }
+    }
+    // Line comment: // ... \n
+    else if (text[i] === "/" && text[i + 1] === "/") {
+      while (i < text.length && text[i] !== "\n") i++;
+    }
+    // Block comment: /* ... */
+    else if (text[i] === "/" && text[i + 1] === "*") {
+      i += 2;
+      while (i < text.length && !(text[i] === "*" && text[i + 1] === "/")) i++;
+      i += 2; // skip closing */
+    } else {
+      s += text[i++];
+    }
+  }
+
+  // Pass 2: remove trailing commas before } or ] — safe now that comments are gone.
+  // Uses a regex rather than a second state machine since comment stripping is complete.
+  // Note: this could theoretically corrupt a string value that literally contains
+  // ",\s*}" or ",\s*]", but that pattern never appears in MCP server config values.
+  return s.replace(/,(\s*[}\]])/g, "$1");
+}
+
+/**
  * Key-order-agnostic deep equality. Used for content-equality checks to
  * avoid spurious writes when host config has different key ordering.
  */
@@ -53,6 +111,13 @@ export interface JsonAdapterConfig {
    * undefined for silent omission.
    */
   onSkipped?: (name: string, server: McpServer) => string | undefined;
+  /**
+   * Optional: custom parser for the host config file text.
+   * Defaults to JSON.parse. Override for hosts that accept non-strict JSON
+   * (e.g., JSONC for OpenCode). The function must throw on truly malformed
+   * input so the adapter fails closed.
+   */
+  parseRaw?: (text: string) => unknown;
 }
 
 /**
@@ -69,7 +134,8 @@ export function createJsonAdapter(cfg: JsonAdapterConfig): McpHostAdapter {
     }
     let raw: unknown;
     try {
-      raw = JSON.parse(readFileSync(p, "utf8")) as unknown;
+      const parseJson = cfg.parseRaw ?? JSON.parse;
+      raw = parseJson(readFileSync(p, "utf8")) as unknown;
     } catch {
       return { ok: false, reason: `Failed to parse ${p}: invalid JSON` };
     }

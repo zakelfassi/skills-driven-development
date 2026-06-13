@@ -8,7 +8,8 @@
       "!**/node_modules/**",
       "!site/**",
       "!prompt-exports/**",
-      "!**/*.md"
+      "!**/*.md",
+      "!cli/test/fixtures/mcp/opencode-jsonc.json"
     ]
   },
   "formatter": {

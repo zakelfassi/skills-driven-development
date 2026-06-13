@@ -1,0 +1,19 @@
+// OpenCode config with JSONC extensions (comments + trailing commas)
+// This is valid per opencode.ai/docs/config but not strict JSON.
+{
+  "$schema": "https://opencode.ai/config.schema.json",
+  // Theme configuration
+  "theme": "opencode",
+  "autoshare": false, // disable sharing by default
+  /* MCP server definitions */
+  "mcp": {
+    "user-opencode-mcp": {
+      "type": "local",
+      "command": ["npx", "-y", "some-mcp-server"],
+      "environment": {
+        "KEY": "value", // trailing comma here
+      },
+      "enabled": true, // trailing comma on last property
+    },
+  },
+}

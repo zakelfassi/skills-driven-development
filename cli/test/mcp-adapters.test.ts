@@ -1227,3 +1227,133 @@ describe("JSON adapter — host-map guard (fix-5)", () => {
     }
   });
 });
+
+// ── Fix 6: OpenCode JSONC parsing ─────────────────────────────────────────────
+
+describe("opencode adapter — JSONC parsing (fix-6)", () => {
+  const OC_PATH = ".config/opencode/opencode.json";
+
+  it("read() accepts a config with // line comments", () => {
+    writeFile(
+      OC_PATH,
+      `{
+  // line comment
+  "theme": "opencode",
+  "mcp": {
+    "my-srv": { "type": "local", "command": ["echo"], "enabled": true }
+  }
+}`,
+    );
+    const result = opencodeAdapter.read();
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.serverNames).toContain("my-srv");
+    }
+  });
+
+  it("read() accepts a config with /* */ block comments", () => {
+    writeFile(
+      OC_PATH,
+      `{
+  /* block comment */
+  "theme": "opencode",
+  "mcp": {
+    "block-srv": { "type": "local", "command": ["npx", "pkg"], "enabled": true }
+  }
+}`,
+    );
+    const result = opencodeAdapter.read();
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.serverNames).toContain("block-srv");
+    }
+  });
+
+  it("read() accepts a config with trailing commas", () => {
+    writeFile(
+      OC_PATH,
+      `{
+  "theme": "opencode",
+  "mcp": {
+    "trailing-srv": { "type": "local", "command": ["echo"], "enabled": true, },
+  },
+}`,
+    );
+    const result = opencodeAdapter.read();
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.serverNames).toContain("trailing-srv");
+    }
+  });
+
+  it("read() and plan() accept the JSONC fixture with comments + trailing commas", () => {
+    // Place the JSONC fixture (not valid strict JSON)
+    const dest = join(fakeTmp, OC_PATH);
+    mkdirSync(join(dest, ".."), { recursive: true });
+    copyFileSync(join(FIXTURES_DIR, "opencode-jsonc.json"), dest);
+
+    const readResult = opencodeAdapter.read();
+    expect(readResult.ok).toBe(true);
+    if (!readResult.ok) return;
+    expect(readResult.serverNames).toContain("user-opencode-mcp");
+
+    const plan = opencodeAdapter.plan(makeCanonical(), []);
+    expect(plan.ok).toBe(true);
+    if (!plan.ok) return;
+    // New server added
+    const servers = plan.finalDoc["mcp"] as Record<string, unknown>;
+    expect(servers).toHaveProperty("skdd-test-server");
+    // Unmanaged server preserved
+    expect(servers).toHaveProperty("user-opencode-mcp");
+  });
+
+  it("plan() preserves unmanaged servers from a JSONC config", () => {
+    writeFile(
+      OC_PATH,
+      `{
+  // user config
+  "mcp": {
+    "unmanaged-srv": { "type": "local", "command": ["echo"], "enabled": true }, // trailing comma
+  },
+}`,
+    );
+    const plan = opencodeAdapter.plan(makeCanonical(), []);
+    expect(plan.ok).toBe(true);
+    if (!plan.ok) return;
+    const servers = plan.finalDoc["mcp"] as Record<string, unknown>;
+    expect(servers).toHaveProperty("unmanaged-srv");
+    expect(servers).toHaveProperty("skdd-test-server");
+  });
+
+  it("read() returns ok:false for input that is malformed even as JSONC (fail closed)", () => {
+    writeFile(OC_PATH, `{ "mcp": { unclosed string: "value" } }`);
+    const result = opencodeAdapter.read();
+    expect(result.ok).toBe(false);
+  });
+
+  it("plan() returns ok:false for truly malformed input, apply never writes", () => {
+    const filePath = writeFile(OC_PATH, `{ totally not parseable ??? }`);
+    const mtimeBefore = statSync(filePath).mtimeMs;
+
+    const plan = opencodeAdapter.plan(makeCanonical(), []);
+    expect(plan.ok).toBe(false);
+
+    const result = opencodeAdapter.apply(plan);
+    expect(result.ok).toBe(false);
+
+    expect(statSync(filePath).mtimeMs).toBe(mtimeBefore);
+  });
+
+  it("other JSON adapters still reject JSONC (strict JSON only)", () => {
+    // claude-code should reject a file with // comments
+    writeFile(
+      ".claude.json",
+      `{
+  // comment
+  "mcpServers": {}
+}`,
+    );
+    const result = claudeCodeAdapter.read();
+    expect(result.ok).toBe(false);
+  });
+});
