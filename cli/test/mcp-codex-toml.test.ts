@@ -104,10 +104,10 @@ describe("findBlockExtent", () => {
     expect(findBlockExtent(lines, "srv")).toEqual([2, 4]);
   });
 
-  it("does NOT match a line with trailing space in the bracket (edge case)", () => {
-    // "[mcp_servers.foo ]" (space before ]) is a different string than "[mcp_servers.foo]"
+  it("matches a line with trailing space in the bracket (whitespace normalization)", () => {
+    // "[mcp_servers.foo ]" has insignificant whitespace before ']' — should still match
     const lines = ["[mcp_servers.foo ]", 'command = "old"'];
-    expect(findBlockExtent(lines, "foo")).toBeNull();
+    expect(findBlockExtent(lines, "foo")).toEqual([0, 2]);
   });
 });
 
@@ -211,17 +211,22 @@ describe("spliceBlocks", () => {
     expect(result.content).toContain("[settings]");
   });
 
-  it("re-parse gate: returns {ok:false} when splice produces invalid TOML (duplicate headers)", () => {
-    // Create content where findBlockExtent can NOT find the existing block
-    // (space before ']' means the header line doesn't match the exact rootHeader string)
-    // then attempt to "upsert" the server → appends a second block → duplicate → invalid
+  it("normalizes whitespace header before upsert — no duplicate block, reparse passes", () => {
+    // "[mcp_servers.foo ]" has insignificant whitespace; after normalization fix the
+    // existing block IS located and updated in place — no duplicate is appended.
     const content = '[mcp_servers.foo ]\ncommand = "old"\n';
     const server: McpServer = { command: "new" };
     const result = spliceBlocks(content, [], [["foo", server]]);
-    // smol-toml must reject the resulting file with two definitions of mcp_servers.foo
-    expect(result.ok).toBe(false);
-    if (result.ok) throw new Error("expected gate to fire");
-    expect(result.reason).toMatch(/re-parse/i);
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error(result.reason);
+    // Old block removed, new block appended — no duplicate header
+    expect(result.content).not.toContain('command = "old"');
+    expect(result.content).toContain('command = "new"');
+    expect(result.content).toContain("[mcp_servers.foo]");
+    const headerCount = (result.content.match(/\[mcp_servers\.foo/g) ?? []).length;
+    expect(headerCount).toBe(1);
+    // Re-parse gate must pass (valid TOML, no duplicates)
+    expect(() => parseToml(result.content)).not.toThrow();
   });
 
   it("returns empty content when original is empty and toRemove/toUpsert are empty", () => {
@@ -1571,5 +1576,263 @@ describe("codexAdapter — content-equality no-op (fix-2 parity)", () => {
     expect(result.written).toBe(false);
 
     expect(statSync(dest).mtimeMs).toBe(mtime1);
+  });
+});
+
+// ── Fix: TOML table header whitespace normalization ───────────────────────────
+
+describe("codexAdapter — TOML table header whitespace normalization (M17)", () => {
+  // ── findBlockExtent: whitespace variants ──────────────────────────────────
+
+  it("findBlockExtent: matches header with leading space '[ mcp_servers.foo ]'", () => {
+    const lines = ["[ mcp_servers.foo ]", 'command = "tool"', "[other]", "y = 1"];
+    expect(findBlockExtent(lines, "foo")).toEqual([0, 2]);
+  });
+
+  it("findBlockExtent: matches header with spaces around dot '[mcp_servers . foo]'", () => {
+    const lines = ["[mcp_servers . foo]", 'command = "tool"', "[other]", "y = 1"];
+    expect(findBlockExtent(lines, "foo")).toEqual([0, 2]);
+  });
+
+  it("findBlockExtent: matches header with mixed extra spaces '[ mcp_servers . foo ]'", () => {
+    const lines = ["[ mcp_servers . foo ]", 'command = "tool"'];
+    expect(findBlockExtent(lines, "foo")).toEqual([0, 2]);
+  });
+
+  it("findBlockExtent: quoted name with internal spaces '[mcp_servers.\"a b\"]'", () => {
+    const lines = [`[mcp_servers."a b"]`, 'command = "tool"', "[other]", "x = 1"];
+    expect(findBlockExtent(lines, "a b")).toEqual([0, 2]);
+  });
+
+  it("findBlockExtent: quoted name with spaces AND extra whitespace in brackets", () => {
+    const lines = [`[ mcp_servers."a b" ]`, 'command = "tool"'];
+    expect(findBlockExtent(lines, "a b")).toEqual([0, 2]);
+  });
+
+  it("findBlockExtent: whitespace-header combined with trailing inline comment", () => {
+    const lines = ["[ mcp_servers.foo ] # managed by skdd", 'command = "tool"', "[other]", "y = 1"];
+    expect(findBlockExtent(lines, "foo")).toEqual([0, 2]);
+  });
+
+  it("findBlockExtent: stops at next header even when both have extra whitespace", () => {
+    const lines = [
+      "[ mcp_servers.first ]",
+      'command = "first"',
+      "[ mcp_servers.second ]",
+      'command = "second"',
+    ];
+    expect(findBlockExtent(lines, "first")).toEqual([0, 2]);
+    expect(findBlockExtent(lines, "second")).toEqual([2, 4]);
+  });
+
+  it("findBlockExtent: sub-table with spaces still stays inside parent block", () => {
+    const lines = [
+      "[ mcp_servers.foo ]",
+      'command = "tool"',
+      "[ mcp_servers.foo.tools.x ]",
+      "enabled = true",
+      "[other]",
+      "x = 1",
+    ];
+    expect(findBlockExtent(lines, "foo")).toEqual([0, 4]);
+  });
+
+  // ── spliceBlocks: whitespace-header update (in-place, no duplicate) ───────
+
+  it("spliceBlocks: updates block with '[ mcp_servers.foo ]' header in place (no dup)", () => {
+    const content = [
+      "[settings]",
+      'bar = "baz"',
+      "",
+      "[ mcp_servers.foo ]",
+      'command = "old"',
+      "",
+      "[other]",
+      "y = 1",
+    ].join("\n");
+    const result = spliceBlocks(content, [], [["foo", { command: "new-cmd" }]]);
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error(result.reason);
+    // Old block removed
+    expect(result.content).not.toContain('command = "old"');
+    // New block present
+    expect(result.content).toContain("[mcp_servers.foo]");
+    expect(result.content).toContain('command = "new-cmd"');
+    // No duplicate header
+    const count = (result.content.match(/\[mcp_servers\.foo/g) ?? []).length;
+    expect(count).toBe(1);
+    // Surrounding content preserved
+    expect(result.content).toContain("[settings]");
+    expect(result.content).toContain("[other]");
+    // Re-parse gate passes
+    expect(() => parseToml(result.content)).not.toThrow();
+  });
+
+  it("spliceBlocks: updates block with '[mcp_servers . foo]' header in place (no dup)", () => {
+    const content = ["[mcp_servers . foo]", 'command = "old"', "[next]", "z = 1"].join("\n");
+    const result = spliceBlocks(content, [], [["foo", { command: "new" }]]);
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error(result.reason);
+    expect(result.content).not.toContain('command = "old"');
+    expect(result.content).toContain('command = "new"');
+    const count = (result.content.match(/\[mcp_servers\.foo/g) ?? []).length;
+    expect(count).toBe(1);
+    expect(result.content).toContain("[next]");
+    expect(() => parseToml(result.content)).not.toThrow();
+  });
+
+  it("spliceBlocks: removes block with '[ mcp_servers.foo ]' header", () => {
+    const content = [
+      "[settings]",
+      "x = 1",
+      "[ mcp_servers.foo ]",
+      'command = "old"',
+      "[other]",
+      "y = 2",
+    ].join("\n");
+    const result = spliceBlocks(content, ["foo"], []);
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error(result.reason);
+    expect(result.content).not.toContain("[mcp_servers.foo");
+    expect(result.content).not.toContain('command = "old"');
+    expect(result.content).toContain("[settings]");
+    expect(result.content).toContain("[other]");
+    expect(() => parseToml(result.content)).not.toThrow();
+  });
+
+  it("spliceBlocks: removes block with '[mcp_servers . foo]' header", () => {
+    const content = ["[mcp_servers . foo]", 'command = "old"', "[other]", "y = 1"].join("\n");
+    const result = spliceBlocks(content, ["foo"], []);
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error(result.reason);
+    expect(result.content).not.toContain("mcp_servers");
+    expect(result.content).toContain("[other]");
+    expect(() => parseToml(result.content)).not.toThrow();
+  });
+
+  // ── Quoted name with internal whitespace ──────────────────────────────────
+
+  it("spliceBlocks: quoted name with space '[mcp_servers.\"a b\"]' updated in place", () => {
+    const content = [`[mcp_servers."a b"]`, 'command = "old"', "[other]", "x = 1"].join("\n");
+    const result = spliceBlocks(content, [], [["a b", { command: "new" }]]);
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error(result.reason);
+    expect(result.content).not.toContain('command = "old"');
+    expect(result.content).toContain(`[mcp_servers."a b"]`);
+    expect(result.content).toContain('command = "new"');
+    const count = (result.content.match(/\[mcp_servers\."a b"\]/g) ?? []).length;
+    expect(count).toBe(1);
+    expect(() => parseToml(result.content)).not.toThrow();
+  });
+
+  it("spliceBlocks: removes quoted name with space '[mcp_servers.\"a b\"]'", () => {
+    const content = [`[mcp_servers."a b"]`, 'command = "old"'].join("\n");
+    const result = spliceBlocks(content, ["a b"], []);
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error(result.reason);
+    expect(result.content).not.toContain(`[mcp_servers."a b"]`);
+    expect(() => parseToml(result.content)).not.toThrow();
+  });
+
+  // ── Inline comment combined with whitespace ────────────────────────────────
+
+  it("spliceBlocks: header with both whitespace and inline comment updated in place", () => {
+    const content = [
+      "[ mcp_servers.foo ] # managed by skdd",
+      'command = "old"',
+      "[other]",
+      "y = 1",
+    ].join("\n");
+    const result = spliceBlocks(content, [], [["foo", { command: "new-cmd" }]]);
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error(result.reason);
+    expect(result.content).not.toContain('command = "old"');
+    expect(result.content).toContain('command = "new-cmd"');
+    const count = (result.content.match(/\[mcp_servers\.foo/g) ?? []).length;
+    expect(count).toBe(1);
+    expect(result.content).toContain("[other]");
+    expect(() => parseToml(result.content)).not.toThrow();
+  });
+
+  // ── Full codexAdapter round-trip ──────────────────────────────────────────
+
+  it("codexAdapter.plan: update of whitespace-header block produces valid TOML in-place", () => {
+    const dir = join(fakeTmp, ".codex");
+    mkdirSync(dir, { recursive: true });
+    const content = [
+      "# Codex config",
+      "[ mcp_servers.foo ]",
+      'command = "old"',
+      "",
+      "[shell]",
+      'shell = "zsh"',
+    ].join("\n");
+    writeFileSync(join(dir, "config.toml"), content, "utf8");
+
+    const canonical = makeCanonical({ foo: { command: "new-cmd" } });
+    const plan = codexAdapter.plan(canonical, ["foo"]);
+    expect(plan.ok).toBe(true);
+    if (!plan.ok) throw new Error(plan.reason);
+    expect(plan.changes).toEqual([{ op: "update", name: "foo" }]);
+
+    const result = plan.finalDoc._tomlContent as string;
+    expect(result).not.toContain('command = "old"');
+    expect(result).toContain('command = "new-cmd"');
+    // No duplicate header
+    const count = (result.match(/\[mcp_servers\.foo/g) ?? []).length;
+    expect(count).toBe(1);
+    expect(result).toContain("# Codex config");
+    expect(result).toContain("[shell]");
+    expect(() => parseToml(result)).not.toThrow();
+  });
+
+  it("codexAdapter.plan: remove of whitespace-header block cleans up completely", () => {
+    const dir = join(fakeTmp, ".codex");
+    mkdirSync(dir, { recursive: true });
+    const content = [
+      "# Codex config",
+      "[settings]",
+      'model = "o3"',
+      "[ mcp_servers.foo ]",
+      'command = "old"',
+      "[other]",
+      "y = 1",
+    ].join("\n");
+    writeFileSync(join(dir, "config.toml"), content, "utf8");
+
+    const canonical = makeCanonical();
+    const plan = codexAdapter.plan(canonical, ["foo"]);
+    expect(plan.ok).toBe(true);
+    if (!plan.ok) throw new Error(plan.reason);
+    expect(plan.changes).toEqual([{ op: "remove", name: "foo" }]);
+
+    const result = plan.finalDoc._tomlContent as string;
+    expect(result).not.toContain("mcp_servers");
+    expect(result).toContain("[settings]");
+    expect(result).toContain("[other]");
+    expect(() => parseToml(result)).not.toThrow();
+  });
+
+  it("codexAdapter: second plan on whitespace-header config is a no-op after first sync", () => {
+    const dir = join(fakeTmp, ".codex");
+    mkdirSync(dir, { recursive: true });
+    // Write a config with the whitespace-header variant
+    const content = ["[ mcp_servers.foo ]", 'command = "old"'].join("\n");
+    writeFileSync(join(dir, "config.toml"), content, "utf8");
+
+    const canonical = makeCanonical({ foo: { command: "new-cmd" } });
+
+    // First plan: should detect update (content differs)
+    const plan1 = codexAdapter.plan(canonical, ["foo"]);
+    expect(plan1.ok).toBe(true);
+    if (!plan1.ok) throw new Error(plan1.reason);
+    expect(plan1.changes).toEqual([{ op: "update", name: "foo" }]);
+    codexAdapter.apply(plan1);
+
+    // Second plan with same canonical as managed: should be a no-op
+    const plan2 = codexAdapter.plan(canonical, ["foo"]);
+    expect(plan2.ok).toBe(true);
+    if (!plan2.ok) throw new Error(plan2.reason);
+    expect(plan2.changes).toHaveLength(0);
   });
 });

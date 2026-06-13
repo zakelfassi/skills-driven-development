@@ -73,6 +73,96 @@ function stripInlineComment(line: string): string {
   return line;
 }
 
+/**
+ * Parse the inner content of a TOML table header (the part between `[` and `]`)
+ * into an array of key segments, respecting quoted keys and stripping insignificant
+ * whitespace around dots and at the start/end.
+ *
+ * Returns null if the content cannot be parsed as a valid dotted key.
+ *
+ * Examples:
+ *   " mcp_servers.foo "    → ["mcp_servers", "foo"]
+ *   "mcp_servers . foo"    → ["mcp_servers", "foo"]
+ *   `mcp_servers."a b"`    → ["mcp_servers", "a b"]
+ *   `mcp_servers.'lit'`    → ["mcp_servers", "lit"]
+ */
+function parseTomlKeySegments(raw: string): string[] | null {
+  const segments: string[] = [];
+  let i = 0;
+  const len = raw.length;
+
+  // Skip leading whitespace
+  while (i < len && (raw[i] === " " || raw[i] === "\t")) i++;
+
+  while (i < len) {
+    const ch = raw[i];
+
+    if (ch === '"') {
+      // Double-quoted key: TOML escape sequences apply
+      i++;
+      let seg = "";
+      while (i < len && raw[i] !== '"') {
+        if (raw[i] === "\\") {
+          i++;
+          if (i >= len) return null;
+          const esc = raw[i];
+          if (esc === '"') seg += '"';
+          else if (esc === "\\") seg += "\\";
+          else if (esc === "n") seg += "\n";
+          else if (esc === "t") seg += "\t";
+          else if (esc === "r") seg += "\r";
+          else if (esc === "b") seg += "\b";
+          else if (esc === "f") seg += "\f";
+          else seg += esc;
+        } else {
+          seg += raw[i];
+        }
+        i++;
+      }
+      if (i >= len) return null; // unterminated double-quoted key
+      i++; // skip closing "
+      segments.push(seg);
+    } else if (ch === "'") {
+      // Single-quoted literal key: no escape sequences
+      i++;
+      let seg = "";
+      while (i < len && raw[i] !== "'") {
+        seg += raw[i++];
+      }
+      if (i >= len) return null; // unterminated single-quoted key
+      i++; // skip closing '
+      segments.push(seg);
+    } else if (/[A-Za-z0-9_-]/.test(ch)) {
+      // Bare key
+      let seg = "";
+      while (i < len && /[A-Za-z0-9_-]/.test(raw[i])) {
+        seg += raw[i++];
+      }
+      segments.push(seg);
+    } else {
+      // Unexpected character
+      return null;
+    }
+
+    // Skip whitespace after key segment
+    while (i < len && (raw[i] === " " || raw[i] === "\t")) i++;
+
+    if (i >= len) break; // end of input — done
+
+    if (raw[i] === ".") {
+      i++; // consume dot
+      // Skip whitespace after dot
+      while (i < len && (raw[i] === " " || raw[i] === "\t")) i++;
+      if (i >= len) return null; // trailing dot is invalid
+    } else {
+      // Unexpected character after segment (e.g. unrecognized char)
+      return null;
+    }
+  }
+
+  return segments.length > 0 ? segments : null;
+}
+
 function getCodexDir(): string {
   const codexHome = process.env.CODEX_HOME;
   return codexHome ?? join(homedir(), ".codex");
@@ -95,12 +185,31 @@ export function findBlockExtent(lines: string[], name: string): [number, number]
   const key = tomlKey(name);
   const rootHeader = `[mcp_servers.${key}]`;
   const subPrefix = `[mcp_servers.${key}.`;
+  // Expected normalized key segments for the root header
+  const rootSegments = ["mcp_servers", name];
 
   let startIdx = -1;
   for (let i = 0; i < lines.length; i++) {
-    if (stripInlineComment(lines[i]).trim() === rootHeader) {
+    const stripped = stripInlineComment(lines[i]).trim();
+    // Fast path: exact match (common case)
+    if (stripped === rootHeader) {
       startIdx = i;
       break;
+    }
+    // Normalized comparison: parse header into key segments and compare.
+    // This handles insignificant whitespace like `[ mcp_servers.foo ]` or
+    // `[mcp_servers . foo]` as well as quoted names like `[mcp_servers."a b"]`.
+    if (stripped.startsWith("[") && stripped.endsWith("]") && !stripped.startsWith("[[")) {
+      const inner = stripped.slice(1, -1);
+      const segs = parseTomlKeySegments(inner);
+      if (
+        segs !== null &&
+        segs.length === rootSegments.length &&
+        segs.every((s, j) => s === rootSegments[j])
+      ) {
+        startIdx = i;
+        break;
+      }
     }
   }
 
@@ -109,7 +218,22 @@ export function findBlockExtent(lines: string[], name: string): [number, number]
   let endIdx = lines.length;
   for (let i = startIdx + 1; i < lines.length; i++) {
     const trimmed = stripInlineComment(lines[i]).trim();
-    if (trimmed.startsWith("[") && !trimmed.startsWith(subPrefix)) {
+    if (trimmed.startsWith("[")) {
+      // Keep sub-tables of this server inside the block.
+      // Fast path: exact prefix match.
+      if (trimmed.startsWith(subPrefix)) continue;
+      // Normalized check: segments start with ["mcp_servers", name] and have more.
+      if (trimmed.endsWith("]") && !trimmed.startsWith("[[")) {
+        const inner = trimmed.slice(1, -1);
+        const segs = parseTomlKeySegments(inner);
+        if (
+          segs !== null &&
+          segs.length > rootSegments.length &&
+          rootSegments.every((s, j) => s === segs[j])
+        ) {
+          continue; // sub-table of this server — stays inside the block
+        }
+      }
       endIdx = i;
       break;
     }
