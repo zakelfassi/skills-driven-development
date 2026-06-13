@@ -349,8 +349,18 @@ export function buildMcpRows(globalRoot: string, opts?: BuildMcpRowsOpts): McpRo
         continue;
       }
 
-      const readResult = adapter.read();
       const managed = loadManaged(hostId);
+
+      // M17 fix 1: skip reading host config when the server is not intended for
+      // this host AND there is no managed cleanup pending. Mirrors what
+      // runMcpSync does — it skips the host entirely when there is nothing to
+      // do. Avoids false drift from malformed-but-irrelevant host configs.
+      if (!isIntendedForHost(server, hostId, adapter) && !managed.includes(name)) {
+        hosts[hostId] = "excluded";
+        continue;
+      }
+
+      const readResult = adapter.read();
 
       if (!readResult.ok) {
         // Malformed host config — treat as drift
@@ -432,9 +442,14 @@ export function buildMcpRows(globalRoot: string, opts?: BuildMcpRowsOpts): McpRo
         } else if (
           isPresent &&
           !isManaged &&
+          isIntendedForHost(server, hostId, adapter) &&
           syncPlan.warnings.some((w) => w.includes(`"${name}"`))
         ) {
           // Unmanaged entry of the same name blocks sync — show as drift/conflict.
+          // M17 fix 2: only treat warnings as unmanaged-name collisions when the
+          // server IS intended for the host. Intentional-skip warnings (e.g. remote
+          // on a stdio-only host) also mention the server name but are NOT
+          // collisions — the canonical server can never sync there regardless.
           hosts[hostId] = "drift";
         } else {
           hosts[hostId] = "excluded";

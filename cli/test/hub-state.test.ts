@@ -419,6 +419,7 @@ describe("buildMcpRows — regression (unchanged behaviors)", () => {
     writeConfig(tmp, config);
 
     const brokenAdapter: McpRowAdapter = {
+      omitsDisabled: false,
       available: () => true,
       read: () => ({ ok: false, reason: "parse error" }),
       plan: (_c, _m) => okPlan(),
@@ -1391,5 +1392,184 @@ describe("buildMirrorRows — copy mirror stale-content detection (f-m17-hub-cop
 
     expect(row?.status).toBe("ok");
     expect(row?.driftKind).toBeUndefined();
+  });
+});
+
+// ── f-m17-hub-mcp-intent-read: intent-before-read + skip-warning fix ─────────
+
+describe("buildMcpRows — intent checked before reading host config (f-m17-hub-mcp-intent-read)", () => {
+  it("malformed irrelevant host (no intended + no managed) → excluded, read() NOT called", () => {
+    // Server is disabled on an omitting-host (isIntendedForHost=false).
+    // The host config is malformed (read() returns ok:false).
+    // Before the fix, the hub would call read(), see ok:false, and mark drift.
+    // After the fix, read() must NOT be called — the host is irrelevant.
+    const config: CanonicalMcpConfig = {
+      version: 1,
+      servers: {
+        "disabled-srv": { command: "echo", disabled: true },
+      },
+    };
+    writeConfig(tmp, config);
+
+    let readCalled = false;
+    const malformedAdapter: McpRowAdapter = {
+      omitsDisabled: true,
+      available: () => true,
+      read: (): HostReadResult => {
+        readCalled = true;
+        return { ok: false, reason: "malformed host config" };
+      },
+      plan: (_c, _m) => okPlan(),
+    };
+
+    const rows = buildMcpRows(tmp, {
+      adapters: { "claude-code": malformedAdapter },
+      loadManaged: () => [], // no managed names — nothing to clean up
+    });
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0].hosts["claude-code"]).toBe("excluded");
+    expect(readCalled).toBe(false);
+  });
+
+  it("disabled-on-omitting + no managed → excluded without reading host config", () => {
+    // Disabled server on an omitting-host (claude-code): adapter omits it.
+    // No managed entry → nothing to clean up → show excluded immediately.
+    const config: CanonicalMcpConfig = {
+      version: 1,
+      servers: {
+        "disabled-srv": { command: "echo", disabled: true },
+      },
+    };
+    writeConfig(tmp, config);
+
+    let readCalled = false;
+    const adapter = makeAdapter({
+      serverNames: [],
+      planFn: (_c, _m) => okPlan(),
+      omitsDisabled: true,
+    });
+    // Wrap read() to detect if it is called
+    const wrappedAdapter: McpRowAdapter = {
+      ...adapter,
+      read: (): HostReadResult => {
+        readCalled = true;
+        return adapter.read();
+      },
+    };
+
+    const rows = buildMcpRows(tmp, {
+      adapters: { "claude-code": wrappedAdapter },
+      loadManaged: () => [],
+    });
+
+    expect(rows[0].hosts["claude-code"]).toBe("excluded");
+    expect(readCalled).toBe(false);
+  });
+
+  it("unsupported remote on stdio-only host WITH a same-name local entry → excluded, not conflict", () => {
+    // Remote server in canonical config. Claude-desktop is stdio-only
+    // (acceptsRemote=false) → server is not intended for this host.
+    // User has a local same-name entry (isPresent=true) but it is NOT managed.
+    // The adapter emits a skip warning mentioning the server name.
+    // Before the fix: warning check would mark as drift/conflict.
+    // After the fix: isIntendedForHost=false → excluded, not conflict.
+    const config: CanonicalMcpConfig = {
+      version: 1,
+      servers: {
+        "remote-srv": { url: "https://mcp.example.com", type: "http" },
+      },
+    };
+    writeConfig(tmp, config);
+
+    const adapter = makeAdapter({
+      serverNames: ["remote-srv"], // same-name local entry exists in host
+      planFn: (_c, _m) => ({
+        ok: true as const,
+        changes: [],
+        filePath: "/fake",
+        finalDoc: {},
+        warnings: [`skipping "remote-srv": unsupported server type for this host`],
+      }),
+      omitsDisabled: true,
+      acceptsRemote: false, // stdio-only host (e.g. claude-desktop)
+    });
+
+    const rows = buildMcpRows(tmp, {
+      adapters: { "claude-desktop": adapter },
+      loadManaged: () => [], // not managed by skdd
+    });
+
+    expect(rows[0].hosts["claude-desktop"]).toBe("excluded");
+  });
+
+  it("genuine unmanaged same-name collision on supported host → still drift/conflict", () => {
+    // Server IS intended for this host (stdio, not disabled, omitsDisabled=true).
+    // Plan emits a warning about the server name (unmanaged entry blocks sync).
+    // isPresent=true, isManaged=false.
+    // This should still be reported as drift — a real conflict the user must resolve.
+    const config: CanonicalMcpConfig = {
+      version: 1,
+      servers: {
+        "conflict-srv": { command: "cmd" },
+      },
+    };
+    writeConfig(tmp, config);
+
+    const adapter = makeAdapter({
+      serverNames: ["conflict-srv"], // present in host (unmanaged)
+      planFn: (_c, _m) => ({
+        ok: true as const,
+        changes: [], // plan emits no add (blocked by collision)
+        filePath: "/fake",
+        finalDoc: {},
+        warnings: [`unmanaged entry "conflict-srv" already exists; skipping`],
+      }),
+      omitsDisabled: true,
+    });
+
+    const rows = buildMcpRows(tmp, {
+      adapters: { "claude-code": adapter },
+      loadManaged: () => [], // not managed by skdd
+    });
+
+    expect(rows[0].hosts["claude-code"]).toBe("drift");
+  });
+
+  it("non-intended server with managed cleanup pending still reads host config", () => {
+    // Server is remote on a stdio-only host (not intended).
+    // BUT it IS in the managed list (was previously synced, now host changed).
+    // We must still read to check for pending removal — no early exit.
+    const config: CanonicalMcpConfig = {
+      version: 1,
+      servers: {
+        "remote-srv": { url: "https://mcp.example.com", type: "http" },
+      },
+    };
+    writeConfig(tmp, config);
+
+    let readCalled = false;
+    const adapter = makeAdapter({
+      serverNames: ["remote-srv"],
+      planFn: (_c, _m) => okPlan([{ op: "remove", name: "remote-srv" }]),
+      omitsDisabled: true,
+      acceptsRemote: false,
+    });
+    const wrappedAdapter: McpRowAdapter = {
+      ...adapter,
+      read: (): HostReadResult => {
+        readCalled = true;
+        return adapter.read();
+      },
+    };
+
+    const rows = buildMcpRows(tmp, {
+      adapters: { "claude-desktop": wrappedAdapter },
+      loadManaged: () => ["remote-srv"], // managed — pending removal
+    });
+
+    // Managed + plan has removal → drift (pending removal)
+    expect(rows[0].hosts["claude-desktop"]).toBe("drift");
+    expect(readCalled).toBe(true); // read() WAS called — managed cleanup pending
   });
 });
