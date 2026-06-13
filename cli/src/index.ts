@@ -204,7 +204,7 @@ program
   .option("-j, --json", "Emit a machine-readable JSON report", false)
   .option(
     "--apply",
-    "Consolidate duplicates/single-source skills into canonical skills/ and refresh mirrors via 'skdd link --force'",
+    "Consolidate duplicates/single-source skills into canonical skills/ and refresh mirrors via a safe non-forced 'skdd link'. Leftover unrecognized files block the link; review them and rerun 'skdd link [-g] --force' to replace the dir.",
     false,
   )
   .option(

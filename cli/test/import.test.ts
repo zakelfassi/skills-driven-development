@@ -244,6 +244,10 @@ describe("runImport", () => {
       // Unrecognized content was NOT deleted
       expect(existsSync(join(tmp, ".claude/skills/readme.txt"))).toBe(true);
       expect(existsSync(join(tmp, ".claude/skills/no-name/SKILL.md"))).toBe(true);
+      // Actionable guidance message is emitted so the user knows what to do next
+      const allLogs = logs.join("\n");
+      expect(allLogs).toMatch(/unrecognized files/);
+      expect(allLogs).toMatch(/skdd link --force/);
     },
   );
 });
@@ -332,6 +336,10 @@ describe("runImport — global mode colony bootstrap", () => {
       // Unrecognized content was NOT deleted
       expect(existsSync(join(droidSkillsDir, "extra.txt"))).toBe(true);
       expect(existsSync(join(droidSkillsDir, "no-name", "SKILL.md"))).toBe(true);
+      // Actionable guidance message is emitted so the user knows what to do next
+      const allLogs = logs.join("\n");
+      expect(allLogs).toMatch(/unrecognized files/);
+      expect(allLogs).toMatch(/skdd link -g --force/);
     },
   );
 
