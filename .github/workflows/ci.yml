@@ -134,7 +134,7 @@ jobs:
         run: pnpm dlx @vscode/vsce package --no-dependencies
 
       - name: Upload .vsix artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: skdd-vscode-extension
           path: extensions/vscode/*.vsix
