@@ -10,6 +10,7 @@ jobs:
   cli:
     name: CLI
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - name: Checkout
         uses: actions/checkout@v5
@@ -96,6 +97,7 @@ jobs:
 
       - name: Markdown link check (best effort, non-blocking)
         uses: gaurav-nelson/github-action-markdown-link-check@v1
+        timeout-minutes: 3
         with:
           use-quiet-mode: "yes"
           use-verbose-mode: "yes"
