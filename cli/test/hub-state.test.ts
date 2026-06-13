@@ -1185,4 +1185,39 @@ describe("buildMcpRows — adapter intent checked before needs-env (f-m9)", () =
 
     expect(rows[0].hosts["opencode"]).toBe("needs-env");
   });
+
+  it("remote server + unset url + managed+present on stdio-only host (claude-desktop) → drift, NOT needs-env (M9-A2)", () => {
+    // M9-A2: A remote server (url with unresolved placeholder) is managed and
+    // still present in a stdio-only host (claude-desktop, acceptsRemote=false).
+    // The adapter plans a removal (it should never have been written there).
+    // Hub must show 'drift' (pending removal), NOT 'needs-env'.
+    delete process.env[UNSET_VAR];
+
+    const config: CanonicalMcpConfig = {
+      version: 1,
+      servers: {
+        "remote-managed-srv": {
+          url: `https://mcp.example.com/\${${UNSET_VAR}}/endpoint`,
+          type: "http",
+        },
+      },
+    };
+    writeConfig(tmp, config);
+
+    // Server is present in host config AND adapter plans removal
+    const adapter = makeAdapter({
+      serverNames: ["remote-managed-srv"],
+      planFn: (_c, _m) => okPlan([{ op: "remove", name: "remote-managed-srv" }]),
+      omitsDisabled: true,
+      acceptsRemote: false, // stdio-only host (claude-desktop)
+    });
+
+    const rows = buildMcpRows(tmp, {
+      adapters: { "claude-desktop": adapter },
+      loadManaged: () => ["remote-managed-srv"],
+    });
+
+    expect(rows[0].hosts["claude-desktop"]).toBe("drift");
+    expect(rows[0].hosts["claude-desktop"]).not.toBe("needs-env");
+  });
 });

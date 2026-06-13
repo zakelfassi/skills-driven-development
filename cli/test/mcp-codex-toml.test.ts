@@ -1062,6 +1062,184 @@ describe("codexAdapter — indented table header after managed block (leading-wh
   });
 });
 
+// ── Fix: trim leading whitespace on managed block START (indented header) ────
+
+describe("codexAdapter — indented managed block START (block-start leading-whitespace fix)", () => {
+  it("findBlockExtent: locates an indented managed root header '  [mcp_servers.x]'", () => {
+    const lines = [
+      "[other]",
+      "y = 1",
+      "  [mcp_servers.x]",
+      'command = "tool"',
+      "[settings]",
+      "z = 2",
+    ];
+    expect(findBlockExtent(lines, "x")).toEqual([2, 4]);
+  });
+
+  it("findBlockExtent: indented managed header with indented sub-table includes the sub-table", () => {
+    const lines = [
+      "  [mcp_servers.x]",
+      'command = "tool"',
+      "  [mcp_servers.x.tools.foo]",
+      "enabled = true",
+      "[settings]",
+      "z = 1",
+    ];
+    expect(findBlockExtent(lines, "x")).toEqual([0, 4]);
+  });
+
+  it("spliceBlocks: update changes only the indented managed block", () => {
+    const content = [
+      "[settings]",
+      'foo = "bar"',
+      "  [mcp_servers.x]",
+      'command = "old"',
+      "[other]",
+      "y = 1",
+    ].join("\n");
+    const newServer: McpServer = { command: "new-cmd" };
+    const result = spliceBlocks(content, [], [["x", newServer]]);
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error(result.reason);
+    // Old block removed, new block appended
+    expect(result.content).not.toContain('command = "old"');
+    expect(result.content).toContain('command = "new-cmd"');
+    // Surrounding tables preserved
+    expect(result.content).toContain("[settings]");
+    expect(result.content).toContain('foo = "bar"');
+    expect(result.content).toContain("[other]");
+    expect(result.content).toContain("y = 1");
+  });
+
+  it("spliceBlocks: remove deletes only the indented managed block", () => {
+    const content = [
+      "[settings]",
+      'foo = "bar"',
+      "  [mcp_servers.x]",
+      'command = "old"',
+      "[other]",
+      "y = 1",
+    ].join("\n");
+    const result = spliceBlocks(content, ["x"], []);
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error(result.reason);
+    expect(result.content).not.toContain("[mcp_servers.x]");
+    expect(result.content).not.toContain('command = "old"');
+    expect(result.content).toContain("[settings]");
+    expect(result.content).toContain("[other]");
+  });
+
+  it("spliceBlocks: indented managed block with indented sub-table removed entirely on remove", () => {
+    const content = [
+      "  [mcp_servers.x]",
+      'command = "old"',
+      "  [mcp_servers.x.tools.foo]",
+      "enabled = true",
+      "[settings]",
+      "z = 1",
+    ].join("\n");
+    const result = spliceBlocks(content, ["x"], []);
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error(result.reason);
+    expect(result.content).not.toContain("[mcp_servers.x]");
+    expect(result.content).not.toContain("[mcp_servers.x.tools.foo]");
+    expect(result.content).toContain("[settings]");
+  });
+
+  it("spliceBlocks: re-parse gate holds after updating indented managed block", () => {
+    const content = ["  [mcp_servers.x]", 'command = "old"', "[settings]", "z = 1"].join("\n");
+    const newServer: McpServer = { command: "new-cmd" };
+    const result = spliceBlocks(content, [], [["x", newServer]]);
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error(result.reason);
+    expect(() => parseToml(result.content)).not.toThrow();
+  });
+
+  it("spliceBlocks: comments BEFORE indented block and subsequent table are preserved when removing", () => {
+    // The block extent includes lines from the header up to (but not including)
+    // the next [table] line; a comment at the top before the block is preserved.
+    const content = [
+      "# top comment",
+      "",
+      "  [mcp_servers.x]",
+      'command = "old"',
+      "[other]",
+      "y = 1",
+    ].join("\n");
+    const result = spliceBlocks(content, ["x"], []);
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error(result.reason);
+    expect(result.content).not.toContain("[mcp_servers.x]");
+    expect(result.content).toContain("# top comment");
+    expect(result.content).toContain("[other]");
+  });
+
+  it("codexAdapter.plan: update of indented managed block changes only that block", () => {
+    const dir = join(fakeTmp, ".codex");
+    mkdirSync(dir, { recursive: true });
+    const content = [
+      "# Codex config",
+      "[settings]",
+      'model = "o3"',
+      "",
+      "  [mcp_servers.x]",
+      'command = "old"',
+      "",
+      "[shell]",
+      'shell = "bash"',
+      "",
+    ].join("\n");
+    writeFileSync(join(dir, "config.toml"), content, "utf8");
+
+    const canonical = makeCanonical({ x: { command: "new-cmd" } });
+    const plan = codexAdapter.plan(canonical, ["x"]);
+    expect(plan.ok).toBe(true);
+    if (!plan.ok) throw new Error(plan.reason);
+    expect(plan.changes).toEqual([{ op: "update", name: "x" }]);
+    const result = plan.finalDoc._tomlContent as string;
+
+    expect(result).not.toContain('command = "old"');
+    expect(result).toContain('command = "new-cmd"');
+    // Unrelated sections preserved
+    expect(result).toContain("# Codex config");
+    expect(result).toContain("[settings]");
+    expect(result).toContain('model = "o3"');
+    expect(result).toContain("[shell]");
+    expect(result).toContain('shell = "bash"');
+    // Must produce valid TOML
+    expect(() => parseToml(result)).not.toThrow();
+  });
+
+  it("codexAdapter.plan: remove of indented managed block preserves surrounding content", () => {
+    const dir = join(fakeTmp, ".codex");
+    mkdirSync(dir, { recursive: true });
+    const content = [
+      "# Codex config",
+      "[settings]",
+      'model = "o3"',
+      "  [mcp_servers.x]",
+      'command = "old"',
+      "[shell]",
+      'shell = "bash"',
+    ].join("\n");
+    writeFileSync(join(dir, "config.toml"), content, "utf8");
+
+    const canonical = makeCanonical();
+    const plan = codexAdapter.plan(canonical, ["x"]);
+    expect(plan.ok).toBe(true);
+    if (!plan.ok) throw new Error(plan.reason);
+    expect(plan.changes).toEqual([{ op: "remove", name: "x" }]);
+    const result = plan.finalDoc._tomlContent as string;
+
+    expect(result).not.toContain("[mcp_servers.x]");
+    expect(result).not.toContain('command = "old"');
+    expect(result).toContain("[settings]");
+    expect(result).toContain("[shell]");
+    expect(() => parseToml(result)).not.toThrow();
+  });
+});
+
 // ── Fix 2 parity: deep-equal content check (codex) ───────────────────────────
 
 describe("codexAdapter — content-equality no-op (fix-2 parity)", () => {

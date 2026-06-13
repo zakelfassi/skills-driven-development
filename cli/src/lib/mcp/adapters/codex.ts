@@ -65,7 +65,7 @@ export function findBlockExtent(lines: string[], name: string): [number, number]
 
   let startIdx = -1;
   for (let i = 0; i < lines.length; i++) {
-    if (lines[i].trimEnd() === rootHeader) {
+    if (lines[i].trim() === rootHeader) {
       startIdx = i;
       break;
     }
