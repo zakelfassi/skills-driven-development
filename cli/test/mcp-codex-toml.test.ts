@@ -1432,6 +1432,106 @@ describe("codexAdapter — inline comments on table headers (inline-comment fix)
   });
 });
 
+// ── Fix: inline-table header key quoting (http_headers + env) ────────────────
+
+describe("codexAdapter — inline-table header key quoting (fix: dot-in-header-name)", () => {
+  it("spliceBlocks: header key with dot is TOML-quoted in http_headers inline table", () => {
+    const server: McpServer = {
+      url: "https://mcp.example.com",
+      type: "http",
+      headers: { "X.Api": "v", Normal: "w" },
+    };
+    const result = spliceBlocks("", [], [["remote_srv", server]]);
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error();
+    // Dot-containing key must be JSON-quoted so TOML sees it as a flat key
+    expect(result.content).toContain(`"X.Api" = "v"`);
+    // Normal bare key emitted without quotes
+    expect(result.content).toContain(`Normal = "w"`);
+  });
+
+  it("parseToml reads X.Api as a FLAT key (not nested X → Api)", () => {
+    const server: McpServer = {
+      url: "https://mcp.example.com",
+      type: "http",
+      headers: { "X.Api": "v", Normal: "w" },
+    };
+    const result = spliceBlocks("", [], [["remote_srv", server]]);
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error();
+    const parsed = parseToml(result.content) as Record<string, unknown>;
+    const servers = parsed.mcp_servers as Record<string, unknown>;
+    const srv = servers.remote_srv as Record<string, unknown>;
+    const headers = srv.http_headers as Record<string, unknown>;
+    // "X.Api" must be a flat key, not nested
+    expect(headers["X.Api"]).toBe("v");
+    expect((headers as Record<string, unknown>).X).toBeUndefined();
+    expect(headers.Normal).toBe("w");
+  });
+
+  it("round-trip (write → read → no-op plan) is stable when headers contain dot keys", () => {
+    placeFixture();
+    const canonical = makeCanonical({
+      remote_dot: {
+        url: "https://api.example.com/mcp",
+        type: "http",
+        headers: { "X.Api": "v", Authorization: "Bearer tok" },
+      },
+    });
+    // First apply
+    const plan1 = codexAdapter.plan(canonical, []);
+    expect(plan1.ok).toBe(true);
+    if (!plan1.ok) throw new Error();
+    codexAdapter.apply(plan1);
+
+    // Second plan with same canonical as managed — must be a no-op
+    const plan2 = codexAdapter.plan(canonical, ["remote_dot"]);
+    expect(plan2.ok).toBe(true);
+    if (!plan2.ok) throw new Error();
+    expect(plan2.changes).toHaveLength(0);
+  });
+
+  it("header value with special chars (quotes, backslash) is correctly escaped", () => {
+    const server: McpServer = {
+      url: "https://mcp.example.com",
+      type: "http",
+      headers: { Authorization: 'Bearer "special\\value"', Normal: "plain" },
+    };
+    const result = spliceBlocks("", [], [["srv", server]]);
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error();
+    // Must produce valid TOML
+    expect(() => parseToml(result.content)).not.toThrow();
+    // Re-parse and verify value is round-tripped correctly
+    const parsed = parseToml(result.content) as Record<string, unknown>;
+    const servers = parsed.mcp_servers as Record<string, unknown>;
+    const srv = servers.srv as Record<string, unknown>;
+    const headers = srv.http_headers as Record<string, unknown>;
+    expect(headers.Authorization).toBe('Bearer "special\\value"');
+    expect(headers.Normal).toBe("plain");
+  });
+
+  it("env keys with dots are also quoted in env inline table", () => {
+    const server: McpServer = {
+      command: "tool",
+      env: { "MY.VAR": "val", NORMAL: "ok" },
+    };
+    const result = spliceBlocks("", [], [["srv", server]]);
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error();
+    // Dot-containing env key must be quoted
+    expect(result.content).toContain(`"MY.VAR" = "val"`);
+    expect(result.content).toContain(`NORMAL = "ok"`);
+    // Must produce valid TOML
+    expect(() => parseToml(result.content)).not.toThrow();
+    const parsed = parseToml(result.content) as Record<string, unknown>;
+    const servers = parsed.mcp_servers as Record<string, unknown>;
+    const srv = servers.srv as Record<string, unknown>;
+    const env = srv.env as Record<string, unknown>;
+    expect(env["MY.VAR"]).toBe("val");
+  });
+});
+
 // ── Fix 2 parity: deep-equal content check (codex) ───────────────────────────
 
 describe("codexAdapter — content-equality no-op (fix-2 parity)", () => {

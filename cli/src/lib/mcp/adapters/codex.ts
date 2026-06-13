@@ -134,7 +134,7 @@ function serverToTomlBlock(name: string, server: McpServer): string {
     }
     if (server.env && Object.keys(server.env).length > 0) {
       const envEntries = Object.entries(server.env)
-        .map(([k, v]) => `${k} = ${JSON.stringify(v)}`)
+        .map(([k, v]) => `${tomlKey(k)} = ${JSON.stringify(v)}`)
         .join(", ");
       parts.push(`env = {${envEntries}}`);
     }
@@ -145,7 +145,7 @@ function serverToTomlBlock(name: string, server: McpServer): string {
     }
     if (server.headers && Object.keys(server.headers).length > 0) {
       const headerEntries = Object.entries(server.headers)
-        .map(([k, v]) => `${k} = ${JSON.stringify(v)}`)
+        .map(([k, v]) => `${tomlKey(k)} = ${JSON.stringify(v)}`)
         .join(", ");
       parts.push(`http_headers = {${headerEntries}}`);
     }
