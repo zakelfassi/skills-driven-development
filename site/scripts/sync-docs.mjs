@@ -66,12 +66,25 @@ function stripLeadingH1(body) {
   return body.replace(/^#\s+.+?\s*\n+/, "");
 }
 
-function rewriteRelativeLinks(body) {
+// Rewrite a single .md link target to its Starlight slug form.
+// Returns null when the link should be left verbatim (absolute URLs, etc.).
+export function rewriteMdLinkTarget(path, hash = "") {
+  // Skip absolute URLs (https://, http://, mailto:, ftp://, etc.),
+  // protocol-relative URLs (//), and anything that isn't a repo-relative path.
+  if (/^[a-z][a-z\d+\-.]*:|^\/\//i.test(path)) return null;
+  return `${path}/${hash}`;
+}
+
+export function rewriteRelativeLinks(body) {
   // Internal .md links should resolve as Starlight slugs. Drop the .md
-  // extension so Starlight's routing picks them up.
+  // extension so Starlight's routing picks them up. Skip absolute/external URLs.
   return body.replace(
     /(\]\()([^)]+?)\.md(#[^)]*)?(\))/g,
-    (_, pre, path, hash = "", post) => `${pre}${path}/${hash}${post}`,
+    (match, pre, path, hash = "", post) => {
+      const rewritten = rewriteMdLinkTarget(path, hash);
+      if (rewritten === null) return match;
+      return `${pre}${rewritten}${post}`;
+    },
   );
 }
 
@@ -151,7 +164,10 @@ async function main() {
   console.log(`\n✓ synced ${mappings.length + 1} pages into ${relative(repoRoot, contentDir)}`);
 }
 
-main().catch((err) => {
-  console.error(err);
-  process.exit(1);
-});
+// Only run when invoked directly (not when imported by tests).
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  main().catch((err) => {
+    console.error(err);
+    process.exit(1);
+  });
+}
