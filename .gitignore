@@ -48,6 +48,7 @@ venv/
 # Test output
 coverage/
 .nyc_output/
+.vite/
 
 # Temp
 *.log
