@@ -249,6 +249,7 @@ export const codexAdapter: McpHostAdapter = {
 
     const changes: ServerChange[] = [];
     const warnings: string[] = [];
+    const omitted: string[] = [];
     const toRemove: string[] = [];
     const toUpsert: Array<[string, McpServer]> = [];
     const canonicalNames = new Set(Object.keys(canonical.servers));
@@ -262,6 +263,10 @@ export const codexAdapter: McpHostAdapter = {
         if (managed.includes(name) && existingNames.has(name)) {
           changes.push({ op: "remove", name });
           toRemove.push(name);
+        } else if (managed.includes(name)) {
+          // Managed but TOML block already absent — track in omitted so managed
+          // state is purged and a future same-name entry is not clobbered.
+          omitted.push(name);
         }
         continue;
       }
@@ -306,6 +311,10 @@ export const codexAdapter: McpHostAdapter = {
       if (!canonicalNames.has(managedName) && existingNames.has(managedName)) {
         changes.push({ op: "remove", name: managedName });
         toRemove.push(managedName);
+      } else if (!canonicalNames.has(managedName)) {
+        // Managed, not in canonical, AND TOML block already absent — track in
+        // omitted so managed state is purged even when no removal change was needed.
+        omitted.push(managedName);
       }
     }
 
@@ -316,7 +325,7 @@ export const codexAdapter: McpHostAdapter = {
         filePath: p,
         finalDoc: { _tomlContent: originalContent },
         warnings,
-        omitted: [],
+        omitted,
       };
     }
 
@@ -333,7 +342,7 @@ export const codexAdapter: McpHostAdapter = {
         filePath: p,
         finalDoc: { _tomlContent: originalContent },
         warnings,
-        omitted: [],
+        omitted,
       };
     }
 
@@ -343,7 +352,7 @@ export const codexAdapter: McpHostAdapter = {
       filePath: p,
       finalDoc: { _tomlContent: result.content },
       warnings,
-      omitted: [],
+      omitted,
     };
   },
 

@@ -253,6 +253,10 @@ export function createJsonAdapter(cfg: JsonAdapterConfig): McpHostAdapter {
           if (managed.includes(name) && name in nextServers) {
             changes.push({ op: "remove", name });
             delete nextServers[name];
+          } else if (managed.includes(name)) {
+            // Managed but host entry already absent — track in omitted so managed
+            // state is purged and a future same-name entry is not clobbered.
+            omitted.push(name);
           }
           continue;
         }
@@ -305,6 +309,10 @@ export function createJsonAdapter(cfg: JsonAdapterConfig): McpHostAdapter {
         if (!canonicalNames.has(managedName) && managedName in nextServers) {
           changes.push({ op: "remove", name: managedName });
           delete nextServers[managedName];
+        } else if (!canonicalNames.has(managedName)) {
+          // Managed, not in canonical, AND host entry already absent — track in
+          // omitted so managed state is purged even when no removal change was needed.
+          omitted.push(managedName);
         }
       }
 

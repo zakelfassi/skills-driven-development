@@ -388,47 +388,37 @@ export async function runMcpSync(opts: McpSyncOptions = {}): Promise<number> {
     }
 
     // Reconcile managed names in the in-memory state.
-    // Always compute the intended set rather than relying solely on plan.changes
-    // being non-empty — Bug 2: when a managed server was removed from canonical
-    // and the host entry was already absent, plan produces no remove change, yet
-    // the name must be purged from managed so the user can freely reuse it later.
+    // The right discriminant is what the adapter ACTUALLY DID: a managed server
+    // remains managed iff it is still PRESENT in the host config after sync.
+    // Removal (removedByPlan) and omission (omittedByPlan) both signal absence;
+    // everything else is still present and should stay managed.
+    //
+    // Adapters track omitted[] for ALL absence cases:
+    //   • toNativeEntry returns null AND host entry was already absent (disabled/unsupported)
+    //   • allowlist excludes this host AND host entry was already absent
+    //   • server removed from canonical AND host entry was already absent
+    // This replaces the previous activeForHost approach, which was based on the
+    // disabled flag and incorrectly purged managed state on hosts that NATIVELY
+    // PERSIST disabled entries (droid disabled:true, opencode enabled:false,
+    // codex enabled=false) — losing ownership and preventing later safe removal.
     {
-      // Names that are "active" for this host: present in canonical, not
-      // disabled, and not excluded by the hosts allowlist.  This mirrors the
-      // adapter's own allowlist check without having to parse finalDoc.
-      // NOTE: disabled servers must NOT be considered active — even when their
-      // host entry is already absent (so the adapter plans no remove op), the
-      // managed name must still be purged so a later user-authored same-name
-      // entry is not clobbered on the next sync.
-      const activeForHost = new Set(
-        Object.entries(effectiveConfig.servers)
-          .filter(([, srv]) => !srv.disabled && (!srv.hosts || srv.hosts.includes(hostId)))
-          .map(([name]) => name),
-      );
-
       const removedByPlan = new Set(
         plan.changes.filter((c) => c.op === "remove").map((c) => c.name),
       );
       const addedByPlan = plan.changes
         .filter((c) => c.op === "add" || c.op === "update")
         .map((c) => c.name);
-      // Servers the adapter intentionally decided not to write (disabled, remote
-      // on a stdio-only host, etc.) AND whose host entry was already absent.
-      // These must be dropped from managed state so that a later user-authored
-      // same-name entry is not clobbered on the next sync.
+      // Names whose host entry is confirmed absent after this sync (adapter
+      // intentionally did not write them and reported them as omitted).
       const omittedByPlan = new Set(plan.omitted ?? []);
 
       const newManaged = [
-        // Keep previously managed names that are still active for this host
-        // (i.e. in canonical with a matching allowlist), were not removed by
-        // the plan, not intentionally omitted by the adapter, and whose
-        // expansion didn't fail (preserved entries stay).
-        ...managed.filter(
-          (m) =>
-            !removedByPlan.has(m) &&
-            !omittedByPlan.has(m) &&
-            (activeForHost.has(m) || expansionFailedManaged.has(m)),
-        ),
+        // Keep previously managed names that are still PRESENT in the host config:
+        // neither removed by the adapter nor confirmed absent (omitted).
+        // expansionFailedManaged servers are neither removed nor omitted (the adapter
+        // never saw them, so the preserved host entry stays) — they pass this filter
+        // and remain managed so the entry can be updated when the var is later set.
+        ...managed.filter((m) => !removedByPlan.has(m) && !omittedByPlan.has(m)),
         // Add names newly written by this sync that weren't tracked before.
         ...addedByPlan.filter((n) => !managed.includes(n)),
       ];
