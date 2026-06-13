@@ -1240,6 +1240,198 @@ describe("codexAdapter — indented managed block START (block-start leading-whi
   });
 });
 
+// ── Fix: inline comments on TOML table headers ───────────────────────────────
+
+describe("codexAdapter — inline comments on table headers (inline-comment fix)", () => {
+  it("findBlockExtent: locates block when header has a trailing inline comment", () => {
+    const lines = ["[mcp_servers.foo] # managed by skdd", 'command = "tool"', "[other]", "y = 1"];
+    expect(findBlockExtent(lines, "foo")).toEqual([0, 2]);
+  });
+
+  it("findBlockExtent: locates block when header has a comment with leading spaces", () => {
+    const lines = ["[mcp_servers.foo]  # do not edit", 'command = "tool"'];
+    expect(findBlockExtent(lines, "foo")).toEqual([0, 2]);
+  });
+
+  it("findBlockExtent: does NOT treat # inside a quoted server name as a comment", () => {
+    // [mcp_servers."a#b"] — the # is inside quotes, not a comment
+    const lines = [`[mcp_servers."a#b"]`, 'command = "tool"', "[other]", "y = 1"];
+    expect(findBlockExtent(lines, "a#b")).toEqual([0, 2]);
+  });
+
+  it("findBlockExtent: block boundary stops at next header even when it has an inline comment", () => {
+    const lines = [
+      "[mcp_servers.first] # managed",
+      'command = "first"',
+      "[mcp_servers.second] # also managed",
+      'command = "second"',
+    ];
+    expect(findBlockExtent(lines, "first")).toEqual([0, 2]);
+    expect(findBlockExtent(lines, "second")).toEqual([2, 4]);
+  });
+
+  it("findBlockExtent: sub-table with inline comment stays inside the block", () => {
+    const lines = [
+      "[mcp_servers.srv] # managed",
+      'command = "tool"',
+      "[mcp_servers.srv.tools.foo] # sub",
+      "enabled = true",
+      "[other]",
+      "x = 1",
+    ];
+    expect(findBlockExtent(lines, "srv")).toEqual([0, 4]);
+  });
+
+  it("spliceBlocks: update replaces header-with-comment block in place (no duplicate)", () => {
+    const content = [
+      "[settings]",
+      'foo = "bar"',
+      "",
+      "[mcp_servers.foo] # managed by skdd",
+      'command = "old"',
+      "",
+      "[other]",
+      "y = 1",
+    ].join("\n");
+    const newServer: McpServer = { command: "new-cmd" };
+    const result = spliceBlocks(content, [], [["foo", newServer]]);
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error(result.reason);
+    // Old block removed
+    expect(result.content).not.toContain('command = "old"');
+    // New block appended
+    expect(result.content).toContain("[mcp_servers.foo]");
+    expect(result.content).toContain('command = "new-cmd"');
+    // No duplicate header
+    const headerCount = (result.content.match(/\[mcp_servers\.foo/g) ?? []).length;
+    expect(headerCount).toBe(1);
+    // Surrounding content preserved
+    expect(result.content).toContain("[settings]");
+    expect(result.content).toContain("[other]");
+    // Re-parse gate must pass
+    expect(() => parseToml(result.content)).not.toThrow();
+  });
+
+  it("spliceBlocks: remove deletes the block including its commented header", () => {
+    const content = [
+      "[settings]",
+      'foo = "bar"',
+      "[mcp_servers.foo] # managed",
+      'command = "tool"',
+      "[other]",
+      "y = 1",
+    ].join("\n");
+    const result = spliceBlocks(content, ["foo"], []);
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error(result.reason);
+    expect(result.content).not.toContain("[mcp_servers.foo]");
+    expect(result.content).not.toContain('command = "tool"');
+    expect(result.content).toContain("[settings]");
+    expect(result.content).toContain("[other]");
+    expect(() => parseToml(result.content)).not.toThrow();
+  });
+
+  it("spliceBlocks: server name with '#' in quotes is not mis-split", () => {
+    // Server named "a#b": header is [mcp_servers."a#b"] — the # is inside quotes
+    const content = [`[mcp_servers."a#b"]`, 'command = "tool"', "[settings]", "x = 1"].join("\n");
+    const newServer: McpServer = { command: "updated" };
+    const result = spliceBlocks(content, [], [["a#b", newServer]]);
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error(result.reason);
+    expect(result.content).not.toContain('command = "tool"');
+    expect(result.content).toContain('command = "updated"');
+    expect(result.content).toContain(`[mcp_servers."a#b"]`);
+    const headerCount = (result.content.match(/\[mcp_servers\."a#b"\]/g) ?? []).length;
+    expect(headerCount).toBe(1);
+    expect(() => parseToml(result.content)).not.toThrow();
+  });
+
+  it("spliceBlocks: comments on OTHER lines/tables are preserved verbatim", () => {
+    const content = [
+      "# top-level comment",
+      "[settings] # keep me",
+      'model = "o3" # also keep',
+      "",
+      "[mcp_servers.foo] # managed",
+      'command = "old"',
+      "",
+      "[other] # section comment",
+      "y = 1",
+    ].join("\n");
+    const newServer: McpServer = { command: "new-cmd" };
+    const result = spliceBlocks(content, [], [["foo", newServer]]);
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error(result.reason);
+    expect(result.content).toContain("# top-level comment");
+    expect(result.content).toContain("[settings] # keep me");
+    expect(result.content).toContain('model = "o3" # also keep');
+    expect(result.content).toContain("[other] # section comment");
+    expect(() => parseToml(result.content)).not.toThrow();
+  });
+
+  it("codexAdapter.plan: update of a header-with-comment block writes correctly without duplicate", () => {
+    const dir = join(fakeTmp, ".codex");
+    mkdirSync(dir, { recursive: true });
+    const content = [
+      "# Codex config",
+      "[settings]",
+      'model = "o3"',
+      "",
+      "[mcp_servers.foo] # managed by skdd",
+      'command = "old-cmd"',
+      "",
+      "[shell]",
+      'shell = "zsh"',
+    ].join("\n");
+    writeFileSync(join(dir, "config.toml"), content, "utf8");
+
+    const canonical = makeCanonical({ foo: { command: "new-cmd" } });
+    const plan = codexAdapter.plan(canonical, ["foo"]);
+    expect(plan.ok).toBe(true);
+    if (!plan.ok) throw new Error(plan.reason);
+    expect(plan.changes).toEqual([{ op: "update", name: "foo" }]);
+    const result = plan.finalDoc._tomlContent as string;
+
+    expect(result).not.toContain('command = "old-cmd"');
+    expect(result).toContain('command = "new-cmd"');
+    // No duplicate
+    const headerCount = (result.match(/\[mcp_servers\.foo/g) ?? []).length;
+    expect(headerCount).toBe(1);
+    // Surrounding content preserved
+    expect(result).toContain("# Codex config");
+    expect(result).toContain("[settings]");
+    expect(result).toContain("[shell]");
+    expect(() => parseToml(result)).not.toThrow();
+  });
+
+  it("codexAdapter.plan: remove of a header-with-comment block deletes it cleanly", () => {
+    const dir = join(fakeTmp, ".codex");
+    mkdirSync(dir, { recursive: true });
+    const content = [
+      "# config",
+      "[settings]",
+      "x = 1",
+      "[mcp_servers.foo] # managed",
+      'command = "tool"',
+      "[other]",
+      "y = 2",
+    ].join("\n");
+    writeFileSync(join(dir, "config.toml"), content, "utf8");
+
+    const canonical = makeCanonical();
+    const plan = codexAdapter.plan(canonical, ["foo"]);
+    expect(plan.ok).toBe(true);
+    if (!plan.ok) throw new Error(plan.reason);
+    expect(plan.changes).toEqual([{ op: "remove", name: "foo" }]);
+    const result = plan.finalDoc._tomlContent as string;
+
+    expect(result).not.toContain("[mcp_servers.foo]");
+    expect(result).toContain("[settings]");
+    expect(result).toContain("[other]");
+    expect(() => parseToml(result)).not.toThrow();
+  });
+});
+
 // ── Fix 2 parity: deep-equal content check (codex) ───────────────────────────
 
 describe("codexAdapter — content-equality no-op (fix-2 parity)", () => {

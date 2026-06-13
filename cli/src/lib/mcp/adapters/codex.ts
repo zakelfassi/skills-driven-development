@@ -40,6 +40,39 @@ function tomlKey(name: string): string {
   return JSON.stringify(name);
 }
 
+/**
+ * Strip an inline TOML comment from a line, returning only the portion before
+ * the comment-starting `#`.  A `#` inside a quoted string is NOT a comment
+ * delimiter — this function handles both single-quoted (no escape sequences in
+ * TOML) and double-quoted (backslash escapes) strings correctly.
+ *
+ * Examples:
+ *   `[mcp_servers.foo] # managed`  →  `[mcp_servers.foo] `
+ *   `[mcp_servers."a#b"]`          →  `[mcp_servers."a#b"]`  (# is inside quotes)
+ */
+function stripInlineComment(line: string): string {
+  let inDouble = false;
+  let inSingle = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (inDouble) {
+      if (ch === "\\") {
+        i++; // skip the escaped character
+        continue;
+      }
+      if (ch === '"') inDouble = false;
+    } else if (inSingle) {
+      // TOML literal strings: no escape sequences
+      if (ch === "'") inSingle = false;
+    } else {
+      if (ch === '"') inDouble = true;
+      else if (ch === "'") inSingle = true;
+      else if (ch === "#") return line.slice(0, i);
+    }
+  }
+  return line;
+}
+
 function getCodexDir(): string {
   const codexHome = process.env.CODEX_HOME;
   return codexHome ?? join(homedir(), ".codex");
@@ -65,7 +98,7 @@ export function findBlockExtent(lines: string[], name: string): [number, number]
 
   let startIdx = -1;
   for (let i = 0; i < lines.length; i++) {
-    if (lines[i].trim() === rootHeader) {
+    if (stripInlineComment(lines[i]).trim() === rootHeader) {
       startIdx = i;
       break;
     }
@@ -75,7 +108,7 @@ export function findBlockExtent(lines: string[], name: string): [number, number]
 
   let endIdx = lines.length;
   for (let i = startIdx + 1; i < lines.length; i++) {
-    const trimmed = lines[i].trim();
+    const trimmed = stripInlineComment(lines[i]).trim();
     if (trimmed.startsWith("[") && !trimmed.startsWith(subPrefix)) {
       endIdx = i;
       break;
