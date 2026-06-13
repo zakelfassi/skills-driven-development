@@ -302,13 +302,16 @@ export function buildMcpRows(globalRoot: string, opts?: BuildMcpRowsOpts): McpRo
         if (excludedAdapter && excludedAdapter.available()) {
           const excludedRead = excludedAdapter.read();
           const excludedManaged = loadManaged(hostId);
-          if (
-            excludedRead.ok &&
-            excludedManaged.includes(name) &&
-            excludedRead.serverNames.includes(name)
-          ) {
-            hosts[hostId] = "drift";
-            continue;
+          if (excludedManaged.includes(name)) {
+            if (!excludedRead.ok || excludedRead.serverNames.includes(name)) {
+              // Malformed config with pending managed cleanup, OR server still
+              // present → sync will block on the config or plan a removal →
+              // surface as drift so users know action is needed.
+              hosts[hostId] = "drift";
+              continue;
+            }
+            // Managed but already absent from a readable config → cleaned up →
+            // fall through to "excluded".
           }
         }
         hosts[hostId] = "excluded";

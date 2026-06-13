@@ -359,6 +359,19 @@ export async function runMcpSync(opts: McpSyncOptions = {}): Promise<number> {
     // Exclude expansion-failed managed names from the managed list so the
     // adapter does not plan a removal for them.
     const effectiveManaged = managed.filter((m) => !expansionFailedManaged.has(m));
+
+    // Skip hosts with nothing to do: no intended servers AND no managed cleanup.
+    // A host is relevant iff it has intended servers (not excluded by the
+    // per-server hosts allowlist) OR managed names that need removal.
+    // Irrelevant hosts must not be parsed — a malformed config on an untargeted
+    // host must not cause sync to exit 1.
+    const hasIntendedServers = Object.values(resolvedConfig.servers).some(
+      (server) => !server.hosts || server.hosts.includes(hostId),
+    );
+    if (!hasIntendedServers && effectiveManaged.length === 0) {
+      continue;
+    }
+
     const plan = adapter.plan(resolvedConfig, effectiveManaged);
 
     if (!plan.ok) {
