@@ -120,7 +120,14 @@ export async function runForge(name: string, opts: ForgeOptions = {}): Promise<n
   // Refresh harness mirrors so the new skill is visible through the conventional path.
   if (!opts.skipLink) {
     if (opts.global) {
-      const linkCode = await runLink({ global: true, mode: "auto", quiet: true });
+      const explicitHarnesses =
+        opts.harness && opts.harness !== "auto" ? ([opts.harness] as Harness[]) : undefined;
+      const linkCode = await runLink({
+        global: true,
+        mode: "auto",
+        quiet: true,
+        harnesses: explicitHarnesses,
+      });
       if (linkCode === 0) {
         logger.dim("refreshed global harness mirrors");
       } else {

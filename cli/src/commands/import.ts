@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { cpSync, existsSync, mkdirSync, readFileSync, realpathSync, rmSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
 import matter from "gray-matter";
-import { globalSkillsDir, skddHome } from "../lib/global.js";
+import { ensureGlobalColony, globalSkillsDir, skddHome } from "../lib/global.js";
 import { HARNESSES, type Harness } from "../lib/harness.js";
 import { logger, pc } from "../lib/logger.js";
 import { findSkills } from "../lib/skill.js";
@@ -57,6 +57,13 @@ export async function runImport(
 ): Promise<number> {
   const cwd = resolve(opts.cwd ?? process.cwd());
   const root = opts.global ? skddHome() : target ? resolve(cwd, target) : cwd;
+
+  // Bootstrap the global colony before the existence check so that
+  // `skdd import -g` (including --apply) can run on a fresh machine where
+  // ~/.skdd doesn't exist yet — mirrors init -g and the mcp commands.
+  if (opts.global) {
+    ensureGlobalColony();
+  }
 
   if (!existsSync(root)) {
     logger.error(`Target directory does not exist: ${target ?? root}`);

@@ -12,6 +12,7 @@ import { platform, tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { runImport } from "../src/commands/import.js";
+import { SKDD_HOME_ENV } from "../src/lib/global.js";
 
 const skipOnWindows = platform() === "win32";
 const runUnix = skipOnWindows ? it.skip : it;
@@ -217,5 +218,76 @@ describe("runImport", () => {
     const code = await runImport("does-not-exist", { cwd: tmp, json: true });
     restoreConsole();
     expect(code).toBe(1);
+  });
+});
+
+describe("runImport — global mode colony bootstrap", () => {
+  let skddParent: string;
+  let fakeTmp: string;
+  let prevSkddHome: string | undefined;
+  let prevHome: string | undefined;
+
+  beforeEach(() => {
+    skddParent = mkdtempSync(join(tmpdir(), "skdd-import-global-"));
+    fakeTmp = mkdtempSync(join(tmpdir(), "skdd-import-fake-home-"));
+    prevSkddHome = process.env[SKDD_HOME_ENV];
+    prevHome = process.env.HOME;
+    // Point SKDD_HOME at a subdirectory that does NOT exist yet
+    process.env[SKDD_HOME_ENV] = join(skddParent, ".skdd-fresh");
+    process.env.HOME = fakeTmp;
+    captureConsole();
+  });
+
+  afterEach(() => {
+    restoreConsole();
+    if (prevSkddHome === undefined) delete process.env[SKDD_HOME_ENV];
+    else process.env[SKDD_HOME_ENV] = prevSkddHome;
+    if (prevHome === undefined) delete process.env.HOME;
+    else process.env.HOME = prevHome;
+    rmSync(skddParent, { recursive: true, force: true });
+    rmSync(fakeTmp, { recursive: true, force: true });
+  });
+
+  it("import -g exits early with error when SKDD_HOME does not exist (non-global target missing)", async () => {
+    // Baseline: without global flag, missing target still returns 1
+    const skddFreshHome = join(skddParent, ".skdd-fresh");
+    expect(existsSync(skddFreshHome)).toBe(false);
+    const code = await runImport(skddFreshHome, { cwd: skddParent, json: true });
+    restoreConsole();
+    expect(code).toBe(1);
+  });
+
+  runUnix(
+    "import -g --apply on a fresh SKDD_HOME bootstraps colony and consolidates harness-global skills",
+    async () => {
+      const skddFreshHome = join(skddParent, ".skdd-fresh");
+      expect(existsSync(skddFreshHome)).toBe(false);
+
+      // Seed a skill in the droid harness global dir (~/.factory/skills)
+      const droidGlobalDir = join(fakeTmp, ".factory", "skills", "hello");
+      mkdirSync(droidGlobalDir, { recursive: true });
+      writeFileSync(join(droidGlobalDir, "SKILL.md"), HELLO_SKILL);
+
+      const code = await runImport(undefined, { global: true, apply: true, skipLink: false });
+      restoreConsole();
+      expect(code).toBe(0);
+
+      // Colony was bootstrapped
+      expect(existsSync(join(skddFreshHome, "skills"))).toBe(true);
+      // hello skill consolidated into canonical
+      expect(existsSync(join(skddFreshHome, "skills", "hello", "SKILL.md"))).toBe(true);
+    },
+  );
+
+  it("import -g (scan only) on a fresh SKDD_HOME bootstraps colony and returns 0", async () => {
+    const skddFreshHome = join(skddParent, ".skdd-fresh");
+    expect(existsSync(skddFreshHome)).toBe(false);
+
+    const code = await runImport(undefined, { global: true, json: true });
+    restoreConsole();
+    expect(code).toBe(0);
+
+    // Colony was created
+    expect(existsSync(join(skddFreshHome, "skills"))).toBe(true);
   });
 });
