@@ -13,6 +13,7 @@ import type { LinkMode } from "./lib/fs-link.js";
 import type { Harness } from "./lib/harness.js";
 import { logger } from "./lib/logger.js";
 import type { McpHostId } from "./lib/mcp/schema.js";
+import { parseKvPairs } from "./lib/parse-kv-pairs.js";
 import { parseShellArgs } from "./lib/parse-shell-args.js";
 
 declare const __SKDD_VERSION__: string;
@@ -263,14 +264,18 @@ mcp
     "Arguments for the command. Tokens are split on whitespace; quote segments that contain spaces (single or double quotes), e.g. --args '-y @pkg \"/path/with spaces\"'",
   )
   .option(
-    "--env <pairs>",
-    "Comma-separated KEY=VALUE environment variables, e.g. API_KEY=${MY_KEY}",
+    "--env <kv>",
+    "KEY=VALUE environment variable (repeatable). Specify once per variable; values may contain = or , (e.g. --env API_KEY=${MY_KEY} --env PATH=/usr/local/bin:/usr/bin)",
+    (v: string, acc: string[]) => [...acc, v],
+    [] as string[],
   )
   .option("-u, --url <url>", "URL of the remote MCP server")
   .option("--type <type>", "Remote server type: http|sse", "http")
   .option(
-    "--headers <pairs>",
-    "Comma-separated KEY=VALUE request headers for remote MCP servers (remote only), e.g. Authorization=Bearer ${TOK}",
+    "--headers <kv>",
+    "KEY=VALUE request header (repeatable, remote only). Specify once per header; values may contain commas and = signs (e.g. --headers 'Authorization=Bearer ${TOK}' --headers 'Accept=application/json, text/event-stream')",
+    (v: string, acc: string[]) => [...acc, v],
+    [] as string[],
   )
   .option(
     "--hosts <list>",
@@ -284,27 +289,18 @@ mcp
       opts: {
         command?: string;
         args?: string;
-        env?: string;
+        env: string[];
         url?: string;
         type?: string;
-        headers?: string;
+        headers: string[];
         hosts?: string;
         disabled: boolean;
         force: boolean;
       },
     ) => {
       const args = opts.args ? parseShellArgs(opts.args) : undefined;
-      const parseKeyValuePairs = (raw: string): Record<string, string> =>
-        Object.fromEntries(
-          raw.split(",").map((pair) => {
-            const idx = pair.indexOf("=");
-            return idx === -1
-              ? [pair.trim(), ""]
-              : [pair.slice(0, idx).trim(), pair.slice(idx + 1).trim()];
-          }),
-        );
-      const env = opts.env ? parseKeyValuePairs(opts.env) : undefined;
-      const headers = opts.headers ? parseKeyValuePairs(opts.headers) : undefined;
+      const env = opts.env.length > 0 ? parseKvPairs(opts.env) : undefined;
+      const headers = opts.headers.length > 0 ? parseKvPairs(opts.headers) : undefined;
       const hosts = opts.hosts
         ? (opts.hosts.split(",").map((h) => h.trim()) as McpHostId[])
         : undefined;
