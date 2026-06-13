@@ -4,6 +4,7 @@ import {
   existsSync,
   lstatSync,
   mkdirSync,
+  readdirSync,
   readFileSync,
   realpathSync,
   rmdirSync,
@@ -272,6 +273,33 @@ function printHumanReport(report: ImportReport): void {
   }
 }
 
+/**
+ * Compute a stable hash over the entire file tree rooted at `dir`.
+ * Files are visited in sorted order so the result is deterministic.
+ * Returns a 16-char hex digest that can be compared between two directories
+ * to decide whether they are byte-identical.
+ */
+function dirTreeHash(dir: string): string {
+  const hash = createHash("sha256");
+  function walk(d: string, rel: string) {
+    const entries = readdirSync(d, { withFileTypes: true });
+    entries.sort((a, b) => a.name.localeCompare(b.name));
+    for (const entry of entries) {
+      const entryRel = rel ? `${rel}/${entry.name}` : entry.name;
+      const entryAbs = join(d, entry.name);
+      if (entry.isDirectory()) {
+        walk(entryAbs, entryRel);
+      } else if (entry.isFile()) {
+        hash.update(`file:${entryRel}\n`);
+        hash.update(readFileSync(entryAbs));
+        hash.update("\n");
+      }
+    }
+  }
+  walk(dir, "");
+  return hash.digest("hex").slice(0, 16);
+}
+
 async function applyConsolidation(
   root: string,
   report: ImportReport,
@@ -345,6 +373,25 @@ async function applyConsolidation(
     for (const e of es) {
       if (e.origin === "canonical") continue;
       const skillDir = dirname(e.absPath);
+
+      // Safety check: only remove a harness copy when its ENTIRE directory tree is
+      // byte-identical to canonical. If the harness copy has unique sibling payload
+      // (scripts/, references/, assets/, or any extra files) that canonical does not
+      // have, deleting it would cause data loss. Leave such dirs for manual review.
+      const canonicalSkillDir = join(canonicalPath, name);
+      if (
+        existsSync(canonicalSkillDir) &&
+        dirTreeHash(skillDir) !== dirTreeHash(canonicalSkillDir)
+      ) {
+        skipped++;
+        skippedNames.add(name);
+        if (!opts.json)
+          logger.dim(
+            `  ${name} — ${dirname(e.relPath)} has unique payload not present in canonical; left for manual review`,
+          );
+        continue;
+      }
+
       try {
         rmSync(skillDir, { recursive: true, force: true });
         removed++;

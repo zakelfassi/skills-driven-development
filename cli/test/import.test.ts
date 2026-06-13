@@ -296,6 +296,79 @@ describe("runImport", () => {
     },
   );
 
+  runUnix(
+    "--apply does not delete harness source with unique payload files not in canonical",
+    async () => {
+      // Canonical has the skill (identical SKILL.md)
+      writeSkill(join(tmp, "skills/hello"), HELLO_SKILL);
+      // Harness has the same SKILL.md but ALSO has a unique extra file not in canonical
+      writeSkill(join(tmp, ".claude/skills/hello"), HELLO_SKILL);
+      mkdirSync(join(tmp, ".claude/skills/hello/scripts"), { recursive: true });
+      writeFileSync(
+        join(tmp, ".claude/skills/hello/scripts/deploy.sh"),
+        "#!/bin/bash\necho deploy",
+      );
+
+      const code = await runImport(undefined, { cwd: tmp, apply: true, skipLink: true });
+      restoreConsole();
+
+      // Non-zero exit: unique payload detected, left for manual review
+      expect(code).not.toBe(0);
+      // Harness source MUST still exist — unique payload was not deleted
+      expect(existsSync(join(tmp, ".claude/skills/hello/SKILL.md"))).toBe(true);
+      expect(existsSync(join(tmp, ".claude/skills/hello/scripts/deploy.sh"))).toBe(true);
+      // Canonical skill is untouched
+      expect(existsSync(join(tmp, "skills/hello/SKILL.md"))).toBe(true);
+      // Informative message emitted
+      const allLogs = logs.join("\n");
+      expect(allLogs).toMatch(/unique payload|manual review/i);
+    },
+  );
+
+  runUnix(
+    "--apply removes harness source when full dir is byte-identical to canonical",
+    async () => {
+      // Canonical has the skill with a scripts/ subdir
+      writeSkill(join(tmp, "skills/hello"), HELLO_SKILL);
+      mkdirSync(join(tmp, "skills/hello/scripts"), { recursive: true });
+      writeFileSync(join(tmp, "skills/hello/scripts/helper.sh"), "#!/bin/bash\necho helper");
+      // Harness has the EXACT same layout (byte-identical)
+      writeSkill(join(tmp, ".claude/skills/hello"), HELLO_SKILL);
+      mkdirSync(join(tmp, ".claude/skills/hello/scripts"), { recursive: true });
+      writeFileSync(
+        join(tmp, ".claude/skills/hello/scripts/helper.sh"),
+        "#!/bin/bash\necho helper",
+      );
+
+      const code = await runImport(undefined, { cwd: tmp, apply: true, skipLink: true });
+      restoreConsole();
+
+      // Zero exit: true duplicate, all good
+      expect(code).toBe(0);
+      // Canonical is intact
+      expect(existsSync(join(tmp, "skills/hello/SKILL.md"))).toBe(true);
+      expect(existsSync(join(tmp, "skills/hello/scripts/helper.sh"))).toBe(true);
+      // Harness copy was removed (byte-identical to canonical)
+      expect(existsSync(join(tmp, ".claude/skills/hello"))).toBe(false);
+    },
+  );
+
+  runUnix("--apply migrates full skill dir including scripts/ into canonical", async () => {
+    // Harness has a skill with a scripts/ subdir — no canonical entry
+    writeSkill(join(tmp, ".claude/skills/hello"), HELLO_SKILL);
+    mkdirSync(join(tmp, ".claude/skills/hello/scripts"), { recursive: true });
+    writeFileSync(join(tmp, ".claude/skills/hello/scripts/deploy.sh"), "#!/bin/bash\necho deploy");
+
+    const code = await runImport(undefined, { cwd: tmp, apply: true, skipLink: true });
+    restoreConsole();
+
+    // Zero exit: migrated cleanly
+    expect(code).toBe(0);
+    // Full dir was copied into canonical
+    expect(existsSync(join(tmp, "skills/hello/SKILL.md"))).toBe(true);
+    expect(existsSync(join(tmp, "skills/hello/scripts/deploy.sh"))).toBe(true);
+  });
+
   it("errors when the target directory does not exist", async () => {
     const code = await runImport("does-not-exist", { cwd: tmp, json: true });
     restoreConsole();
@@ -436,6 +509,34 @@ describe("runImport — global mode colony bootstrap", () => {
     // Colony was created
     expect(existsSync(join(skddFreshHome, "skills"))).toBe(true);
   });
+
+  runUnix(
+    "import -g --apply does not delete harness source with unique payload not in canonical",
+    async () => {
+      const skddFreshHome = join(skddParent, ".skdd-fresh");
+
+      // Canonical already has the skill
+      mkdirSync(join(skddFreshHome, "skills", "hello"), { recursive: true });
+      writeFileSync(join(skddFreshHome, "skills", "hello", "SKILL.md"), HELLO_SKILL);
+
+      // Droid harness global dir has same SKILL.md but also a unique scripts/ file
+      const droidSkillsDir = join(fakeTmp, ".factory", "skills");
+      mkdirSync(join(droidSkillsDir, "hello", "scripts"), { recursive: true });
+      writeFileSync(join(droidSkillsDir, "hello", "SKILL.md"), HELLO_SKILL);
+      writeFileSync(join(droidSkillsDir, "hello", "scripts", "run.sh"), "#!/bin/bash\necho run");
+
+      const code = await runImport(undefined, { global: true, apply: true, skipLink: true });
+      restoreConsole();
+
+      // Non-zero exit: unique payload detected
+      expect(code).not.toBe(0);
+      // Harness source MUST still exist
+      expect(existsSync(join(droidSkillsDir, "hello", "SKILL.md"))).toBe(true);
+      expect(existsSync(join(droidSkillsDir, "hello", "scripts", "run.sh"))).toBe(true);
+      // Canonical intact
+      expect(existsSync(join(skddFreshHome, "skills", "hello", "SKILL.md"))).toBe(true);
+    },
+  );
 
   runUnix(
     "import -g --apply preserves harness source when global canonical dest is occupied (not in scan)",
