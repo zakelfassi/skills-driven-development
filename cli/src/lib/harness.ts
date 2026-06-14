@@ -9,12 +9,14 @@ export type Harness =
   | "gemini"
   | "opencode"
   | "goose"
-  | "amp";
+  | "amp"
+  | "droid";
 
 export interface HarnessProfile {
   id: Harness;
   label: string;
   skillsDir: string; // relative to project root
+  globalSkillsDir: string; // tilde-relative; resolved by lib/global.ts::globalSkillsDir()
   instructionFile: string; // relative to project root
   instructionHint: string; // what to tell users to add
 }
@@ -24,6 +26,7 @@ export const HARNESSES: Record<Harness, HarnessProfile> = {
     id: "claude",
     label: "Claude Code",
     skillsDir: ".claude/skills",
+    globalSkillsDir: "~/.claude/skills",
     instructionFile: "CLAUDE.md",
     instructionHint: "Add a `## Skills` section pointing at `.skills-registry.md`",
   },
@@ -31,6 +34,7 @@ export const HARNESSES: Record<Harness, HarnessProfile> = {
     id: "codex",
     label: "OpenAI Codex",
     skillsDir: ".codex/skills",
+    globalSkillsDir: "~/.codex/skills",
     instructionFile: "AGENTS.md",
     instructionHint: "Add a `## Skills` section pointing at `.skills-registry.md`",
   },
@@ -38,6 +42,7 @@ export const HARNESSES: Record<Harness, HarnessProfile> = {
     id: "cursor",
     label: "Cursor",
     skillsDir: ".cursor/skills",
+    globalSkillsDir: "~/.cursor/skills",
     instructionFile: ".cursor/rules/skills.mdc",
     instructionHint: "Add a rules file with alwaysApply: true",
   },
@@ -45,6 +50,7 @@ export const HARNESSES: Record<Harness, HarnessProfile> = {
     id: "copilot",
     label: "GitHub Copilot",
     skillsDir: ".github/skills",
+    globalSkillsDir: "~/.copilot/skills",
     instructionFile: ".github/copilot-instructions.md",
     instructionHint: "Add a `## Skills` section pointing at `.skills-registry.md`",
   },
@@ -52,6 +58,7 @@ export const HARNESSES: Record<Harness, HarnessProfile> = {
     id: "gemini",
     label: "Gemini CLI",
     skillsDir: ".gemini/skills",
+    globalSkillsDir: "~/.gemini/skills",
     instructionFile: "AGENTS.md",
     instructionHint: "Add a `## Skills` section pointing at `.skills-registry.md`",
   },
@@ -59,6 +66,7 @@ export const HARNESSES: Record<Harness, HarnessProfile> = {
     id: "opencode",
     label: "OpenCode",
     skillsDir: ".opencode/skills",
+    globalSkillsDir: "~/.config/opencode/skills",
     instructionFile: "AGENTS.md",
     instructionHint: "Add a `## Skills` section pointing at `.skills-registry.md`",
   },
@@ -66,6 +74,7 @@ export const HARNESSES: Record<Harness, HarnessProfile> = {
     id: "goose",
     label: "Goose",
     skillsDir: ".goose/skills",
+    globalSkillsDir: "~/.agents/skills",
     instructionFile: "AGENTS.md",
     instructionHint: "Add a `## Skills` section pointing at `.skills-registry.md`",
   },
@@ -73,6 +82,15 @@ export const HARNESSES: Record<Harness, HarnessProfile> = {
     id: "amp",
     label: "Amp",
     skillsDir: ".amp/skills",
+    globalSkillsDir: "~/.config/agents/skills",
+    instructionFile: "AGENTS.md",
+    instructionHint: "Add a `## Skills` section pointing at `.skills-registry.md`",
+  },
+  droid: {
+    id: "droid",
+    label: "Factory Droid",
+    skillsDir: ".factory/skills",
+    globalSkillsDir: "~/.factory/skills",
     instructionFile: "AGENTS.md",
     instructionHint: "Add a `## Skills` section pointing at `.skills-registry.md`",
   },
@@ -87,6 +105,7 @@ const HARNESS_MARKERS: Array<[Harness, string[]]> = [
   ["opencode", [".opencode/skills", ".opencode"]],
   ["goose", [".goose/skills", ".goose"]],
   ["amp", [".amp/skills", ".amp"]],
+  ["droid", [".factory/skills", ".factory"]],
 ];
 
 export function detectHarness(cwd: string): Harness | null {
@@ -115,7 +134,10 @@ export function detectAllHarnesses(cwd: string): Harness[] {
   return found;
 }
 
-export function resolveHarness(cwd: string, explicit: Harness | "auto" | undefined): HarnessProfile {
+export function resolveHarness(
+  cwd: string,
+  explicit: Harness | "auto" | undefined,
+): HarnessProfile {
   if (explicit && explicit !== "auto") {
     return HARNESSES[explicit];
   }

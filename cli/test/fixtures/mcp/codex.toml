@@ -1,0 +1,43 @@
+# Codex CLI configuration
+# Managed by: ~/.codex/config.toml
+# Last updated: 2026-06-11
+
+[defaults]
+model = "o3"
+temperature = 0.2
+# inline comment: keep this exactly
+max_tokens = 4096
+
+[shell]
+login = false
+exec = "/bin/zsh"
+
+# Network settings (do not touch)
+[network]
+timeout_sec = 30
+proxy = ""
+
+# The mcp_servers section is partially managed by skdd
+[mcp_servers.user_owned]
+command = "user-tool"
+args = ["--verbose", "--port", "8080"]
+enabled = true
+startup_timeout_sec = 10
+tool_timeout_sec = 60
+
+[mcp_servers.user_owned.tools.inspect]
+enabled = true
+description = "User-owned inspect tool"
+
+[mcp_servers.user_owned.tools.transform]
+enabled = false
+
+[mcp_servers.existing_managed]
+command = "old-command"
+args = ["--old-arg", "--deprecated"]
+enabled = true
+startup_timeout_sec = 15
+
+[mcp_servers.existing_managed.tools.legacy_tool]
+enabled = false
+description = "Legacy managed tool"

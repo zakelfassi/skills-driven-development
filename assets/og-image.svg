@@ -1,0 +1,89 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" fill="none" role="img" aria-label="SkDD Open Graph image">
+  <title>SkDD — Skills-Driven Development</title>
+  <defs>
+    <linearGradient id="og-bg" x1="0" y1="0" x2="1200" y2="630" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#0f172a"/>
+      <stop offset="1" stop-color="#1e293b"/>
+    </linearGradient>
+    <linearGradient id="og-anvil" x1="480" y1="200" x2="720" y2="440" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#f59e0b"/>
+      <stop offset="1" stop-color="#ef4444"/>
+    </linearGradient>
+    <filter id="og-glow">
+      <feGaussianBlur stdDeviation="6" result="blur"/>
+      <feComposite in="SourceGraphic" in2="blur" operator="over"/>
+    </filter>
+  </defs>
+
+  <!-- Background -->
+  <rect width="1200" height="630" fill="url(#og-bg)"/>
+
+  <!-- Subtle grid pattern for depth -->
+  <g opacity="0.04" stroke="#38bdf8" stroke-width="1">
+    <line x1="0" y1="126" x2="1200" y2="126"/>
+    <line x1="0" y1="252" x2="1200" y2="252"/>
+    <line x1="0" y1="378" x2="1200" y2="378"/>
+    <line x1="0" y1="504" x2="1200" y2="504"/>
+    <line x1="200" y1="0" x2="200" y2="630"/>
+    <line x1="400" y1="0" x2="400" y2="630"/>
+    <line x1="600" y1="0" x2="600" y2="630"/>
+    <line x1="800" y1="0" x2="800" y2="630"/>
+    <line x1="1000" y1="0" x2="1000" y2="630"/>
+  </g>
+
+  <!-- Logo mark — centred, ~256px -->
+  <g transform="translate(472, 100) scale(2)">
+    <!-- Anvil base, body, horn -->
+    <path d="M26 92 H102 V100 H92 V108 H36 V100 H26 Z" fill="url(#og-anvil)"/>
+    <path d="M34 76 H94 L102 92 H26 Z" fill="url(#og-anvil)"/>
+    <path d="M94 76 L114 72 L110 82 L94 82 Z" fill="url(#og-anvil)"/>
+    <!-- Spark diamond -->
+    <path d="M64 44 L70 58 L64 72 L58 58 Z" fill="#fef3c7" opacity="0.95"/>
+    <circle cx="64" cy="58" r="3" fill="#0f172a"/>
+    <!-- Loop arc -->
+    <path d="M18 58 Q 18 22, 64 22 Q 110 22, 110 58"
+      fill="none" stroke="#38bdf8" stroke-width="4" stroke-linecap="round"/>
+    <circle cx="18" cy="58" r="4" fill="#38bdf8"/>
+    <circle cx="110" cy="58" r="4" fill="#38bdf8"/>
+  </g>
+
+  <!-- "SkDD" wordmark -->
+  <text
+    x="600" y="440"
+    font-family="ui-monospace, SFMono-Regular, Menlo, 'Courier New', monospace"
+    font-size="96"
+    font-weight="800"
+    letter-spacing="-2"
+    text-anchor="middle"
+    fill="#f8fafc"
+  >SkDD</text>
+
+  <!-- Tagline -->
+  <text
+    x="600" y="500"
+    font-family="ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif"
+    font-size="28"
+    font-weight="400"
+    letter-spacing="2"
+    text-anchor="middle"
+    fill="#94a3b8"
+  >Skills-Driven Development</text>
+
+  <!-- URL -->
+  <text
+    x="600" y="576"
+    font-family="ui-monospace, SFMono-Regular, Menlo, monospace"
+    font-size="18"
+    font-weight="500"
+    letter-spacing="1"
+    text-anchor="middle"
+    fill="#38bdf8"
+    opacity="0.8"
+  >agentskills.io</text>
+
+  <!-- Corner decorations — loop endpoints echoing the mark -->
+  <circle cx="60" cy="60" r="6" fill="#38bdf8" opacity="0.3"/>
+  <circle cx="1140" cy="570" r="6" fill="#f59e0b" opacity="0.3"/>
+  <path d="M 30,30 Q 60,30 60,60" fill="none" stroke="#38bdf8" stroke-width="2" opacity="0.3" stroke-linecap="round"/>
+  <path d="M 1170,600 Q 1140,600 1140,570" fill="none" stroke="#f59e0b" stroke-width="2" opacity="0.3" stroke-linecap="round"/>
+</svg>

@@ -1,7 +1,7 @@
 import { existsSync, statSync } from "node:fs";
 import { basename, relative, resolve } from "node:path";
 import { logger, pc } from "../lib/logger.js";
-import { parseSkill, findSkills, type ParsedSkill } from "../lib/skill.js";
+import { findSkills, type ParsedSkill, parseSkill } from "../lib/skill.js";
 import {
   DESCRIPTION_MAX_LENGTH,
   DESCRIPTION_MIN_LENGTH,
@@ -104,7 +104,10 @@ export function validateSkill(skill: ParsedSkill, opts: ValidateOptions = {}): V
   }
 
   // Metadata must be an object if present
-  if (fm.metadata !== undefined && (typeof fm.metadata !== "object" || Array.isArray(fm.metadata))) {
+  if (
+    fm.metadata !== undefined &&
+    (typeof fm.metadata !== "object" || Array.isArray(fm.metadata))
+  ) {
     issues.push({
       severity: "error",
       field: "metadata",
@@ -144,9 +147,7 @@ export async function runValidate(targets: string[], opts: ValidateOptions = {})
     }
     const stat = statSync(absTarget);
     const skillPaths =
-      stat.isFile() && basename(absTarget) === "SKILL.md"
-        ? [absTarget]
-        : findSkills(absTarget);
+      stat.isFile() && basename(absTarget) === "SKILL.md" ? [absTarget] : findSkills(absTarget);
 
     if (skillPaths.length === 0) {
       logger.warn(`No SKILL.md files found under ${relative(cwd, absTarget) || "."}`);

@@ -1,6 +1,6 @@
 # skdd — Skills-Driven Development CLI
 
-> Validate, init, forge, list, link, doctor, import, and (soon) sync SkDD skill colonies.
+> Validate, init, forge, list, link, doctor, and import SkDD skill colonies.
 
 ## Install
 
@@ -24,7 +24,6 @@ skdd list [--format=table|json]
 skdd link [--mode=symlink|copy|auto] [--harness=<list>] [--force] [--quiet]
 skdd doctor [--json]
 skdd import [target] [--json] [--apply] [--canonical=<dir>] [--skip-link]
-skdd sync <registry-url>       # stub — implemented in a future release
 ```
 
 ### `skdd init`
@@ -103,10 +102,6 @@ skdd import --json                              # machine-readable
 skdd import --apply                             # migrate + link
 skdd import ../some-other-project --apply       # operate on a different root
 ```
-
-### `skdd sync`
-
-Stub. Planned: pull a remote colony manifest and fork selected skills into the local project. Not implemented yet — the command exits 2 with a pointer to this note.
 
 ## Development
 

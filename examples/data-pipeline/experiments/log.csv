@@ -1,0 +1,2 @@
+run_id,experiment_name,timestamp,git_sha,params,metrics,artifact_path,notes,status
+test-run-20260612-152320,test-run,2026-06-12T15:23:20Z,b241fc7,"{"learning_rate": 0.05, "n_estimators": 300}","{"auc": 0.83, "f1": 0.71, "precision": 0.79, "recall": 0.64}",artifacts/example-run/model.pkl,"stub run — no real training performed",completed

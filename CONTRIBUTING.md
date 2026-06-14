@@ -51,6 +51,35 @@ pnpm -C cli build
 
 All three must pass. The GitHub Actions workflow under `.github/workflows/validate-skills.yml` re-runs these on every PR, runs `skdd validate` across every skill in the repo, and greps for any stale pre-rename references (the project was renamed to SkDD in an early commit; the grep prevents regressions of the old acronym).
 
+### Plugin skillforge SKILL.md generation
+
+`plugins/skdd-claude/skills/skillforge/SKILL.md` is **generated** from `skillforge/SKILL.md`
+(the canonical source). Never edit the plugin file by hand — edits will be overwritten.
+
+After changing `skillforge/SKILL.md`, regenerate the plugin file:
+
+```bash
+node scripts/generate-plugin-skillforge.mjs
+```
+
+To verify the plugin file is up to date without writing (CI mode):
+
+```bash
+node scripts/generate-plugin-skillforge.mjs --check
+```
+
+To verify all transform anchors are still present in the canonical file without writing:
+
+```bash
+node scripts/generate-plugin-skillforge.mjs --selftest
+```
+
+The generator (Node ≥20, zero deps) applies 7 ordered transforms: plugin metadata key,
+`skills/` → `.claude/skills/` path rewrites in the two code fences, harness note injection,
+`status: active` in the skeleton, registry sentence rewrites, heading spacing normalization,
+and checklist delta additions. If any anchor is missing from the canonical file the script
+exits 1 with the rule name.
+
 ## Review process
 
 - Small doc fixes: single approval from a maintainer, merged same-day when possible.

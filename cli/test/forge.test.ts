@@ -1,10 +1,14 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { mkdtempSync, rmSync, readFileSync, existsSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { existsSync, lstatSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { platform, tmpdir } from "node:os";
 import { join } from "node:path";
-import { runForge } from "../src/commands/forge.js";
-import { loadRegistry } from "../src/lib/registry.js";
 import matter from "gray-matter";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { runForge } from "../src/commands/forge.js";
+import { SKDD_HOME_ENV } from "../src/lib/global.js";
+import { loadRegistry } from "../src/lib/registry.js";
+
+const skipOnWindows = platform() === "win32";
+const runUnix = skipOnWindows ? it.skip : it;
 
 let tmp: string;
 
@@ -115,4 +119,54 @@ describe("runForge — flat / --no-canonical mode", () => {
     // No sync state file should have been written
     expect(existsSync(join(tmp, ".skdd-sync.json"))).toBe(false);
   });
+});
+
+describe("runForge — global mode (-g) with explicit --harness", () => {
+  let skddTmp: string;
+  let fakeTmp: string;
+  let prevSkddHome: string | undefined;
+  let prevHome: string | undefined;
+
+  beforeEach(() => {
+    skddTmp = mkdtempSync(join(tmpdir(), "skdd-forge-global-"));
+    fakeTmp = mkdtempSync(join(tmpdir(), "skdd-forge-fake-home-"));
+    prevSkddHome = process.env[SKDD_HOME_ENV];
+    prevHome = process.env.HOME;
+    process.env[SKDD_HOME_ENV] = skddTmp;
+    process.env.HOME = fakeTmp;
+  });
+
+  afterEach(() => {
+    if (prevSkddHome === undefined) delete process.env[SKDD_HOME_ENV];
+    else process.env[SKDD_HOME_ENV] = prevSkddHome;
+    if (prevHome === undefined) delete process.env.HOME;
+    else process.env.HOME = prevHome;
+    rmSync(skddTmp, { recursive: true, force: true });
+    rmSync(fakeTmp, { recursive: true, force: true });
+  });
+
+  runUnix(
+    "forge -g -H droid creates the droid global mirror even when ~/.factory is absent",
+    async () => {
+      // fakeTmp has NO .factory dir — auto-detection would skip droid entirely.
+      expect(existsSync(join(fakeTmp, ".factory"))).toBe(false);
+
+      const code = await runForge("global-droid-skill", {
+        global: true,
+        harness: "droid",
+        fromDescription:
+          "A global droid skill. Use when testing global forge with explicit droid harness.",
+        nonInteractive: true,
+      });
+      expect(code).toBe(0);
+
+      // Skill written to global canonical
+      expect(existsSync(join(skddTmp, "skills/global-droid-skill/SKILL.md"))).toBe(true);
+
+      // Droid mirror created at ~/.factory/skills (resolved through fakeTmp HOME)
+      const droidMirror = join(fakeTmp, ".factory", "skills");
+      expect(existsSync(droidMirror)).toBe(true);
+      expect(lstatSync(droidMirror).isSymbolicLink()).toBe(true);
+    },
+  );
 });

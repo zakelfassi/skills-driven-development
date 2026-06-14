@@ -2,7 +2,7 @@
   "name": "skdd-vscode",
   "displayName": "SkDD — Agent Skills",
   "description": "SKILL.md frontmatter snippets, validation hints, and a Forge-a-Skill command for Skills-Driven Development.",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "publisher": "skdd",
   "license": "MIT",
   "repository": {
@@ -11,8 +11,16 @@
     "directory": "extensions/vscode"
   },
   "homepage": "https://github.com/zakelfassi/skills-driven-development#readme",
+  "bugs": {
+    "url": "https://github.com/zakelfassi/skills-driven-development/issues"
+  },
   "engines": {
     "vscode": "^1.80.0"
+  },
+  "icon": "assets/icon.png",
+  "galleryBanner": {
+    "color": "#0f172a",
+    "theme": "dark"
   },
   "categories": [
     "Snippets",
@@ -25,13 +33,12 @@
     "skdd",
     "claude-code",
     "codex",
-    "cursor"
+    "cursor",
+    "ai",
+    "agents"
   ],
   "activationEvents": [
-    "onLanguage:markdown",
-    "onCommand:skdd.forge",
-    "onCommand:skdd.doctor",
-    "onCommand:skdd.link"
+    "onLanguage:markdown"
   ],
   "main": "./dist/extension.js",
   "contributes": {
@@ -61,7 +68,7 @@
     "jsonValidation": [
       {
         "fileMatch": ".colony.json",
-        "url": "https://raw.githubusercontent.com/zakelfassi/skills-driven-development/main/docs/spec/colony-v1.json"
+        "url": "https://raw.githubusercontent.com/zakelfassi/skills-driven-development/v1.0.0/docs/spec/colony-v1.json"
       }
     ],
     "configuration": {
@@ -83,10 +90,13 @@
   "scripts": {
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./",
-    "vscode:prepublish": "pnpm run compile"
+    "vscode:prepublish": "pnpm run compile",
+    "package": "vsce package --no-dependencies"
   },
   "devDependencies": {
     "@types/vscode": "^1.80.0",
+    "@vscode/vsce": "^3.0.0",
     "typescript": "^5.6.0"
-  }
+  },
+  "packageManager": "pnpm@10.34.3+sha512.f2c531b08829d7be7f03c90addc266615f9c5477463e4bf1d275cb263ce9ea57cf0d5599110d94649a9bb3fed9f0b5efcea74a7016b61532a24cb9ad87860c1d"
 }

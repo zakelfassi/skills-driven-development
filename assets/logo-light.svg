@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" fill="none" role="img" aria-label="SkDD logo — light variant">
+  <title>SkDD — Skills-Driven Development</title>
+  <defs>
+    <linearGradient id="lg-anvil" x1="32" y1="40" x2="96" y2="96" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#f59e0b"/>
+      <stop offset="1" stop-color="#ef4444"/>
+    </linearGradient>
+  </defs>
+  <rect width="128" height="128" rx="24" fill="#f8fafc"/>
+  <!-- Anvil silhouette: base, body, horn -->
+  <path d="M26 92 H102 V100 H92 V108 H36 V100 H26 Z" fill="url(#lg-anvil)"/>
+  <path d="M34 76 H94 L102 92 H26 Z" fill="url(#lg-anvil)"/>
+  <path d="M94 76 L114 72 L110 82 L94 82 Z" fill="url(#lg-anvil)"/>
+  <!-- Spark: diamond above the anvil — use amber on light bg -->
+  <path d="M64 44 L70 58 L64 72 L58 58 Z" fill="#f59e0b" opacity="0.90"/>
+  <circle cx="64" cy="58" r="3" fill="#1e293b"/>
+  <!-- Loop arc around the anvil — feedback loop motif -->
+  <path
+    d="M18 58 Q 18 22, 64 22 Q 110 22, 110 58"
+    fill="none"
+    stroke="#0284c7"
+    stroke-width="4"
+    stroke-linecap="round"
+  />
+  <circle cx="18" cy="58" r="4" fill="#0284c7"/>
+  <circle cx="110" cy="58" r="4" fill="#0284c7"/>
+</svg>

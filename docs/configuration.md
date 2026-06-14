@@ -1,4 +1,7 @@
-# Configuration
+---
+title: "Configuration"
+description: "How to wire SkDD into each supported agent harness."
+---
 
 > How to wire SkDD into each supported agent harness.
 
@@ -188,15 +191,91 @@ Install: `pnpm dlx @zakelfassi/skdd init --harness=amp`. See [ampcode.com/manual
 
 ---
 
+### Factory Droid
+
+- **Instruction file**: `AGENTS.md`
+- **Mirror**: `.factory/skills/` → `../skills`
+- **Global skills**: `~/.factory/skills/` (personal, follows you across all projects)
+- **MCP config**: `~/.factory/mcp.json` (managed by `skdd mcp sync`)
+
+Install: `pnpm dlx @zakelfassi/skdd init --harness=droid`
+
+Skills block (auto-written by `skdd init`):
+
+```markdown
+## Skills
+
+Skills live at `skills/<name>/SKILL.md` (canonical, single source of truth). The registry is at `.skills-registry.md` in the project root. `.factory/skills` is a mirror maintained by `skdd link` so Factory Droid can find skills at its conventional path.
+
+At session start, read `.skills-registry.md` to discover available skills. Before deriving a solution, check whether an existing skill covers the task and follow it. When you notice a pattern repeat 2-3 times, or when I ask you to "forge a skill for X", invoke the `skillforge` skill and follow its steps. Always write new skills to `skills/`, never to the mirror.
+```
+
+Full details at [`docs/integrations/droid.md`](integrations/droid.md).
+
+---
+
 ## Using one colony across multiple harnesses
 
 This is the common case once you've tried SkDD on one harness and want the same colony everywhere else. `skills/` is the single source of truth and `skdd link` materializes every requested mirror:
 
 ```bash
-skdd link --harness=claude,codex,cursor,copilot
+skdd link --harness=claude,codex,cursor,copilot,droid
 ```
 
 Re-run the command anytime a new harness gets installed or a mirror drifts. `.skdd-sync.json` tracks what's been materialized, so it's idempotent — no-ops when everything's in sync, drift-repair when it isn't.
+
+## Global colony (`--global` / `-g`)
+
+A **global colony** at `~/.skdd/` holds skills that travel with you rather than with any one project. The `--global` flag is available on `init`, `link`, `doctor`, `list`, `forge`, and `import`.
+
+```bash
+# One-time setup: create ~/.skdd/ and link to all reachable harness global dirs
+skdd init --global
+
+# Forge a personal skill into the global colony
+skdd forge commit-message-style -g
+
+# Check global colony health
+skdd doctor -g
+
+# List globally available skills
+skdd list -g
+```
+
+Global mirrors use each harness's user-level skills directory:
+
+| Harness | Global skills dir |
+|---------|-------------------|
+| Claude Code | `~/.claude/skills/` |
+| OpenAI Codex | `~/.codex/skills/` |
+| Cursor | `~/.cursor/skills/` |
+| GitHub Copilot | `~/.copilot/skills/` |
+| Gemini CLI | `~/.gemini/skills/` |
+| OpenCode | `~/.config/opencode/skills/` |
+| Goose | `~/.agents/skills/` |
+| Amp | `~/.config/agents/skills/` |
+| Factory Droid | `~/.factory/skills/` |
+
+See [`docs/global-colony.md`](global-colony.md) for the full guide, including the safe migration path for pre-existing global skills directories.
+
+## MCP server management
+
+`skdd mcp` manages a canonical catalogue of MCP (Model Context Protocol) servers at `~/.skdd/mcp.json` and syncs it to all seven AI hosts that support MCP:
+
+```bash
+# Add a server
+skdd mcp add my-tool --command npx --args "-y @acme/my-tool-mcp" --env "API_KEY=\${MY_KEY}"
+
+# Preview sync without writing
+skdd mcp sync --dry-run
+
+# Sync to all available hosts
+skdd mcp sync
+```
+
+Supported hosts: `claude-code`, `claude-desktop`, `codex`, `droid`, `cursor`, `opencode`, `gemini`.
+
+See [`docs/mcp-sync.md`](mcp-sync.md) for the full guide including the canonical schema, `${VAR}` placeholder expansion, backup/atomic-write guarantees, and the secrets-never-round-trip guarantee.
 
 ## Troubleshooting
 

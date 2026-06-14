@@ -1,6 +1,6 @@
 # SkDD Roadmap
 
-> What's shipped, what's in flight, and what's deferred. Canonical planning lives in `/Users/zakelfassi/.claude/plans/linear-gathering-hamming.md` (not checked in — it's a working document).
+> What's shipped, what's in flight, and what's deferred.
 
 ## Current release
 

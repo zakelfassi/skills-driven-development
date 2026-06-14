@@ -1,8 +1,8 @@
 {
   "$schema": "./docs/spec/colony-v1.json",
   "name": "skills-driven-development",
-  "version": "0.2.0",
-  "description": "The seed colony for Skills-Driven Development — the skillforge meta-skill, methodology docs, a canonical-skills/ pattern CLI, and a reference webapp-starter example.",
+  "version": "1.0.0",
+  "description": "The seed colony for Skills-Driven Development — the skillforge meta-skill, methodology docs, a canonical-skills/ pattern CLI, and three reference example colonies (webapp-starter, cli-tool, data-pipeline).",
   "spec": "agentskills.io/v1",
   "canonicalSkillsDir": "skillforge",
   "harnessMirrors": [],
@@ -18,12 +18,36 @@
     {
       "name": "webapp-starter",
       "path": "examples/webapp-starter",
-      "description": "Reference structure of a SkDD-enabled project: skills, registry, AGENTS.md, and CLAUDE.md. Not a runnable webapp — ships one real deploy-preview.sh stub and four example SKILL.md fixtures.",
+      "description": "Reference colony for a React + TypeScript + Express web application. Demonstrates SkDD skills for component scaffolding, API endpoint generation, deploy-preview automation, and bug triage.",
       "skills": [
-        "examples/webapp-starter/skills/api-endpoint",
-        "examples/webapp-starter/skills/bug-triage",
-        "examples/webapp-starter/skills/component-scaffold",
-        "examples/webapp-starter/skills/deploy-preview"
+        "examples/webapp-starter/skills/deploy-preview/SKILL.md",
+        "examples/webapp-starter/skills/component-scaffold/SKILL.md",
+        "examples/webapp-starter/skills/api-endpoint/SKILL.md",
+        "examples/webapp-starter/skills/bug-triage/SKILL.md"
+      ]
+    },
+    {
+      "name": "cli-tool",
+      "path": "examples/cli-tool",
+      "description": "Reference colony for a cross-platform CLI project (shipctl persona). Demonstrates SkDD skills for release pipelines, build matrices, flag management, man page generation, and breaking-change audits.",
+      "skills": [
+        "examples/cli-tool/skills/release-cut/SKILL.md",
+        "examples/cli-tool/skills/cross-compile-matrix/SKILL.md",
+        "examples/cli-tool/skills/flag-add/SKILL.md",
+        "examples/cli-tool/skills/manpage-sync/SKILL.md",
+        "examples/cli-tool/skills/breaking-change-audit/SKILL.md"
+      ]
+    },
+    {
+      "name": "data-pipeline",
+      "path": "examples/data-pipeline",
+      "description": "Reference colony for a Python data-engineering and ML project. Demonstrates SkDD skills for dataset onboarding, ETL pipeline scaffolding, experiment logging, data quality gates, and safe historical backfills.",
+      "skills": [
+        "examples/data-pipeline/skills/dataset-onboard/SKILL.md",
+        "examples/data-pipeline/skills/pipeline-stage/SKILL.md",
+        "examples/data-pipeline/skills/experiment-log/SKILL.md",
+        "examples/data-pipeline/skills/data-quality-gate/SKILL.md",
+        "examples/data-pipeline/skills/backfill-runbook/SKILL.md"
       ]
     }
   ],

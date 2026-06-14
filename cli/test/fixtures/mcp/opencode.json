@@ -1,0 +1,15 @@
+{
+  "$schema": "https://opencode.ai/config.schema.json",
+  "theme": "opencode",
+  "autoshare": false,
+  "mcp": {
+    "user-opencode-mcp": {
+      "type": "local",
+      "command": ["npx", "-y", "some-mcp-server"],
+      "environment": {
+        "KEY": "value"
+      },
+      "enabled": true
+    }
+  }
+}

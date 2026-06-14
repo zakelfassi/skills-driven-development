@@ -1,6 +1,6 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "https://github.com/zakelfassi/skills-driven-development/blob/main/docs/spec/colony-v1.json",
+  "$id": "https://raw.githubusercontent.com/zakelfassi/skills-driven-development/v1.0.0/docs/spec/colony-v1.json",
   "title": "SkDD Colony Manifest",
   "description": "JSON Schema (draft-07) for `.colony.json` — the manifest a SkDD colony publishes so marketplaces, validators, and adapter tools can discover and index it. Spec version: agentskills.io/v1. This schema is a SkDD extension layered on top of the Agent Skills SKILL.md spec; skills themselves remain spec-compliant and live in their own directories.",
   "type": "object",
@@ -62,9 +62,7 @@
               "opencode",
               "goose",
               "amp",
-              "roo-code",
-              "junie",
-              "vscode"
+              "droid"
             ]
           },
           "mode": {
@@ -182,9 +180,7 @@
               "opencode",
               "goose",
               "amp",
-              "roo-code",
-              "junie",
-              "vscode"
+              "droid"
             ]
           }
         }

@@ -1,0 +1,16 @@
+{
+  "name": "data-pipeline",
+  "version": "0.0.0-example",
+  "private": true,
+  "description": "Reference structure of a SkDD-enabled data/ML project. Not a runnable pipeline — the files exist to show where skills, the registry, and agent instructions live.",
+  "scripts": {
+    "skills:list": "cat .skills-registry.md",
+    "skills:experiment-log": "./skills/experiment-log/scripts/log-experiment.sh"
+  },
+  "skdd": {
+    "registry": ".skills-registry.md",
+    "skillsDir": "skills",
+    "harness": "claude"
+  },
+  "license": "MIT"
+}

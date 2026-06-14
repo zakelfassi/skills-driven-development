@@ -8,6 +8,7 @@ Per-harness deep dives for wiring SkDD into each supported agent runtime. For a 
 | OpenAI Codex | [codex.md](codex.md) | Full |
 | Cursor | [cursor.md](cursor.md) | Full |
 | GitHub Copilot | [github-copilot.md](github-copilot.md) | Full |
+| Factory Droid | [droid.md](droid.md) | Full |
 | Gemini CLI | [gemini-cli.md](gemini-cli.md) | Stub + link |
 | VS Code | [vscode.md](vscode.md) | Stub + link |
 | OpenCode | [opencode.md](opencode.md) | Stub + link |

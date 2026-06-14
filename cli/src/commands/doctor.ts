@@ -1,10 +1,12 @@
 import { existsSync, lstatSync, readFileSync, readlinkSync } from "node:fs";
-import { dirname, join, relative, resolve } from "node:path";
+import { dirname, isAbsolute, join, relative, resolve } from "node:path";
+import { dirTreeHash } from "../lib/dir-tree-hash.js";
+import { globalSkillsDir, skddHome } from "../lib/global.js";
+import { detectAllHarnesses, HARNESSES, type Harness } from "../lib/harness.js";
 import { logger, pc } from "../lib/logger.js";
-import { detectAllHarnesses } from "../lib/harness.js";
+import { loadRegistry, type Registry, registryExists } from "../lib/registry.js";
+import { findSkills, type ParsedSkill, parseSkill } from "../lib/skill.js";
 import { loadState } from "../lib/sync-state.js";
-import { loadRegistry, registryExists } from "../lib/registry.js";
-import { findSkills, parseSkill, type ParsedSkill } from "../lib/skill.js";
 import { validateSkill } from "./validate.js";
 
 export type CheckStatus = "ok" | "warn" | "error";
@@ -19,6 +21,7 @@ export interface DoctorCheck {
 export interface DoctorOptions {
   cwd?: string;
   json?: boolean;
+  global?: boolean;
 }
 
 interface ColonyManifest {
@@ -34,22 +37,38 @@ const INSTRUCTION_FILES = [
   ".github/copilot-instructions.md",
 ] as const;
 
-export async function runDoctor(opts: DoctorOptions = {}): Promise<number> {
-  const cwd = resolve(opts.cwd ?? process.cwd());
+export async function collectDoctorChecks(
+  root: string,
+  opts: { global?: boolean } = {},
+): Promise<{ checks: DoctorCheck[]; canonical: string }> {
   const checks: DoctorCheck[] = [];
 
-  const canonical = checkColony(cwd, checks);
-  const canonicalPath = join(cwd, canonical);
-  const parsedSkills = checkSkillsDir(cwd, canonical, canonicalPath, checks);
+  const canonical = checkColony(root, checks);
+  const canonicalPath = join(root, canonical);
+  const parsedSkills = checkSkillsDir(root, canonical, canonicalPath, checks);
   checkValidation(parsedSkills, checks);
-  checkRegistry(cwd, parsedSkills, canonical, checks);
-  checkMirrors(cwd, canonicalPath, checks);
-  checkInstructions(cwd, checks);
+  checkRegistry(root, parsedSkills, canonical, checks);
+  if (opts.global) {
+    checkGlobalMirrors(canonicalPath, checks);
+  } else {
+    checkMirrors(root, canonicalPath, checks);
+  }
+  if (!opts.global) {
+    checkInstructions(root, checks);
+  }
+
+  return { checks, canonical };
+}
+
+export async function runDoctor(opts: DoctorOptions = {}): Promise<number> {
+  const root = opts.global ? skddHome() : resolve(opts.cwd ?? process.cwd());
+
+  const { checks, canonical } = await collectDoctorChecks(root, { global: opts.global });
 
   if (opts.json) {
-    emitJson(cwd, canonical, checks);
+    emitJson(root, canonical, checks);
   } else {
-    emitHuman(cwd, canonical, checks);
+    emitHuman(root, canonical, checks);
   }
 
   return checks.some((c) => c.status === "error") ? 1 : 0;
@@ -194,7 +213,7 @@ function checkRegistry(
     return;
   }
 
-  let registry;
+  let registry: Registry | undefined;
   try {
     registry = loadRegistry(cwd);
   } catch (err) {
@@ -243,6 +262,77 @@ function checkRegistry(
   }
 }
 
+/**
+ * Global-mode mirror check: for each harness whose global parent dir exists
+ * (e.g. ~/.factory, ~/.claude), verify that the global skills dir is linked
+ * to the canonical global skills path per .skdd-sync.json.
+ */
+function checkGlobalMirrors(canonicalPath: string, checks: DoctorCheck[]): void {
+  const home = skddHome();
+  const state = loadState(home);
+
+  // Collect harnesses whose global parent dir exists on disk.
+  const existingHarnesses: Harness[] = [];
+  for (const id of Object.keys(HARNESSES) as Harness[]) {
+    const targetDir = globalSkillsDir(id); // e.g. /home/user/.factory/skills
+    const parentDir = dirname(targetDir); // e.g. /home/user/.factory
+    if (existsSync(parentDir)) {
+      existingHarnesses.push(id);
+    }
+  }
+
+  if (existingHarnesses.length === 0) {
+    checks.push({
+      section: "Mirrors",
+      status: "ok",
+      message: "no harness global dirs detected — nothing to mirror",
+    });
+    return;
+  }
+
+  const linkedTargets = new Set(state?.mirrors.map((m) => m.target) ?? []);
+  const unlinked: string[] = [];
+
+  for (const id of existingHarnesses) {
+    const targetDir = globalSkillsDir(id);
+    if (!linkedTargets.has(targetDir)) {
+      unlinked.push(id);
+      continue;
+    }
+    // Verify the recorded mirror is still healthy.
+    const mirror = state!.mirrors.find((m) => m.target === targetDir)!;
+    const result = verifyMirror(targetDir, mirror.mode, canonicalPath);
+    if (!result.ok) {
+      checks.push({
+        section: "Mirrors",
+        status: "error",
+        message: `${targetDir}: ${result.reason}`,
+        hint: "Run 'skdd link -g' (or 'skdd link -g --force') to repair.",
+      });
+    }
+  }
+
+  if (unlinked.length > 0) {
+    checks.push({
+      section: "Mirrors",
+      status: "warn",
+      message: `${unlinked.length} global harness dir(s) exist but are not linked to global skills: ${unlinked.join(", ")}`,
+      hint: "Run 'skdd link -g' to mirror the global skills into each harness dir.",
+    });
+    return;
+  }
+
+  const okCount = existingHarnesses.length - unlinked.length;
+  const hasErrors = checks.some((c) => c.section === "Mirrors" && c.status === "error");
+  if (!hasErrors) {
+    checks.push({
+      section: "Mirrors",
+      status: "ok",
+      message: `${okCount} global harness mirror(s) in sync (${existingHarnesses.join(", ")})`,
+    });
+  }
+}
+
 function checkMirrors(cwd: string, canonicalPath: string, checks: DoctorCheck[]): void {
   const state = loadState(cwd);
   const detected = detectAllHarnesses(cwd);
@@ -277,7 +367,9 @@ function checkMirrors(cwd: string, canonicalPath: string, checks: DoctorCheck[])
   let okCount = 0;
   let driftCount = 0;
   for (const mirror of state!.mirrors) {
-    const target = join(cwd, mirror.target);
+    // Mirror targets in global scope are stored as absolute paths; project scope uses
+    // relative paths. isAbsolute guard handles both correctly on all platforms.
+    const target = isAbsolute(mirror.target) ? mirror.target : join(cwd, mirror.target);
     const result = verifyMirror(target, mirror.mode, canonicalPath);
     if (result.ok) {
       okCount++;
@@ -329,6 +421,15 @@ function verifyMirror(
     }
     if (!stat.isDirectory()) {
       return { ok: false, reason: "expected directory copy, found file" };
+    }
+    // Compare tree hashes to detect stale copies.
+    const targetHash = dirTreeHash(target);
+    const canonicalHash = dirTreeHash(canonicalPath);
+    if (targetHash !== canonicalHash) {
+      return {
+        ok: false,
+        reason: "copy is stale — contents differ from canonical",
+      };
     }
     return { ok: true };
   } catch (err) {

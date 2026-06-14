@@ -1,14 +1,16 @@
 import { resolve } from "node:path";
+import { skddHome } from "../lib/global.js";
 import { logger, pc } from "../lib/logger.js";
 import { loadRegistry, registryExists } from "../lib/registry.js";
 
 export interface ListOptions {
   cwd?: string;
   format?: "table" | "json";
+  global?: boolean;
 }
 
 export async function runList(opts: ListOptions = {}): Promise<number> {
-  const cwd = resolve(opts.cwd ?? process.cwd());
+  const cwd = opts.global ? skddHome() : resolve(opts.cwd ?? process.cwd());
   const has = registryExists(cwd);
 
   if (!has.md && !has.json) {
@@ -51,7 +53,11 @@ export async function runList(opts: ListOptions = {}): Promise<number> {
 
   if (registry.archived.length > 0) {
     logger.heading(`Archived skills (${registry.archived.length})`);
-    const rows = registry.archived.map((s) => [s.name, s.lastUsed ?? "—", truncate(s.description, 60)]);
+    const rows = registry.archived.map((s) => [
+      s.name,
+      s.lastUsed ?? "—",
+      truncate(s.description, 60),
+    ]);
     printTable(["Skill", "Archived", "Reason"], rows);
   }
 

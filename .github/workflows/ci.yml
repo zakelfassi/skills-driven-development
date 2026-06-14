@@ -1,0 +1,142 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  cli:
+    name: CLI
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v5
+        with:
+          version: 9
+
+      - name: Setup Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: "20"
+          cache: pnpm
+          cache-dependency-path: cli/pnpm-lock.yaml
+
+      - name: Install CLI deps
+        working-directory: cli
+        run: pnpm install --frozen-lockfile
+
+      - name: Biome lint + format check
+        working-directory: cli
+        run: pnpm lint
+
+      - name: Typecheck CLI
+        working-directory: cli
+        run: pnpm typecheck
+
+      - name: Run CLI unit tests
+        working-directory: cli
+        run: pnpm test
+
+      - name: Build CLI
+        working-directory: cli
+        run: pnpm build
+
+      - name: Version smoke test
+        run: |
+          CLI_VERSION=$(node cli/dist/index.js --version)
+          PKG_VERSION=$(node -p "require('./cli/package.json').version")
+          if [ "$CLI_VERSION" != "$PKG_VERSION" ]; then
+            echo "::error::Version mismatch: CLI reported '$CLI_VERSION', package.json says '$PKG_VERSION'"
+            exit 1
+          fi
+          echo "Version OK: $CLI_VERSION"
+
+      - name: Validate repo skills with skdd
+        run: node cli/dist/index.js validate skillforge examples/webapp-starter/skills examples/cli-tool/skills examples/data-pipeline/skills plugins/skdd-claude/skills
+
+      - name: Doctor each example colony
+        run: |
+          for d in examples/webapp-starter examples/cli-tool examples/data-pipeline; do
+            (cd "$d" && node "$GITHUB_WORKSPACE/cli/dist/index.js" doctor)
+          done
+
+      - name: Colony schema validation (ajv)
+        run: |
+          npx --yes ajv-cli validate \
+            -s docs/spec/colony-v1.json \
+            -d .colony.json \
+            -d examples/webapp-starter/.colony.json \
+            -d examples/cli-tool/.colony.json \
+            -d examples/data-pipeline/.colony.json \
+            --strict=false
+
+      - name: Plugin skillforge drift check
+        run: node scripts/generate-plugin-skillforge.mjs --check
+
+      - name: Sync-removal regression grep
+        run: |
+          if rg 'skdd sync|runSync' cli/src cli/README.md; then
+            echo "::error::Found 'skdd sync' or 'runSync' in cli/src or cli/README.md — removal regression"
+            exit 1
+          fi
+          echo "OK — no sync regression found"
+
+      - name: Regression grep — ensure no stale "SDD" strings
+        run: |
+          if grep -rn '\bSDD\b' --include='*.md' .; then
+            echo "::error::Stale 'SDD' strings found - replace with 'SkDD'"
+            exit 1
+          fi
+          echo "OK - no stale SDD strings"
+
+      - name: Markdown link check (best effort, non-blocking)
+        uses: gaurav-nelson/github-action-markdown-link-check@v1
+        timeout-minutes: 3
+        with:
+          use-quiet-mode: "yes"
+          use-verbose-mode: "yes"
+          config-file: ".github/markdown-link-check.json"
+        continue-on-error: true
+
+  vscode-extension:
+    name: VS Code Extension
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v5
+        with:
+          version: 9
+
+      - name: Setup Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: "20"
+          cache: pnpm
+          cache-dependency-path: extensions/vscode/pnpm-lock.yaml
+
+      - name: Install deps
+        working-directory: extensions/vscode
+        run: pnpm install --frozen-lockfile
+
+      - name: Compile
+        working-directory: extensions/vscode
+        run: pnpm run compile
+
+      - name: Package extension
+        working-directory: extensions/vscode
+        run: pnpm dlx @vscode/vsce package --no-dependencies
+
+      - name: Upload .vsix artifact
+        uses: actions/upload-artifact@v5
+        with:
+          name: skdd-vscode-extension
+          path: extensions/vscode/*.vsix

@@ -4,11 +4,32 @@ All notable changes to Skills-Driven Development (SkDD) are recorded in this fil
 
 Entries are retroactively reconstructed from git history for versions before this file existed.
 
-## [Unreleased]
+## [1.0.0] — 2026-06-12
+
+> **Why 1.0.0?** The CLI's public API surface (`init`, `validate`, `forge`, `list`, `show`, `link`, `doctor`, `import`, `mcp`, `hub`) is now stable and intentionally committed. Semver discipline starts here: breaking changes will require a major bump. This release ships the global colony, 9-harness skill mirrors and global colony support (including Factory Droid), plus MCP sync across 7 hosts, and the `skdd hub` Ink TUI dashboard — the features that complete the 0.x roadmap.
 
 ### Added
-- `skdd show <name>` prints a skill's full SKILL.md body. Resolves via canonical `skills/` first, then registry.
-- Community scaffolding: `SECURITY.md`, `CODE_OF_CONDUCT.md` (link-based Contributor Covenant 2.1), `.github/CODEOWNERS`, `.github/FUNDING.yml`, `.github/ISSUE_TEMPLATE/*.yml` (bug / feature / new-skill / rfc), `.github/PULL_REQUEST_TEMPLATE.md`, `ROADMAP.md`.
+- **`skdd hub`** — Ink TUI dashboard showing active skills, harness mirrors, MCP host matrix, and doctor status in one live view. Navigate with arrow keys; toggle mirror links with Enter; sync MCP servers with s; inspect dry-run plans with d.
+- **Global colony** (`--global`) — per-harness global skills directories (`~/.skdd/skills` + harness mirrors) and a global colony root (`lib/global.ts`). `--global` flag threaded through `init`, `link`, `doctor`, `list`, `forge`, and `import`.
+- **`skdd mcp`** subcommands — `list`, `add`, `remove`, `sync`. Canonical `mcp.json` schema with env-variable expansion and managed-server state. Full suite of MCP host adapters: `claude-code`, `claude-desktop`, `droid`, `cursor`, `opencode`, `gemini` (7 hosts), plus a Codex TOML adapter with comment-preserving block splice.
+- **Factory Droid harness** — detection markers and harness profile added to `lib/harness.ts`.
+- **`skdd show <name>`** — prints a skill's full SKILL.md body; resolves via canonical `skills/` first, then registry.
+- **Community scaffolding** — `SECURITY.md`, `CODE_OF_CONDUCT.md`, `.github/CODEOWNERS`, `.github/FUNDING.yml`, `.github/ISSUE_TEMPLATE/*.yml`, `.github/PULL_REQUEST_TEMPLATE.md`, `ROADMAP.md`.
+- **Plugin skillforge generator** — `scripts/generate-plugin-skillforge.mjs` derives `plugins/skdd-claude/skills/skillforge/SKILL.md` from the canonical `skillforge/SKILL.md` via 7 deterministic transforms; CI drift-check (`--check`) gates every push.
+- **VS Code extension v0.2.0** — tagged JSON Schema URL, pruned `activationEvents`, `pnpm`/`vsce` toolchain, Marketplace README. Packaged as `.vsix`; not yet published.
+- **Reference colonies** — `examples/cli-tool/`, `examples/data-pipeline/`, `examples/webapp-starter/` with `.colony.json` manifests and `doctor`/`validate` dogfooding.
+- **Docs site** (Astro + Starlight) — examples gallery, terminal-cast component, brand theme tokens, global colony guide, MCP sync guide, Droid integration page.
+
+### Changed
+- **Version is now build-time injected** via `tsup define` (`__SKDD_VERSION__` read from `cli/package.json` at build). No more hardcoded version constant drifting from npm.
+- `skdd init` and `skdd forge` default to canonical mode (write to `skills/`, call `skdd link`).
+- Colony schema adds `canonicalSkillsDir` and `harnessMirrors` fields; `.colony.json` version tracks the release train.
+
+### Removed
+
+- **BREAKING: `skdd sync` removed.** The command was always a stub that printed a warning and exited 2; it never synced anything remote. If you scripted `skdd sync`, delete the call — there is no replacement. Federated colony sync remains on the roadmap; for now, fork skills manually or clone a colony repo.
+
+  **Migration:** no code changes required. `skdd link` (local mirror sync) and `.skdd-sync.json` (mirror state file) are **unrelated and unchanged**.
 
 ## [0.3.0] — 2026-04-13
 
@@ -58,7 +79,8 @@ Entries are retroactively reconstructed from git history for versions before thi
 - `.colony.json` manifest + `docs/spec/colony-v1.json` JSON Schema.
 - `CONTRIBUTING.md`, `LICENSE` (MIT), example project under `examples/webapp-starter/`.
 
-[Unreleased]: https://github.com/zakelfassi/skills-driven-development/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/zakelfassi/skills-driven-development/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/zakelfassi/skills-driven-development/compare/v0.3.0...v1.0.0
 [0.3.0]: https://github.com/zakelfassi/skills-driven-development/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/zakelfassi/skills-driven-development/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/zakelfassi/skills-driven-development/releases/tag/v0.1.0

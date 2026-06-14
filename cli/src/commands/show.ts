@@ -21,10 +21,7 @@ export interface ShowOptions {
  *   - Registry references a path that isn't on disk → exit 1 with a
  *     "registered but missing on disk" message.
  */
-export async function runShow(
-  name: string,
-  opts: ShowOptions = {},
-): Promise<number> {
+export async function runShow(name: string, opts: ShowOptions = {}): Promise<number> {
   const cwd = resolve(opts.cwd ?? process.cwd());
 
   if (!name) {
@@ -50,12 +47,8 @@ export async function runShow(
         process.stdout.write(readFileSync(registeredPath, "utf8"));
         return 0;
       }
-      logger.error(
-        `Skill "${name}" is registered but missing on disk at ${entry.path}.`,
-      );
-      logger.dim(
-        "Check the registry or re-forge the skill with `skdd forge`.",
-      );
+      logger.error(`Skill "${name}" is registered but missing on disk at ${entry.path}.`);
+      logger.dim("Check the registry or re-forge the skill with `skdd forge`.");
       return 1;
     }
   }

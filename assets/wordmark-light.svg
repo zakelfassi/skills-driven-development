@@ -1,0 +1,101 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 560 128" fill="none" role="img" aria-label="SkDD wordmark — light variant">
+  <title>SkDD — Skills-Driven Development</title>
+  <!--
+    "SkDD" rendered as filled path outlines (no <text> dependency) for
+    pixel-stable rasterisation via librsvg/sharp on all platforms.
+    Reference font: ui-monospace bold, size 54, cap-height ≈ 38px,
+    baseline y=70, letterforms scaled to exact advance width.
+  -->
+  <defs>
+    <linearGradient id="wml-accent" x1="0" y1="0" x2="1" y2="0" gradientUnits="objectBoundingBox">
+      <stop offset="0" stop-color="#f59e0b"/>
+      <stop offset="1" stop-color="#38bdf8"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Mini anvil mark on the left (same geometry as logo.svg, scaled 0.625×) -->
+  <g transform="translate(24,24)">
+    <defs>
+      <linearGradient id="wml-mk" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0" stop-color="#f59e0b"/>
+        <stop offset="1" stop-color="#ef4444"/>
+      </linearGradient>
+    </defs>
+    <path d="M6 68 H74 V76 H66 V82 H14 V76 H6 Z" fill="url(#wml-mk)"/>
+    <path d="M12 54 H68 L74 68 H6 Z" fill="url(#wml-mk)"/>
+    <path d="M68 54 L86 50 L82 60 L68 60 Z" fill="url(#wml-mk)"/>
+    <path d="M40 24 L46 38 L40 52 L34 38 Z" fill="#f59e0b" opacity="0.85"/>
+    <path
+      d="M3 36 Q3 10 40 10 Q77 10 77 36"
+      fill="none" stroke="#0284c7" stroke-width="4" stroke-linecap="round"
+    />
+    <circle cx="3" cy="36" r="3.5" fill="#0284c7"/>
+    <circle cx="77" cy="36" r="3.5" fill="#0284c7"/>
+  </g>
+
+  <!--
+    SkDD letterforms as geometric paths.
+    Grid: baseline y=70, cap y=16, x-height y=34.
+    Advance width per glyph ~38px. Ink colour: #0f172a.
+    Stroke-based construction: each glyph is a filled shape built from
+    rectangles, arcs and bezier segments at ~10px stroke-equivalent weight.
+  -->
+
+  <!-- S  (advance x=140..178) -->
+  <path d="
+    M 172,16 H 144 C 140,16 138,19 138,23 L 138,40 C 138,44 140,47 144,47
+    L 170,47 C 172,47 174,49 174,51 L 174,63 C 174,66 172,68 170,68
+    L 140,68 C 138,68 138,66 138,63 L 138,60
+    L 130,60 L 130,65 C 130,70 134,76 140,76
+    L 172,76 C 178,76 182,71 182,65 L 182,48 C 182,43 178,39 172,39
+    L 146,39 C 144,39 142,37 142,35 L 142,25 C 142,23 144,22 146,22
+    L 176,22 C 178,22 178,24 178,26 L 178,29
+    L 186,29 L 186,24 C 186,19 182,16 176,16 Z
+  " fill="#0f172a"/>
+
+  <!-- k  (advance x=192..230) -->
+  <!-- Vertical stem -->
+  <rect x="192" y="16" width="9" height="60" rx="2" fill="#0f172a"/>
+  <!-- Upper-right diagonal (k-arm, top) -->
+  <path d="M 199,46 L 228,16 L 236,16 L 209,47 Z" fill="#0f172a"/>
+  <!-- Lower-right diagonal (k-leg, bottom) -->
+  <path d="M 207,48 L 236,76 L 228,76 L 199,50 Z" fill="#0f172a"/>
+
+  <!-- D  (advance x=242..282) -->
+  <!-- Left vertical stem -->
+  <rect x="242" y="16" width="9" height="60" rx="2" fill="#0f172a"/>
+  <!-- Right curved part -->
+  <path d="
+    M 251,16 L 262,16 C 278,16 286,28 286,46 C 286,64 278,76 262,76
+    L 251,76 L 251,68 L 261,68 C 273,68 277,60 277,46 C 277,32 273,24 261,24
+    L 251,24 Z
+  " fill="#0f172a"/>
+
+  <!-- D  (advance x=292..332) -->
+  <rect x="292" y="16" width="9" height="60" rx="2" fill="#0f172a"/>
+  <path d="
+    M 301,16 L 312,16 C 328,16 336,28 336,46 C 336,64 328,76 312,76
+    L 301,76 L 301,68 L 311,68 C 323,68 327,60 327,46 C 327,32 323,24 311,24
+    L 301,24 Z
+  " fill="#0f172a"/>
+
+  <!-- Subtitle: "Skills-Driven Development" -->
+  <text
+    x="140" y="106"
+    font-family="ui-monospace, SFMono-Regular, Menlo, 'Courier New', monospace"
+    font-size="16"
+    font-weight="500"
+    letter-spacing="1"
+    fill="#475569"
+  >Skills-Driven Development</text>
+
+  <!-- Tagline (right edge) -->
+  <text x="540" y="68"
+    font-family="ui-sans-serif, system-ui, -apple-system, sans-serif"
+    font-size="13" font-weight="600" text-anchor="end" fill="#0284c7"
+  >agentskills.io/v1</text>
+  <text x="540" y="88"
+    font-family="ui-sans-serif, system-ui, -apple-system, sans-serif"
+    font-size="11" font-weight="400" text-anchor="end" fill="#94a3b8"
+  >forge · evolve · compose · archive</text>
+</svg>

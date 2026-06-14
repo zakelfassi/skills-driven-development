@@ -1,16 +1,74 @@
-/* SkDD brand accents on top of Starlight's defaults. */
+/* ========================================================
+   SkDD brand tokens — single source of truth.
+   All --skdd-* custom properties are defined here and
+   mapped onto Starlight's theme variables below.
+   ======================================================== */
+
 :root {
-  --sl-color-accent-low: #0c4a6e;
-  --sl-color-accent: #38bdf8;
-  --sl-color-accent-high: #e0f2fe;
+  /* ── Ink (slate-dark) ── */
+  --skdd-ink-900: #0f172a; /* bg gradient start */
+  --skdd-ink-800: #1e293b; /* bg gradient end   */
+  --skdd-ink-600: #334155; /* archive node fill / code borders */
+
+  /* ── Slate (neutral) ── */
+  --skdd-slate-400: #94a3b8; /* secondary text */
+
+  /* ── Forge (amber → red) ── */
+  --skdd-forge-500: #f59e0b; /* anvil gradient start — "forge" amber */
+  --skdd-forge-600: #ef4444; /* anvil gradient end   — heat red      */
+
+  /* ── Spark ── */
+  --skdd-spark-100: #fef3c7; /* spark diamond */
+
+  /* ── Loop / Discover (sky) ── */
+  --skdd-loop-400: #38bdf8; /* loop arc — "discover" sky = Starlight accent */
+  --skdd-loop-900: #0c4a6e; /* accent-low (dark surfaces)                   */
+
+  /* ── Paper (light surface) ── */
+  --skdd-paper-50: #f8fafc; /* light text / light-mode bg */
+
+  /* ── Map onto Starlight accent vars (light mode defaults) ── */
+  --sl-color-accent-low:  var(--skdd-loop-900);
+  --sl-color-accent:      var(--skdd-loop-400);
+  --sl-color-accent-high: #e0f2fe; /* sky-100 */
 }
 
+/* Dark-mode overrides */
 :root[data-theme="dark"] {
-  --sl-color-accent-low: #082f49;
-  --sl-color-accent: #38bdf8;
-  --sl-color-accent-high: #f0f9ff;
+  --sl-color-accent-low:  #082f49;
+  --sl-color-accent:      var(--skdd-loop-400);
+  --sl-color-accent-high: #f0f9ff; /* sky-50 */
+
+  /* Ink-900 dark background feel */
+  --sl-color-bg:          var(--skdd-ink-900);
+  --sl-color-bg-nav:      var(--skdd-ink-900);
+  --sl-color-bg-sidebar:  var(--skdd-ink-800);
+
+  /* ink-600 code-block borders */
+  --sl-color-gray-6:      var(--skdd-ink-600);
+  --sl-color-hairline:    var(--skdd-ink-600);
 }
 
+/* ── Hero image glow ── */
 .hero img {
   filter: drop-shadow(0 10px 30px rgba(56, 189, 248, 0.2));
+}
+
+/* ── Hero CTA — amber hover accent ── */
+.hero .action.primary:hover,
+.hero .action.primary:focus-visible {
+  background-color: var(--skdd-forge-500);
+  border-color:     var(--skdd-forge-500);
+  color:            var(--skdd-ink-900);
+}
+
+/* ── Code-block borders use ink-600 in dark mode ── */
+:root[data-theme="dark"] .sl-markdown-content pre,
+:root[data-theme="dark"] code {
+  border-color: var(--skdd-ink-600);
+}
+
+/* ── Inline code slight tint ── */
+:root[data-theme="dark"] .sl-markdown-content :not(pre) > code {
+  border: 1px solid var(--skdd-ink-600);
 }

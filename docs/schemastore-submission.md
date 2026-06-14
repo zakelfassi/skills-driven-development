@@ -30,11 +30,11 @@ The file to edit is `src/api/json/catalog.json` — adding a single object to th
   "name": "SkDD Colony Manifest",
   "description": "Manifest for a Skills-Driven Development (SkDD) colony — a discoverable collection of Agent Skills (agentskills.io/v1) with a canonical skills directory, harness mirrors, CLI pointer, and optional plugin wrappers.",
   "fileMatch": [".colony.json"],
-  "url": "https://raw.githubusercontent.com/zakelfassi/skills-driven-development/v0.3.0/docs/spec/colony-v1.json"
+  "url": "https://raw.githubusercontent.com/zakelfassi/skills-driven-development/v1.0.0/docs/spec/colony-v1.json"
 }
 ```
 
-> Replace the URL with a tagged raw URL once v0.3.0 (or whichever release ships the schema) is tagged. Before tagging, we can use `main` for local dev but **must** switch to a tag for the PR.
+> The URL targets the `v1.0.0` release tag. Before tagging, you can use `main` for local dev but **must** switch to a tag for the PR.
 
 ## Draft PR title
 
@@ -55,11 +55,11 @@ A catalog entry for `.colony.json`, the manifest file used by [Skills-Driven Dev
 
 ## Schema URL stability
 
-The schema is published under the [skills-driven-development](https://github.com/zakelfassi/skills-driven-development) repo at `docs/spec/colony-v1.json`. The submitted URL targets a tagged release (`v0.3.0`), so edits to `main` can't silently regress existing clients. Major schema changes will ship as `colony-v2.json` at a new URL and be added as a separate catalog entry.
+The schema is published under the [skills-driven-development](https://github.com/zakelfassi/skills-driven-development) repo at `docs/spec/colony-v1.json`. The submitted URL targets a tagged release (`v1.0.0`), so edits to `main` can't silently regress existing clients. Major schema changes will ship as `colony-v2.json` at a new URL and be added as a separate catalog entry.
 
 ## Example files
 
-Valid: <https://github.com/zakelfassi/skills-driven-development/blob/v0.3.0/.colony.json>
+Valid: <https://github.com/zakelfassi/skills-driven-development/blob/v1.0.0/.colony.json>
 
 ## Validation
 

@@ -1,0 +1,16 @@
+{
+  "persistentPermissions": {
+    "bash": true,
+    "read": true
+  },
+  "mcpServers": {
+    "user-droid-mcp": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "some-mcp"],
+      "env": {
+        "API_KEY": "${MY_API_KEY}"
+      }
+    }
+  }
+}

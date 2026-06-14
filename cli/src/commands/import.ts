@@ -2,15 +2,19 @@ import { createHash } from "node:crypto";
 import {
   cpSync,
   existsSync,
+  lstatSync,
   mkdirSync,
   readFileSync,
   realpathSync,
+  rmdirSync,
   rmSync,
 } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
 import matter from "gray-matter";
+import { dirTreeHash } from "../lib/dir-tree-hash.js";
+import { ensureGlobalColony, globalSkillsDir, skddHome } from "../lib/global.js";
+import { HARNESSES, type Harness } from "../lib/harness.js";
 import { logger, pc } from "../lib/logger.js";
-import { HARNESSES } from "../lib/harness.js";
 import { findSkills } from "../lib/skill.js";
 import { runLink } from "./link.js";
 
@@ -20,6 +24,7 @@ export interface ImportOptions {
   apply?: boolean;
   canonical?: string;
   skipLink?: boolean;
+  global?: boolean;
 }
 
 interface ImportEntry {
@@ -61,7 +66,27 @@ export async function runImport(
   opts: ImportOptions = {},
 ): Promise<number> {
   const cwd = resolve(opts.cwd ?? process.cwd());
-  const root = target ? resolve(cwd, target) : cwd;
+  const root = opts.global ? skddHome() : target ? resolve(cwd, target) : cwd;
+
+  // Global mode always uses ~/.skdd/skills as its canonical directory.
+  // Accepting --canonical in global mode would cause the consolidation step to
+  // write into ~/.skdd/<custom-dir> while runLinkGlobal hard-codes ~/.skdd/skills,
+  // leaving harness mirrors pointing at an empty default dir. Reject early instead
+  // of silently producing a misaligned colony.
+  if (opts.global && opts.canonical !== undefined) {
+    logger.error(
+      `--canonical cannot be used with --global: global mode always uses ~/.skdd/skills as the canonical directory.`,
+    );
+    logger.dim(`Remove --canonical or omit --global to use a custom canonical directory.`);
+    return 1;
+  }
+
+  // Bootstrap the global colony before the existence check so that
+  // `skdd import -g` (including --apply) can run on a fresh machine where
+  // ~/.skdd doesn't exist yet — mirrors init -g and the mcp commands.
+  if (opts.global) {
+    ensureGlobalColony();
+  }
 
   if (!existsSync(root)) {
     logger.error(`Target directory does not exist: ${target ?? root}`);
@@ -69,7 +94,7 @@ export async function runImport(
   }
 
   const canonical = opts.canonical ?? detectCanonicalFromColony(root) ?? "skills";
-  const report = scanForSkills(root, canonical);
+  const report = scanForSkills(root, canonical, opts.global ?? false);
 
   if (opts.json) {
     console.log(JSON.stringify(report, null, 2));
@@ -95,7 +120,7 @@ function detectCanonicalFromColony(root: string): string | null {
   return null;
 }
 
-function scanForSkills(root: string, canonical: string): ImportReport {
+function scanForSkills(root: string, canonical: string, globalMode = false): ImportReport {
   const dirsToScan: Array<{ dir: string; origin: string }> = [];
   const seenRealpaths = new Set<string>();
 
@@ -114,8 +139,15 @@ function scanForSkills(root: string, canonical: string): ImportReport {
 
   // Canonical first so it wins realpath dedup over any symlinked mirror.
   add(join(root, canonical), "canonical");
-  for (const profile of Object.values(HARNESSES)) {
-    add(join(root, profile.skillsDir), profile.id);
+  if (globalMode) {
+    // In global mode scan harness global dirs (absolute paths)
+    for (const harness of Object.keys(HARNESSES) as Harness[]) {
+      add(globalSkillsDir(harness), harness);
+    }
+  } else {
+    for (const profile of Object.values(HARNESSES)) {
+      add(join(root, profile.skillsDir), profile.id);
+    }
   }
 
   const entries: ImportEntry[] = [];
@@ -271,7 +303,7 @@ async function applyConsolidation(
 
   // Re-walk to get the flat entry list. The JSON report only carries duplicates + collisions,
   // so we re-scan to pick up single-source skills that still need migration into canonical.
-  const entries = rescanForApply(root, report.canonical);
+  const entries = rescanForApply(root, report.canonical, opts.global ?? false);
   const byName = new Map<string, ImportEntry[]>();
   for (const e of entries) {
     if (!e.skillName) continue;
@@ -288,6 +320,7 @@ async function applyConsolidation(
   let moved = 0;
   let removed = 0;
   let skipped = 0;
+  const skippedNames = new Set<string>();
   for (const [name, es] of byName) {
     // With no name collisions, every entry in this group shares the same hash. So it's
     // either already in canonical (do nothing but clean up harness copies) or needs to
@@ -300,21 +333,51 @@ async function applyConsolidation(
       const source = es[0]!;
       const sourceSkillDir = dirname(source.absPath);
       if (existsSync(destSkillDir)) {
-        // Canonical already has a skill with this name but it wasn't in our scan (e.g., the
-        // canonical dir doesn't exist yet but was detected via .colony.json). Skip to be safe.
+        // Canonical destination exists but was not picked up as a canonical scan entry
+        // (e.g., the SKILL.md has a different/missing frontmatter name, or is an empty dir).
+        // Leave the harness source in place so the user can resolve manually.
         skipped++;
-        if (!opts.json) logger.dim(`  ${name} — already at ${report.canonical}/${name}/, skipping`);
+        skippedNames.add(name);
+        if (!opts.json)
+          logger.dim(
+            `  ${name} — destination ${report.canonical}/${name}/ already exists; left harness copy in place for manual review`,
+          );
       } else {
         cpSync(sourceSkillDir, destSkillDir, { recursive: true });
         moved++;
-        if (!opts.json) logger.success(`  ${name} → ${report.canonical}/${name}/ (migrated from ${source.origin})`);
+        if (!opts.json)
+          logger.success(
+            `  ${name} → ${report.canonical}/${name}/ (migrated from ${source.origin})`,
+          );
       }
     }
 
     // Remove non-canonical copies (harness-dir real directories — symlinks were realpath-deduped).
+    // Skip removal for names whose destination was occupied — those harness sources were left
+    // in place intentionally so the user can resolve the conflict manually.
+    if (skippedNames.has(name)) continue;
     for (const e of es) {
       if (e.origin === "canonical") continue;
       const skillDir = dirname(e.absPath);
+
+      // Safety check: only remove a harness copy when its ENTIRE directory tree is
+      // byte-identical to canonical. If the harness copy has unique sibling payload
+      // (scripts/, references/, assets/, or any extra files) that canonical does not
+      // have, deleting it would cause data loss. Leave such dirs for manual review.
+      const canonicalSkillDir = join(canonicalPath, name);
+      if (
+        existsSync(canonicalSkillDir) &&
+        dirTreeHash(skillDir) !== dirTreeHash(canonicalSkillDir)
+      ) {
+        skipped++;
+        skippedNames.add(name);
+        if (!opts.json)
+          logger.dim(
+            `  ${name} — ${dirname(e.relPath)} has unique payload not present in canonical; left for manual review`,
+          );
+        continue;
+      }
+
       try {
         rmSync(skillDir, { recursive: true, force: true });
         removed++;
@@ -334,16 +397,60 @@ async function applyConsolidation(
     );
   }
 
-  if (opts.skipLink) return 0;
+  if (opts.skipLink) return skipped > 0 ? 1 : 0;
 
-  if (!opts.json) logger.dim("Running 'skdd link --force' to refresh harness mirrors…");
-  // --force is safe here: we just consolidated every skill out of the harness dirs,
-  // so whatever's left is either empty or non-skill cruft that the user can recreate.
-  const linkCode = await runLink({ cwd: root, quiet: opts.json ?? false, force: true });
+  // Try to remove any harness skill-dirs that are now empty so the non-forced runLink
+  // below can replace them with clean symlinks. Dirs that still contain unrecognized
+  // files (anything import didn't process: malformed skills, auxiliary top-level files)
+  // will resist rmdirSync and stay in place; runLink will block on them instead of
+  // silently deleting user content.
+  const harnessDirsToCheck: string[] = [];
+  if (opts.global) {
+    for (const h of Object.keys(HARNESSES) as Harness[]) {
+      harnessDirsToCheck.push(globalSkillsDir(h));
+    }
+  } else {
+    for (const profile of Object.values(HARNESSES)) {
+      harnessDirsToCheck.push(join(root, profile.skillsDir));
+    }
+  }
+  for (const hDir of harnessDirsToCheck) {
+    let stat: ReturnType<typeof lstatSync> | null = null;
+    try {
+      stat = lstatSync(hDir);
+    } catch {
+      continue; // directory doesn't exist — nothing to do
+    }
+    if (!stat.isDirectory()) continue; // already a symlink or non-dir — leave alone
+    try {
+      rmdirSync(hDir); // only succeeds when empty; throws ENOTEMPTY if content remains
+    } catch {
+      // content remains — leave the dir for runLink to block on
+    }
+  }
+
+  if (!opts.json) logger.dim("Running 'skdd link' to refresh harness mirrors…");
+  // Run without --force: if any harness dir still contains unrecognized files
+  // (malformed skills, auxiliary top-level files, etc.) that import did not consolidate,
+  // ensureMirror's block protection prevents silent data loss. The user is prompted to
+  // review those files and then run 'skdd link --force' to finish.
+  const linkCode = opts.global
+    ? await runLink({ global: true, quiet: opts.json ?? false })
+    : await runLink({ cwd: root, quiet: opts.json ?? false });
+  if (linkCode !== 0 && !opts.json) {
+    const forceCmd = opts.global ? "skdd link -g --force" : "skdd link --force";
+    logger.warn(
+      `Some harness skill dirs still contain unrecognized files that import did not move.\n` +
+        `  Your recognized skills are safely consolidated in canonical; those files were NOT deleted.\n` +
+        `  Review the blocked dirs listed above, then run:\n` +
+        `    ${forceCmd}\n` +
+        `  to replace each remaining directory with a symlink (permanently deletes its contents).`,
+    );
+  }
   return linkCode;
 }
 
-function rescanForApply(root: string, canonical: string): ImportEntry[] {
+function rescanForApply(root: string, canonical: string, globalMode = false): ImportEntry[] {
   // Re-walk the directories and return a flat ImportEntry list.
   // Kept separate from scanForSkills so the JSON report stays small.
   const entries: ImportEntry[] = [];
@@ -378,8 +485,14 @@ function rescanForApply(root: string, canonical: string): ImportEntry[] {
     }
   };
   add(join(root, canonical), "canonical");
-  for (const profile of Object.values(HARNESSES)) {
-    add(join(root, profile.skillsDir), profile.id);
+  if (globalMode) {
+    for (const harness of Object.keys(HARNESSES) as Harness[]) {
+      add(globalSkillsDir(harness), harness);
+    }
+  } else {
+    for (const profile of Object.values(HARNESSES)) {
+      add(join(root, profile.skillsDir), profile.id);
+    }
   }
   return entries;
 }

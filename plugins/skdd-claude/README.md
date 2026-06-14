@@ -7,10 +7,14 @@
 From the SkDD repo root:
 
 ```bash
-claude plugins install ./plugins/skdd-claude
+claude plugin install ./plugins/skdd-claude
 ```
 
-Or point Claude Code's plugin marketplace at this directory once SkDD is published.
+Or install directly from GitHub once SkDD is published:
+
+```bash
+claude plugin install github.com/zakelfassi/skills-driven-development/plugins/skdd-claude
+```
 
 ## What you get
 
@@ -48,13 +52,13 @@ Plugin-scope skills are namespaced in Claude Code as `<plugin>:<skill>`. So the 
 ## Updating
 
 ```bash
-cd path/to/skills-driven-development && git pull && claude plugins install --force ./plugins/skdd-claude
+cd path/to/skills-driven-development && git pull && claude plugin install --force ./plugins/skdd-claude
 ```
 
 ## Uninstall
 
 ```bash
-claude plugins uninstall skdd-claude
+claude plugin uninstall skdd-claude
 ```
 
 Skills you forged in your own projects remain — only the plugin's bundled meta-skill and slash commands are removed.

@@ -1,0 +1,56 @@
+{
+  "$schema": "../../docs/spec/colony-v1.json",
+  "name": "webapp-starter",
+  "version": "0.1.0",
+  "description": "Reference colony for a React + TypeScript + Express web application. Demonstrates SkDD skills for component scaffolding, API endpoint generation, deploy-preview automation, and bug triage.",
+  "spec": "agentskills.io/v1",
+  "canonicalSkillsDir": "skills",
+  "harnessMirrors": [],
+  "skills": [
+    {
+      "name": "deploy-preview",
+      "path": "skills/deploy-preview/SKILL.md",
+      "description": "Deploy preview branches to staging and post the URL to the pull request.",
+      "status": "active"
+    },
+    {
+      "name": "component-scaffold",
+      "path": "skills/component-scaffold/SKILL.md",
+      "description": "Create React components with co-located tests and Storybook stories.",
+      "status": "active"
+    },
+    {
+      "name": "api-endpoint",
+      "path": "skills/api-endpoint/SKILL.md",
+      "description": "Scaffold REST API endpoints with input validation, error handling, and tests.",
+      "status": "active"
+    },
+    {
+      "name": "bug-triage",
+      "path": "skills/bug-triage/SKILL.md",
+      "description": "Triage bug reports into actionable GitHub issues with severity labels and reproduction steps.",
+      "status": "active"
+    }
+  ],
+  "homepage": "https://github.com/zakelfassi/skills-driven-development/tree/main/examples/webapp-starter",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/zakelfassi/skills-driven-development.git",
+    "directory": "examples/webapp-starter"
+  },
+  "license": "MIT",
+  "maintainers": [
+    {
+      "name": "Zak El Fassi",
+      "github": "zakelfassi"
+    }
+  ],
+  "keywords": [
+    "react",
+    "typescript",
+    "express",
+    "webapp",
+    "skdd",
+    "skills-driven-development"
+  ]
+}

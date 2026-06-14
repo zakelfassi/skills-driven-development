@@ -18,9 +18,49 @@ export default defineConfig({
       title: "Skills-Driven Development",
       description:
         "A methodology where AI agents create, evolve, and share reusable skills as a byproduct of their work. Spec-aligned with agentskills.io/v1.",
+      favicon: "/favicon.svg",
+      head: [
+        // PNG favicon fallback for browsers that don't support SVG favicons
+        {
+          tag: "link",
+          attrs: {
+            rel: "icon",
+            href: "/skills-driven-development/favicon-32.png",
+            type: "image/png",
+            sizes: "32x32",
+          },
+        },
+        // Apple touch icon
+        {
+          tag: "link",
+          attrs: {
+            rel: "apple-touch-icon",
+            href: "/skills-driven-development/apple-touch-icon.png",
+          },
+        },
+        // Open Graph image
+        {
+          tag: "meta",
+          attrs: {
+            property: "og:image",
+            content:
+              "https://zakelfassi.github.io/skills-driven-development/og-image.png",
+          },
+        },
+        // Twitter card
+        {
+          tag: "meta",
+          attrs: {
+            name: "twitter:card",
+            content: "summary_large_image",
+          },
+        },
+      ],
       logo: {
-        src: "./src/assets/logo.svg",
+        light: "./src/assets/logo-light.svg",
+        dark: "./src/assets/mark.svg",
         alt: "SkDD logo",
+        replacesTitle: false,
       },
       social: {
         github: "https://github.com/zakelfassi/skills-driven-development",
@@ -41,10 +81,18 @@ export default defineConfig({
           label: "Start here",
           items: [
             { label: "Why SkDD?", link: "/why-skdd/" },
+            { label: "Examples gallery", link: "/examples/" },
             { label: "Configuration", link: "/configuration/" },
             { label: "Skill colony concept", link: "/skill-colony/" },
             { label: "Forging skills", link: "/forging-skills/" },
             { label: "Specification alignment", link: "/specification-alignment/" },
+          ],
+        },
+        {
+          label: "Hub & global",
+          items: [
+            { label: "Global colony", link: "/global-colony/" },
+            { label: "MCP sync", link: "/mcp-sync/" },
           ],
         },
         {

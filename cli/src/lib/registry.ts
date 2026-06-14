@@ -119,7 +119,13 @@ export function writeMarkdownRegistry(registry: Registry, projectName?: string):
   }
 
   if (registry.archived.length > 0) {
-    lines.push("", "## Archived", "", "| Skill | Archived | Reason |", "|-------|----------|--------|");
+    lines.push(
+      "",
+      "## Archived",
+      "",
+      "| Skill | Archived | Reason |",
+      "|-------|----------|--------|",
+    );
     for (const a of registry.archived) {
       lines.push(`| ${a.name} | ${a.lastUsed ?? ""} | ${a.description} |`);
     }
@@ -145,7 +151,11 @@ export function parseJsonRegistry(source: string): Registry {
   };
 }
 
-export function writeJsonRegistry(registry: Registry, colonyName = "colony", version = "0.1.0"): string {
+export function writeJsonRegistry(
+  registry: Registry,
+  colonyName = "colony",
+  version = "0.1.0",
+): string {
   const manifest: ColonyManifestJson = {
     schema: "https://agentskills.io/registry/v1.json",
     colony: registry.colony ?? { name: colonyName, version },

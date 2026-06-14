@@ -1,6 +1,7 @@
 {
   "name": "skdd-claude",
-  "version": "0.1.0",
+  "displayName": "SkDD — Skills-Driven Development",
+  "version": "0.2.0",
   "description": "Skills-Driven Development plugin for Claude Code. Ships the skillforge meta-skill, /forge and /skills slash commands, and a SessionStart hint that nudges the agent to load the colony registry.",
   "author": {
     "name": "Zak El Fassi",

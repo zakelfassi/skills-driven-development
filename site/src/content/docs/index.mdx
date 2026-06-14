@@ -5,7 +5,8 @@ template: splash
 hero:
   tagline: Agents that learn by doing — and remember how they did it.
   image:
-    file: ../../assets/logo.svg
+    dark: ../../assets/mark.svg
+    light: ../../assets/logo-light.svg
   actions:
     - text: Why SkDD?
       link: /skills-driven-development/why-skdd/
@@ -22,10 +23,13 @@ hero:
 ---
 
 import { Card, CardGrid, LinkCard } from "@astrojs/starlight/components";
+import TerminalCast from "../../components/TerminalCast.astro";
 
 export const base = import.meta.env.BASE_URL.endsWith("/")
   ? import.meta.env.BASE_URL
   : `${import.meta.env.BASE_URL}/`;
+
+<TerminalCast />
 
 ## The one-minute pitch
 
@@ -55,6 +59,28 @@ flowchart LR
   canonical -- symlink --> cursor
   canonical -- symlink --> copilot
 ```
+
+## Examples gallery
+
+Three reference colonies — each with real structure, a lived-in registry, and at least one executable script.
+
+<CardGrid>
+  <LinkCard
+    title="webapp-starter"
+    href={`${base}examples/#webapp-starter`}
+    description="TypeScript + React/Express colony. 4 skills: deploy-preview (runs), api-endpoint, component-scaffold, bug-triage."
+  />
+  <LinkCard
+    title="cli-tool"
+    href={`${base}examples/#cli-tool`}
+    description="Cross-platform CLI (shipctl) colony. 5 skills: release-cut (runs), cross-compile-matrix, flag-add, manpage-sync, breaking-change-audit."
+  />
+  <LinkCard
+    title="data-pipeline"
+    href={`${base}examples/#data-pipeline`}
+    description="Python data-engineering + ML colony. 5 skills: experiment-log (runs), dataset-onboard, pipeline-stage, data-quality-gate (forked), backfill-runbook."
+  />
+</CardGrid>
 
 ## Explore
 
@@ -88,6 +114,11 @@ flowchart LR
     title="Harness integrations"
     href={`${base}integrations/claude-code/`}
     description="Dedicated guides for 11 harnesses: Claude Code, Codex, Cursor, Copilot, Gemini CLI, OpenCode, Goose, Amp, VS Code, Junie, Roo Code."
+  />
+  <LinkCard
+    title="Examples gallery"
+    href={`${base}examples/`}
+    description="Three reference colonies (webapp-starter, cli-tool, data-pipeline) with real skills, registries, and executable stubs — every example passes skdd validate and skdd doctor."
   />
 </CardGrid>
 

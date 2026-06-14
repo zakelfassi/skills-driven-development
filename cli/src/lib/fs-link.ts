@@ -5,11 +5,12 @@ import {
   mkdirSync,
   readlinkSync,
   rmSync,
+  type Stats,
   symlinkSync,
   unlinkSync,
 } from "node:fs";
-import { dirname, relative, resolve } from "node:path";
 import { platform } from "node:os";
+import { dirname, relative, resolve } from "node:path";
 
 export type LinkMode = "symlink" | "copy" | "auto";
 
@@ -85,7 +86,7 @@ function ensureSymlink(
   opts: EnsureMirrorOptions,
 ): EnsureMirrorResult {
   const desiredTarget = relative(parent, absSource);
-  let targetStat;
+  let targetStat: Stats | null = null;
   try {
     targetStat = lstatSync(absTarget);
   } catch {
@@ -143,7 +144,7 @@ function ensureCopy(
   absTarget: string,
   opts: EnsureMirrorOptions,
 ): EnsureMirrorResult {
-  let targetStat;
+  let targetStat: Stats | null = null;
   try {
     targetStat = lstatSync(absTarget);
   } catch {

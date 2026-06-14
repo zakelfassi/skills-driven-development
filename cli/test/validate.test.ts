@@ -1,8 +1,8 @@
-import { describe, it, expect } from "vitest";
-import { resolve, dirname } from "node:path";
+import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { parseSkill } from "../src/lib/skill.js";
+import { describe, expect, it } from "vitest";
 import { validateSkill } from "../src/commands/validate.js";
+import { parseSkill } from "../src/lib/skill.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const FIXTURES = resolve(__dirname, "fixtures");
