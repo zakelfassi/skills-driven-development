@@ -46,6 +46,8 @@ jobs:
 
       - name: Publish to npm
         working-directory: cli
+        env:
+          NODE_AUTH_TOKEN: ""
         run: npm publish --provenance --access public
 
       # Marketplace submissions (SkillsMP, Skills.sh, ClawHub, Claude Code Marketplace)
