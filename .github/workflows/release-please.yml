@@ -11,9 +11,75 @@ permissions:
 jobs:
   release-please:
     runs-on: ubuntu-latest
+    # Expose release-please-action@v4 outputs to downstream jobs. The CLI package
+    # lives at path `cli` (see release-please-config.json), so the relevant signal
+    # is the path-prefixed `cli--release_created` / `cli--tag_name` outputs, not
+    # the root-component `release_created` (which only fires for a `.` package).
+    outputs:
+      releases_created: ${{ steps.release.outputs.releases_created }}
+      cli_release_created: ${{ steps.release.outputs['cli--release_created'] }}
+      cli_tag_name: ${{ steps.release.outputs['cli--tag_name'] }}
     steps:
-      - uses: googleapis/release-please-action@v4
+      - id: release
+        uses: googleapis/release-please-action@v4
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
+
+  # Primary, automatic npm publisher.
+  #
+  # Why this lives here instead of relying on publish-cli.yml's `release: published`
+  # trigger: release-please creates the GitHub Release using GITHUB_TOKEN, and
+  # events emitted by GITHUB_TOKEN do NOT cascade to trigger other workflows. That
+  # means a `release: published` workflow never fires automatically for these
+  # releases. By publishing in the same workflow run that created the release, we
+  # avoid the no-cascade gap entirely — no manual `gh workflow run` needed.
+  #
+  # The steps below MUST stay byte-for-byte equivalent to publish-cli.yml's publish
+  # job (retained as a manual workflow_dispatch fallback). If you change one, change
+  # the other. Critically, this preserves npm OIDC trusted publishing: Node 24,
+  # npm@latest, NO registry-url, NO NODE_AUTH_TOKEN, and `id-token: write`.
+  publish:
+    name: Publish skdd to npm
+    needs: release-please
+    if: needs.release-please.outputs.cli_release_created == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v5
+        with:
+          version: 9
+
+      - name: Setup Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: "24"
+          cache: pnpm
+          cache-dependency-path: cli/pnpm-lock.yaml
+
+      - name: Install CLI deps
+        working-directory: cli
+        run: pnpm install --frozen-lockfile
+
+      - name: Run tests
+        working-directory: cli
+        run: pnpm test
+
+      - name: Build CLI
+        working-directory: cli
+        run: pnpm build
+
+      - name: Upgrade npm for trusted publishing
+        run: npm install -g npm@latest
+
+      # OIDC trusted publishing: no registry-url/token npmrc so npm mints an OIDC token
+      - name: Publish to npm
+        working-directory: cli
+        run: npm publish --provenance --access public

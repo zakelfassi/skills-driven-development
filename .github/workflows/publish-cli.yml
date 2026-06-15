@@ -1,8 +1,21 @@
 name: Publish CLI
 
+# Manual fallback publisher only.
+#
+# The automatic, post-release publish lives in release-please.yml (it publishes in
+# the same run that creates the GitHub Release). That is necessary because
+# release-please creates the release using GITHUB_TOKEN, and GITHUB_TOKEN-emitted
+# events do NOT cascade to trigger other workflows — so a `release: published`
+# trigger here would never fire automatically. We therefore deliberately keep this
+# workflow as `workflow_dispatch` ONLY, to be invoked manually
+# (`gh workflow run publish-cli.yml --ref vX.Y.Z`) if the automatic path ever needs
+# to be re-run. This also guarantees there is exactly one automatic publisher and
+# no risk of a double publish.
+#
+# Keep the publish steps below byte-for-byte equivalent to release-please.yml's
+# publish job, including npm OIDC trusted publishing: Node 24, npm@latest, NO
+# registry-url, NO NODE_AUTH_TOKEN, and `id-token: write`.
 on:
-  release:
-    types: [published]
   workflow_dispatch:
 
 jobs:
