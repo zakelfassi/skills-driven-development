@@ -43,20 +43,10 @@ jobs:
       - name: Upgrade npm for trusted publishing
         run: npm install -g npm@latest
 
-      - name: Diagnostics (npm version + config)
-        working-directory: cli
-        run: |
-          echo "node: $(node --version)"
-          echo "npm: $(npm --version)"
-          echo "which npm: $(which npm)"
-          echo "--- npm config (registry/auth) ---"
-          npm config get registry || true
-          npm config list || true
-
       # OIDC trusted publishing: no registry-url/token npmrc so npm mints an OIDC token
       - name: Publish to npm
         working-directory: cli
-        run: npm publish --provenance --access public --verbose
+        run: npm publish --provenance --access public
 
       # Marketplace submissions (SkillsMP, Skills.sh, ClawHub, Claude Code Marketplace)
       # are intentionally deferred to a future milestone - see the P4 section of the
