@@ -41,11 +41,12 @@ jobs:
         working-directory: cli
         run: pnpm build
 
+      - name: Upgrade npm for trusted publishing
+        run: npm install -g npm@latest
+
       - name: Publish to npm
         working-directory: cli
-        run: pnpm publish --no-git-checks --provenance --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npm publish --provenance --access public
 
       # Marketplace submissions (SkillsMP, Skills.sh, ClawHub, Claude Code Marketplace)
       # are intentionally deferred to a future milestone - see the P4 section of the
