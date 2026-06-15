@@ -15,7 +15,7 @@
 <p align="center">
   <a href="https://www.npmjs.com/package/@zakelfassi/skdd"><img alt="npm version" src="https://img.shields.io/npm/v/@zakelfassi/skdd?color=0ea5e9&label=%40zakelfassi%2Fskdd&logo=npm"></a>
   <a href="https://www.npmjs.com/package/@zakelfassi/skdd"><img alt="downloads" src="https://img.shields.io/npm/dw/@zakelfassi/skdd?color=0ea5e9&label=downloads&logo=npm"></a>
-  <a href="https://github.com/zakelfassi/skills-driven-development/actions"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/zakelfassi/skills-driven-development/validate-skills.yml?branch=main&label=CI&logo=github"></a>
+  <a href="https://github.com/zakelfassi/skills-driven-development/actions/workflows/ci.yml"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/zakelfassi/skills-driven-development/ci.yml?branch=main&label=CI&logo=github"></a>
   <a href="./LICENSE"><img alt="license" src="https://img.shields.io/badge/license-MIT-0ea5e9"></a>
   <a href="https://github.com/zakelfassi/skills-driven-development/stargazers"><img alt="stars" src="https://img.shields.io/github/stars/zakelfassi/skills-driven-development?color=f59e0b&label=stars&logo=github"></a>
   <a href="https://agentskills.io/specification.md"><img alt="agentskills.io v1" src="https://img.shields.io/badge/spec-agentskills.io%2Fv1-f59e0b"></a>
