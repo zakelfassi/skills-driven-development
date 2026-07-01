@@ -1,8 +1,8 @@
 {
   "name": "skdd-claude",
   "displayName": "SkDD — Skills-Driven Development",
-  "version": "0.2.0",
-  "description": "Skills-Driven Development plugin for Claude Code. Ships the skillforge meta-skill, /forge and /skills slash commands, and a SessionStart hint that nudges the agent to load the colony registry.",
+  "version": "0.3.0",
+  "description": "Skills-Driven Development plugin for Claude Code. Ships the skillforge meta-skill, /forge, /skills and /skdd-hooks slash commands, plus two opt-in enforcement hooks: a finish-the-loop Stop gate and a freeze-the-session reminder.",
   "author": {
     "name": "Zak El Fassi",
     "url": "https://github.com/zakelfassi"

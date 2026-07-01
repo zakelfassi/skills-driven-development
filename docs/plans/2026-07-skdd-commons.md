@@ -205,10 +205,10 @@ plugins/skdd-claude/
 
 ### 6.3 Acceptance (Phase 3)
 
-- [ ] Both hooks inert by default; `/skdd:hooks on` activates, `off` deactivates, state survives sessions
-- [ ] Gate blocks exactly once on a planted "should work" report, passes on evidence-bearing reports, never fires on docs-only diffs
-- [ ] Scripts have no dependencies beyond node ≥20 built-ins; each exits <2s in the common (inactive) path
-- [ ] Plugin README documents both hooks, the philosophy line ("a skill is a procedure the model follows when it decides to; a hook is a gate for when it forgets"), and the toggle
+- [x] Both hooks inert by default; `/skdd:hooks on` activates, `off` deactivates, state survives sessions
+- [x] Gate blocks exactly once on a planted "should work" report, passes on evidence-bearing reports, never fires on docs-only diffs
+- [x] Scripts have no dependencies beyond node ≥20 built-ins; each exits <2s in the common (inactive) path
+- [x] Plugin README documents both hooks, the philosophy line ("a skill is a procedure the model follows when it decides to; a hook is a gate for when it forgets"), and the toggle
 
 ---
 
@@ -236,5 +236,6 @@ plugins/skdd-claude/
 *(Append dated entries here as phases complete. Manual steps for Zak accumulate here too.)*
 
 - 2026-07-01 — Plan authored (claude-fable-5). Bootstrap skills exist untracked at `packs/fable-festival/`; installed to the global colony the same day.
+- 2026-07-01 — **Phase 3 complete** (claude-fable-5). Two opt-in hooks shipped in `plugins/skdd-claude` v0.3.0 (branch `feat/plugin-hooks`): `finish-loop-gate.mjs` (Stop; blocks once per session on unverified-claim reports over non-test product diffs, anti-loop state in `$TMPDIR`), `freeze-reminder.mjs` (SessionEnd + PreCompact; non-blocking `systemMessage` when a substantive session ends with the registry untouched), `session-start.mjs` (seeds session-start timestamp), `lib/state.mjs` (state + toggle reads). Toggles live in `.claude/skdd.local.md` via the `/skdd-claude:skdd-hooks` command; both gates OFF by default. 11 end-to-end tests in `cli/test/plugin-hooks.test.ts` spawn the real scripts (block-once, evidence pass, docs-only/test-only silence, registry-mtime logic, <2s inactive path). No deps beyond node built-ins. Deviation from §6.1 noted: a small `session-start.mjs` + SessionStart hook entry was added so "since session start" comparisons are real — same lifecycle pattern as the codex plugin.
 - 2026-07-01 — **Phase 2 complete** (claude-fable-5). `skdd add` / `skdd push` / `skdd drops` shipped in `cli/` (branch `feat/commons-cli`). New libs: `commons.ts` (source parsing + shallow clone + drops.json), `lock.ts` (`.skdd-lock.json`, full sha for future drift detection), `config.ts` (`~/.skdd/config.toml`, `commons` key, default `zakelfassi/skdd-commons`). 24 new tests (add/push/drops) + mini-commons fixtures; 894 total green; typecheck + lint green. Design note: new skills pushed without `--drop` land in the Commons' `incoming/` staging dir (added to the Commons + its CI same day) — drops stay maintainer-curated. Push against a **local path** target supports `--dry-run` only (test seam); real PRs need `gh`. Round-trip e2e ran against the real private repo: `init → add zakelfassi/skdd-commons 2026-07-frontier` (6 skills, provenance `@12ba029`) `→ edit → push --dry-run` produced the correct evolve-branch PR body with diff summary; populated-mirror guardrail covered by a regression test.
 - 2026-07-01 — **Phase 1 complete** (claude-fable-5). `zakelfassi/skdd-commons` created **private** (ASK-ZAK default taken: private until launch commit), **MIT license** (default taken: consistency with main repo), **npm drops deferred** (default taken: git transport only for v1). Full layout + `2026-07-frontier` drop (six skills, `metadata.pack` updated, `usage-count` reset, `last-used` dropped). CI green on main (run 28552710128: validate --strict / safety-lint / manifest-check, ~22s total). Gate proven on PR #1: safety-lint failed on a planted pipe-to-shell + credential-read fixture (run 28552744808), passed after `security-reviewed` label applied (run 28552805972); PR closed unmerged, branch deleted. `packs/fable-festival/` deleted from this repo; `packs/README.md` now concept doc + featured-drop index.
