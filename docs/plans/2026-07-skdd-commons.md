@@ -141,10 +141,10 @@ Copy from this repo's `packs/fable-festival/`, then per skill: set `metadata.pac
 
 ### 4.5 Acceptance (Phase 1)
 
-- [ ] Repo exists with the full layout; `git clone` + CI green on main
-- [ ] All six skills pass `skdd validate --strict` in CI
-- [ ] Safety lint catches a planted bad fixture in a test PR (prove the gate works before trusting it)
-- [ ] README states the thesis, the security posture, and the no-hosted-registry philosophy in ≤2 screens
+- [x] Repo exists with the full layout; `git clone` + CI green on main
+- [x] All six skills pass `skdd validate --strict` in CI
+- [x] Safety lint catches a planted bad fixture in a test PR (prove the gate works before trusting it)
+- [x] README states the thesis, the security posture, and the no-hosted-registry philosophy in ≤2 screens
 
 ---
 
@@ -236,3 +236,4 @@ plugins/skdd-claude/
 *(Append dated entries here as phases complete. Manual steps for Zak accumulate here too.)*
 
 - 2026-07-01 — Plan authored (claude-fable-5). Bootstrap skills exist untracked at `packs/fable-festival/`; installed to the global colony the same day.
+- 2026-07-01 — **Phase 1 complete** (claude-fable-5). `zakelfassi/skdd-commons` created **private** (ASK-ZAK default taken: private until launch commit), **MIT license** (default taken: consistency with main repo), **npm drops deferred** (default taken: git transport only for v1). Full layout + `2026-07-frontier` drop (six skills, `metadata.pack` updated, `usage-count` reset, `last-used` dropped). CI green on main (run 28552710128: validate --strict / safety-lint / manifest-check, ~22s total). Gate proven on PR #1: safety-lint failed on a planted pipe-to-shell + credential-read fixture (run 28552744808), passed after `security-reviewed` label applied (run 28552805972); PR closed unmerged, branch deleted. `packs/fable-festival/` deleted from this repo; `packs/README.md` now concept doc + featured-drop index.
