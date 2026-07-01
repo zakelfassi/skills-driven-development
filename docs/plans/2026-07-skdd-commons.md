@@ -174,10 +174,10 @@ Copy from this repo's `packs/fable-festival/`, then per skill: set `metadata.pac
 
 ### 5.4 Acceptance (Phase 2)
 
-- [ ] Unit tests per command in `cli/test/` (fixtures: a mini commons repo checked into `cli/test/fixtures/`) — cover happy path, validation failure, collision, dirty-mirror safety, `--dry-run`
-- [ ] `add` never force-replaces a populated mirror dir (regression test for the §2 guardrail)
-- [ ] Round-trip e2e (manual or scripted): `init` a scratch colony → `add` the frontier drop → edit a skill → `push --dry-run` produces a correct PR body
-- [ ] `pnpm typecheck && pnpm lint && pnpm test` green; conventional-commit history; release-please cuts a minor version
+- [x] Unit tests per command in `cli/test/` (fixtures: a mini commons repo checked into `cli/test/fixtures/`) — cover happy path, validation failure, collision, dirty-mirror safety, `--dry-run`
+- [x] `add` never force-replaces a populated mirror dir (regression test for the §2 guardrail)
+- [x] Round-trip e2e (manual or scripted): `init` a scratch colony → `add` the frontier drop → edit a skill → `push --dry-run` produces a correct PR body
+- [x] `pnpm typecheck && pnpm lint && pnpm test` green; conventional-commit history; release-please cuts a minor version *(release-please runs on merge)*
 
 ---
 
@@ -236,4 +236,5 @@ plugins/skdd-claude/
 *(Append dated entries here as phases complete. Manual steps for Zak accumulate here too.)*
 
 - 2026-07-01 — Plan authored (claude-fable-5). Bootstrap skills exist untracked at `packs/fable-festival/`; installed to the global colony the same day.
+- 2026-07-01 — **Phase 2 complete** (claude-fable-5). `skdd add` / `skdd push` / `skdd drops` shipped in `cli/` (branch `feat/commons-cli`). New libs: `commons.ts` (source parsing + shallow clone + drops.json), `lock.ts` (`.skdd-lock.json`, full sha for future drift detection), `config.ts` (`~/.skdd/config.toml`, `commons` key, default `zakelfassi/skdd-commons`). 24 new tests (add/push/drops) + mini-commons fixtures; 894 total green; typecheck + lint green. Design note: new skills pushed without `--drop` land in the Commons' `incoming/` staging dir (added to the Commons + its CI same day) — drops stay maintainer-curated. Push against a **local path** target supports `--dry-run` only (test seam); real PRs need `gh`. Round-trip e2e ran against the real private repo: `init → add zakelfassi/skdd-commons 2026-07-frontier` (6 skills, provenance `@12ba029`) `→ edit → push --dry-run` produced the correct evolve-branch PR body with diff summary; populated-mirror guardrail covered by a regression test.
 - 2026-07-01 — **Phase 1 complete** (claude-fable-5). `zakelfassi/skdd-commons` created **private** (ASK-ZAK default taken: private until launch commit), **MIT license** (default taken: consistency with main repo), **npm drops deferred** (default taken: git transport only for v1). Full layout + `2026-07-frontier` drop (six skills, `metadata.pack` updated, `usage-count` reset, `last-used` dropped). CI green on main (run 28552710128: validate --strict / safety-lint / manifest-check, ~22s total). Gate proven on PR #1: safety-lint failed on a planted pipe-to-shell + credential-read fixture (run 28552744808), passed after `security-reviewed` label applied (run 28552805972); PR closed unmerged, branch deleted. `packs/fable-festival/` deleted from this repo; `packs/README.md` now concept doc + featured-drop index.

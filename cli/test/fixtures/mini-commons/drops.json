@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "drops": [
+    {
+      "id": "2026-01-test",
+      "title": "January 2026 Test — the mini fixture drop",
+      "date": "2026-01-15",
+      "skills": ["alpha-skill", "beta-skill"],
+      "story": "https://example.com/mini-commons-story",
+      "forgedBy": "fixture-bot"
+    }
+  ]
+}

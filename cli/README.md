@@ -26,6 +26,9 @@ skdd list [--format=table|json] [-g]
 skdd link [--mode=symlink|copy|auto] [--harness=<list>] [--force] [--quiet] [-g]
 skdd doctor [--json] [-g]
 skdd import [target] [--json] [--apply] [--canonical=<dir>] [--skip-link] [-g]
+skdd add <source> [selector] [--rename=<name>] [--dry-run] [--json] [--non-interactive] [-g]
+skdd push <skill|pack> [--to=<owner/repo>] [--drop=<id>] [--dry-run] [-g]
+skdd drops [--from=<source>] [--format=table|json]
 skdd hub
 skdd mcp <subcommand>
 ```
@@ -117,6 +120,34 @@ skdd import --json                              # machine-readable
 skdd import --apply                             # migrate + link
 skdd import ../some-other-project --apply       # operate on a different root
 ```
+
+### `skdd add`
+
+Install skills from a **Commons repo** — a git repo with a `drops.json` manifest and `packs/<drop-id>/<skill>/` directories (see [SkDD Commons](https://github.com/zakelfassi/skdd-commons)). Sources: GitHub shorthand (`owner/repo`), a full git URL, or a local path, each with an optional `#ref`. Selector: a drop id, `drop/skill` for a single skill, or omitted for an interactive pick.
+
+Every skill is validated with `--strict` before install (refused on failure), checked for name collisions against the target colony (`--rename` resolves single-skill collisions), registered with provenance (`owner/repo@shortsha (drop-id)` in the Source column, full sha in `.skdd-lock.json`), and mirrored via the same **safe, never-forced** link path as `skdd link`.
+
+```bash
+skdd add zakelfassi/skdd-commons 2026-07-frontier                       # whole drop
+skdd add zakelfassi/skdd-commons 2026-07-frontier/finish-the-loop -g    # one skill, global colony
+skdd add ../my-commons 2026-01-test --dry-run                           # local source, plan only
+```
+
+### `skdd push`
+
+Ship a skill (or every local skill sharing a `metadata.pack` id) upstream to a Commons as a PR. Needs the [GitHub CLI](https://cli.github.com) authenticated. The default target repo comes from `~/.skdd/config.toml` (`commons = "owner/repo"`).
+
+Machine-local state is stripped before travel (`usage-count` resets to `"0"`, `last-used` is dropped); `forged-*` provenance is preserved. Skills that already exist upstream branch as `evolve/<name>` with a diff summary; new skills branch as `skill/<name>` and land in `incoming/` for maintainer triage, or in an existing drop with `--drop <id>`. `--dry-run` prints the full would-be PR without network writes.
+
+```bash
+skdd push what-would-you-cut --dry-run     # inspect the PR before sending it
+skdd push what-would-you-cut               # fork, branch, PR
+skdd push my-new-skill --drop 2026-07-frontier
+```
+
+### `skdd drops`
+
+List the drops a Commons offers (id, title, date, skill count, story link). `--from` accepts the same source forms as `add`; defaults to the configured commons.
 
 ## Development
 
