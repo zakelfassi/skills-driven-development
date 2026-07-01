@@ -34,11 +34,12 @@ skdd mcp <subcommand>
 `import` at a personal `~/.skdd/` colony instead of the project in `cwd` —
 skills that travel with you across every repo and harness on the machine,
 rather than versioned with one project. See
-[`docs/global-colony.md`](../docs/global-colony.md) for the directory layout,
-migration path for existing harness skill dirs, and per-harness global-path
-table. `skdd hub` is an interactive TUI over the same state (project or
-global); `skdd mcp` manages the canonical MCP server catalogue at
-`~/.skdd/mcp.json` (see [`docs/mcp-sync.md`](../docs/mcp-sync.md)).
+[`docs/global-colony.md`](https://github.com/zakelfassi/skills-driven-development/blob/main/docs/global-colony.md)
+for the directory layout, migration path for existing harness skill dirs, and
+per-harness global-path table. `skdd hub` is an interactive TUI over the same
+state (project or global); `skdd mcp` manages the canonical MCP server
+catalogue at `~/.skdd/mcp.json` (see
+[`docs/mcp-sync.md`](https://github.com/zakelfassi/skills-driven-development/blob/main/docs/mcp-sync.md)).
 
 ### `skdd init`
 
