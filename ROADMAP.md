@@ -22,6 +22,16 @@ SkDD is being built in named tranches (P0 → P5). Each tranche ships as a batch
 | **G — Community scaffolding** | SECURITY, CoC, CODEOWNERS, issue/PR templates, FUNDING, CHANGELOG, ROADMAP | ✅ Shipped (v0.3.0) |
 | **H — CLI depth + quality bar** | `skdd stats`, `search`, `migrate`, `compose`, `link --watch`, `completion`, ESLint/Prettier, Changesets, e2e tests, `SkddError` class, man pages | ⏸ Deferred |
 | **P4 — Strategy / Ecosystem** | Marketplace submissions, RFC upstream for lifecycle metadata, security doc, SkDD rename debate, governance | ⏸ Deferred |
+| **Commons** ([plan](docs/plans/2026-07-skdd-commons.md)) | Phase 1: [`skdd-commons`](https://github.com/zakelfassi/skdd-commons) repo + `2026-07-frontier` drop + safety-lint CI · Phase 2: `skdd add`/`push`/`drops` + `.skdd-lock.json` provenance · Phase 3: opt-in plugin hooks (`finish-the-loop` gate, `freeze-the-session` reminder) · Phase 4: docs + launch | 🚧 Shipped, launch pending |
+
+### Commons v2 (deferred)
+
+Explicitly cut from Commons v1 — candidates for a follow-up tranche:
+
+- **`skdd update`** — three-way evolution merge against the upstream drop; highest-value item, because a local/upstream divergence *is a PR waiting to be pushed* (`.skdd-lock.json` already records the base sha)
+- **Hub "Commons" pane** — list drops with an install action inside `skdd hub`
+- **npm drops** (`@skdd/drop-*`) — git transport is enough for v1
+- **`attack-the-plan` as a plan-approval gate** — deferred for nag risk; stays a skill
 
 ## Manual steps (not automatable — GitHub settings)
 

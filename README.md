@@ -81,6 +81,23 @@ Every loop through the diagram *improves* the colony. Archiving is reversible; n
 
 ---
 
+## SkDD Commons — skills that evolve in public
+
+Community skills live in **[SkDD Commons](https://github.com/zakelfassi/skdd-commons)**, released as curated, dated **drops**. Unlike static skill lists, every Commons skill carries lifecycle metadata (`forged-by`, `forged-from`, `forged-reason`) and an evolution loop: hit an edge case in the wild, fix your local copy, and `skdd push` ships the diff upstream as a PR. A skill that has evolved across many codebases carries a trust signal no static collection can fake.
+
+```bash
+# Install the current drop — six skills forged by claude-fable-5 on 2026-07-01
+pnpm dlx @zakelfassi/skdd add zakelfassi/skdd-commons 2026-07-frontier
+
+# See what's on offer / push your evolution back
+skdd drops
+skdd push what-would-you-cut
+```
+
+Current drop: [`2026-07-frontier` — July 2026 Frontier, the Fable Festival drop](https://github.com/zakelfassi/skdd-commons/tree/main/packs/2026-07-frontier). See [`packs/README.md`](packs/README.md) for the pack concept and [`docs/commons.md`](docs/commons.md) for the full add/push flow.
+
+---
+
 ## Hub & Global Colony
 
 *This is the 1.0 headline.*

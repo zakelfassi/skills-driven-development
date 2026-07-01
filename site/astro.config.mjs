@@ -96,6 +96,10 @@ export default defineConfig({
           ],
         },
         {
+          label: "Commons",
+          items: [{ label: "SkDD Commons & drops", link: "/commons/" }],
+        },
+        {
           label: "Colony lifecycle",
           items: [
             { label: "Discovery", link: "/colony/discovery/" },
