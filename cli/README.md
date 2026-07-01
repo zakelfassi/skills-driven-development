@@ -1,6 +1,8 @@
 # skdd — Skills-Driven Development CLI
 
-> Validate, init, forge, list, link, doctor, and import SkDD skill colonies.
+> Validate, init, forge, list, link, doctor, and import SkDD skill colonies —
+> project-scoped by default, or `-g`/`--global` for a personal `~/.skdd/`
+> colony every harness on your machine reads.
 
 ## Install
 
@@ -17,14 +19,26 @@ This repo uses pnpm exclusively — do not use npm or yarn.
 ## Usage
 
 ```
-skdd init [--harness=claude|codex|cursor|copilot|gemini|opencode|goose|amp|auto] [--no-canonical]
+skdd init [--harness=claude|codex|cursor|copilot|gemini|opencode|goose|amp|auto] [--no-canonical] [-g]
 skdd validate [path...] [--strict]
-skdd forge <name> [--from-description="..."] [--non-interactive] [--no-canonical] [--skip-link]
-skdd list [--format=table|json]
-skdd link [--mode=symlink|copy|auto] [--harness=<list>] [--force] [--quiet]
-skdd doctor [--json]
-skdd import [target] [--json] [--apply] [--canonical=<dir>] [--skip-link]
+skdd forge <name> [--from-description="..."] [--non-interactive] [--no-canonical] [--skip-link] [-g]
+skdd list [--format=table|json] [-g]
+skdd link [--mode=symlink|copy|auto] [--harness=<list>] [--force] [--quiet] [-g]
+skdd doctor [--json] [-g]
+skdd import [target] [--json] [--apply] [--canonical=<dir>] [--skip-link] [-g]
+skdd hub
+skdd mcp <subcommand>
 ```
+
+`-g` / `--global` retargets `init`, `forge`, `list`, `link`, `doctor`, and
+`import` at a personal `~/.skdd/` colony instead of the project in `cwd` —
+skills that travel with you across every repo and harness on the machine,
+rather than versioned with one project. See
+[`docs/global-colony.md`](../docs/global-colony.md) for the directory layout,
+migration path for existing harness skill dirs, and per-harness global-path
+table. `skdd hub` is an interactive TUI over the same state (project or
+global); `skdd mcp` manages the canonical MCP server catalogue at
+`~/.skdd/mcp.json` (see [`docs/mcp-sync.md`](../docs/mcp-sync.md)).
 
 ### `skdd init`
 
