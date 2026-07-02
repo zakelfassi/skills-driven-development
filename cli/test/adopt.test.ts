@@ -161,4 +161,45 @@ describe("runLink --adopt (project)", () => {
     expect(code).toBe(0);
     expect(logs.join("\n")).toContain("already a colony symlink");
   });
+
+  runUnix("leaves a same-named non-directory target entry untouched (no throw)", async () => {
+    writeSkill(join(tmp, "skills"), "alpha", "a");
+    mkdirSync(join(tmp, ".claude/skills"), { recursive: true });
+    // A regular FILE named like a colony skill — must not throw or be clobbered.
+    writeFileSync(join(tmp, ".claude/skills/alpha"), "i am a file, not a skill dir");
+    const code = await runLink({ cwd: tmp, harnesses: ["claude"], adopt: true, quiet: true });
+    restore();
+    expect(code).toBe(0);
+    expect(readFileSync(join(tmp, ".claude/skills/alpha"), "utf8")).toContain("i am a file");
+  });
+});
+
+describe("runLink -g --adopt (global)", () => {
+  runUnix(
+    "no-ops with a warning when no global harness dir exists (doesn't create ~/.claude)",
+    async () => {
+      const home = mkdtempSync(join(tmpdir(), "skdd-home-"));
+      mkdirSync(join(home, "skills"), { recursive: true });
+      writeSkill(join(home, "skills"), "alpha", "a");
+      const fakeHome = join(tmp, "no-harnesses-here"); // HOME with no ~/.claude, ~/.codex, etc.
+      mkdirSync(fakeHome, { recursive: true });
+      const prevHome = process.env.HOME;
+      const prevSkdd = process.env.SKDD_HOME;
+      process.env.HOME = fakeHome;
+      process.env.SKDD_HOME = home;
+      try {
+        const code = await runLink({ global: true, adopt: true, quiet: false });
+        restore();
+        expect(code).toBe(0);
+        expect(logs.join("\n")).toContain("No global harness parent directories found");
+        expect(existsSync(join(fakeHome, ".claude/skills"))).toBe(false); // nothing fabricated
+      } finally {
+        if (prevHome === undefined) delete process.env.HOME;
+        else process.env.HOME = prevHome;
+        if (prevSkdd === undefined) delete process.env.SKDD_HOME;
+        else process.env.SKDD_HOME = prevSkdd;
+        rmSync(home, { recursive: true, force: true });
+      }
+    },
+  );
 });

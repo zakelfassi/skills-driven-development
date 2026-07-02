@@ -270,10 +270,26 @@ async function runAdopt(opts: LinkOptions): Promise<number> {
   // (global) / detected (project) — mirroring the normal link target selection.
   let harnesses = opts.harnesses;
   if (!harnesses || harnesses.length === 0) {
-    harnesses = opts.global
-      ? (Object.keys(HARNESSES) as Harness[]).filter((h) => existsSync(dirname(globalSkillsDir(h))))
-      : detectAllHarnesses(resolve(opts.cwd ?? process.cwd()));
-    if (harnesses.length === 0) harnesses = ["claude"];
+    if (opts.global) {
+      // Only adopt into harnesses whose global parent dir exists. If none do,
+      // no-op with a warning — never fabricate ~/.claude/skills for a tool that
+      // isn't installed (mirrors runLinkGlobal's behavior).
+      harnesses = (Object.keys(HARNESSES) as Harness[]).filter((h) =>
+        existsSync(dirname(globalSkillsDir(h))),
+      );
+      if (harnesses.length === 0) {
+        if (!quiet) {
+          logger.warn(
+            "No global harness parent directories found. Pass --harness to adopt into a specific harness.",
+          );
+        }
+        return 0;
+      }
+    } else {
+      // Project scope defaults to claude when nothing is detected, matching runLink.
+      const detected = detectAllHarnesses(resolve(opts.cwd ?? process.cwd()));
+      harnesses = detected.length > 0 ? detected : ["claude"];
+    }
   }
 
   const targetOf = (h: Harness) =>
@@ -292,6 +308,7 @@ async function runAdopt(opts: LinkOptions): Promise<number> {
 
   let created = 0;
   let divergent = 0;
+  let failed = 0;
   for (const harness of harnesses) {
     const target = targetOf(harness);
     const label = opts.global ? target : HARNESSES[harness].skillsDir;
@@ -317,7 +334,16 @@ async function runAdopt(opts: LinkOptions): Promise<number> {
       continue;
     }
 
-    const results = adoptSkills(canonicalPath, target);
+    // Isolate per-harness failures — an unreadable dir or odd entry in one
+    // target must not abort adoption into the rest.
+    let results: ReturnType<typeof adoptSkills>;
+    try {
+      results = adoptSkills(canonicalPath, target);
+    } catch (err) {
+      failed++;
+      if (!quiet) logger.error(`${label}: adopt failed — ${(err as Error).message} (skipped)`);
+      continue;
+    }
     const c = results.filter((r) => r.action === "created").length;
     const d = results.filter((r) => r.action === "skipped-divergent").length;
     created += c;
@@ -343,8 +369,9 @@ async function runAdopt(opts: LinkOptions): Promise<number> {
       );
     }
     logger.dim("Nothing in any target dir was overwritten or deleted.");
+    if (failed > 0) logger.warn(`${failed} harness dir(s) could not be processed (see above).`);
   }
-  return 0;
+  return failed > 0 ? 1 : 0;
 }
 
 // -- runUnlink ----------------------------------------------------------------

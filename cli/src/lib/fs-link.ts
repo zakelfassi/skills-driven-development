@@ -69,11 +69,18 @@ export function adoptSkills(canonicalPath: string, targetDir: string): AdoptSkil
     if (!existsSync(dest)) {
       cpSync(src, dest, { recursive: true });
       results.push({ skill, action: "created" });
-    } else if (dirTreeHash(dest) === dirTreeHash(src)) {
-      results.push({ skill, action: "unchanged" });
-    } else {
-      results.push({ skill, action: "skipped-divergent" });
+      continue;
     }
+    // A same-named target entry that isn't a directory (a regular file, a
+    // symlink, a device node) can't be hashed/compared like a skill dir — treat
+    // it as a divergent collision and leave it untouched rather than throw.
+    let sameContent = false;
+    try {
+      sameContent = lstatSync(dest).isDirectory() && dirTreeHash(dest) === dirTreeHash(src);
+    } catch {
+      sameContent = false;
+    }
+    results.push({ skill, action: sameContent ? "unchanged" : "skipped-divergent" });
   }
   return results;
 }
