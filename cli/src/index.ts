@@ -1,5 +1,7 @@
 import { Command } from "commander";
+import { runAdd } from "./commands/add.js";
 import { runDoctor } from "./commands/doctor.js";
+import { runDrops } from "./commands/drops.js";
 import { runForge } from "./commands/forge.js";
 import { runHub } from "./commands/hub.js";
 import { runImport } from "./commands/import.js";
@@ -7,6 +9,7 @@ import { runInit } from "./commands/init.js";
 import { runLink } from "./commands/link.js";
 import { runList } from "./commands/list.js";
 import { runMcpAdd, runMcpList, runMcpRemove, runMcpSync } from "./commands/mcp.js";
+import { runPush } from "./commands/push.js";
 import { runShow } from "./commands/show.js";
 import { runValidate } from "./commands/validate.js";
 import type { LinkMode } from "./lib/fs-link.js";
@@ -239,6 +242,92 @@ program
       process.exit(code);
     },
   );
+
+program
+  .command("add")
+  .description(
+    "Install skills from a Commons repo (drop or single skill) with validation + provenance",
+  )
+  .argument("<source>", "Commons source: owner/repo, a git URL (optional #ref), or a local path")
+  .argument(
+    "[selector]",
+    "Drop id (e.g. 2026-07-frontier) or drop/skill (e.g. 2026-07-frontier/finish-the-loop); omit for an interactive pick",
+  )
+  .option("-g, --global", "Install into the global colony (~/.skdd/skills/)", false)
+  .option(
+    "--rename <new-name>",
+    "Install a single skill under a different name (collision escape hatch)",
+  )
+  .option("-n, --dry-run", "Show what would be installed without writing files", false)
+  .option("-j, --json", "Emit a machine-readable JSON report", false)
+  .option("--non-interactive", "Fail instead of prompting when no selector is given", false)
+  .action(
+    async (
+      source: string,
+      selector: string | undefined,
+      opts: {
+        global: boolean;
+        rename?: string;
+        dryRun: boolean;
+        json: boolean;
+        nonInteractive: boolean;
+      },
+    ) => {
+      const code = await runAdd(source, selector, {
+        global: opts.global,
+        rename: opts.rename,
+        dryRun: opts.dryRun,
+        json: opts.json,
+        nonInteractive: opts.nonInteractive,
+      });
+      process.exit(code);
+    },
+  );
+
+program
+  .command("push")
+  .description(
+    "Push a skill (or a whole pack) upstream to a Commons repo as a PR — new skill or evolution",
+  )
+  .argument("<target>", "Skill name in the colony, or a pack id shared by several local skills")
+  .option(
+    "--to <repo>",
+    "Target Commons: owner/repo (default: config `commons` key, or a local path for --dry-run)",
+  )
+  .option(
+    "--drop <id>",
+    "Existing drop a NEW skill should join (also updates drops.json in the PR)",
+  )
+  .option("-g, --global", "Look for the skill in the global colony (~/.skdd/skills/)", false)
+  .option(
+    "-n, --dry-run",
+    "Print the would-be PR (branch, title, body) without network writes",
+    false,
+  )
+  .action(
+    async (
+      target: string,
+      opts: { to?: string; drop?: string; global: boolean; dryRun: boolean },
+    ) => {
+      const code = await runPush(target, {
+        to: opts.to,
+        drop: opts.drop,
+        global: opts.global,
+        dryRun: opts.dryRun,
+      });
+      process.exit(code);
+    },
+  );
+
+program
+  .command("drops")
+  .description("List the drops a Commons repo offers (default: the configured commons)")
+  .option("--from <source>", "Commons source: owner/repo, git URL, or local path")
+  .option("-f, --format <fmt>", "Output format: table|json", "table")
+  .action(async (opts: { from?: string; format: "table" | "json" }) => {
+    const code = await runDrops({ from: opts.from, format: opts.format });
+    process.exit(code);
+  });
 
 // ── mcp subcommand group ─────────────────────────────────────────────────────
 

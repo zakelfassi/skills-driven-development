@@ -172,4 +172,27 @@ describe("addRegistryEntry", () => {
     expect(parsed.skills).toHaveLength(1);
     expect(parsed.skills[0]!.name).toBe("json-sync");
   });
+
+  it("escapes pipes and newlines in cell values so untrusted metadata can't inject rows", () => {
+    const md = writeMarkdownRegistry({
+      skills: [
+        {
+          name: "injected",
+          source: "owner/repo@abc1234 (drop)",
+          uses: 0,
+          // A description that tries to add a fake column / fake row.
+          description: "evil | 999 | fake\nsecond line",
+        },
+      ],
+      archived: [],
+    });
+    // One data row (header + separator + 1), no injected extras.
+    const dataRows = md.split("\n").filter((l) => l.startsWith("| injected"));
+    expect(dataRows).toHaveLength(1);
+    // Round-trips back to a single skill with the literal description intact.
+    const back = parseMarkdownRegistry(md);
+    expect(back.skills).toHaveLength(1);
+    expect(back.skills[0]!.description).toContain("evil | 999 | fake");
+    expect(back.skills[0]!.uses).toBe(0);
+  });
 });
