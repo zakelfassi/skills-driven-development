@@ -136,6 +136,14 @@ export async function runPush(target: string, opts: PushOptions = {}): Promise<n
       );
       return 1;
     }
+    // readFileSync follows symlinks — a symlinked skill dir or SKILL.md would
+    // exfiltrate whatever it points at (an ssh key, /etc/passwd) into the PR.
+    if (lstatSync(dir).isSymbolicLink() || lstatSync(join(dir, "SKILL.md")).isSymbolicLink()) {
+      logger.error(
+        `'${name}' is (or its SKILL.md is) a symlink — refusing to push linked content. Replace it with a real file to share it.`,
+      );
+      return 1;
+    }
     const raw = readFileSync(join(dir, "SKILL.md"), "utf8");
     const content = stripMachineLocalMetadata(raw);
     const payload = collectPublishablePayload(dir);
@@ -312,6 +320,9 @@ export function collectPublishablePayload(skillDir: string): {
   files: string[];
   skipped: string[];
 } {
+  if (lstatSync(join(skillDir, "SKILL.md")).isSymbolicLink()) {
+    throw new Error(`${skillDir}/SKILL.md is a symlink — linked content is not publishable`);
+  }
   const files: string[] = ["SKILL.md"];
   const skipped: string[] = [];
 

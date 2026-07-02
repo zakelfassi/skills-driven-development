@@ -209,6 +209,32 @@ describe("runPush --dry-run against a local commons", () => {
     expect(out).toContain("delta-skill");
   });
 
+  runUnix("refuses to push a skill whose SKILL.md is a symlink", async () => {
+    const dir = join(tmp, "skills", "sneaky-skill");
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(tmp, "secret.txt"), "PRIVATE KEY MATERIAL");
+    symlinkSync(join(tmp, "secret.txt"), join(dir, "SKILL.md"));
+
+    const code = await runPush("sneaky-skill", { cwd: tmp, to: MINI_COMMONS, dryRun: true });
+    restoreConsole();
+    expect(code).toBe(1);
+    const out = logs.join("\n");
+    expect(out).toContain("symlink");
+    expect(out).not.toContain("PRIVATE KEY MATERIAL");
+  });
+
+  runUnix("refuses to push a skill whose directory is a symlink", async () => {
+    mkdirSync(join(tmp, "elsewhere"), { recursive: true });
+    writeFileSync(join(tmp, "elsewhere", "SKILL.md"), "---\nname: linked-skill\n---\nbody");
+    mkdirSync(join(tmp, "skills"), { recursive: true });
+    symlinkSync(join(tmp, "elsewhere"), join(tmp, "skills", "linked-skill"));
+
+    const code = await runPush("linked-skill", { cwd: tmp, to: MINI_COMMONS, dryRun: true });
+    restoreConsole();
+    expect(code).toBe(1);
+    expect(logs.join("\n")).toContain("symlink");
+  });
+
   it("errors when the target is neither a skill nor a pack id", async () => {
     const code = await runPush("no-such-thing", { cwd: tmp, to: MINI_COMMONS, dryRun: true });
     restoreConsole();
