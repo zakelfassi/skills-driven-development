@@ -9,6 +9,7 @@ import {
   provenanceLabel,
   readDropsManifest,
   resolveSelector,
+  treeHasSymlink,
 } from "../lib/commons.js";
 import { ensureGlobalColony, skddHome } from "../lib/global.js";
 import { upsertLockEntry } from "../lib/lock.js";
@@ -45,9 +46,8 @@ export async function runAdd(
   const cwd = resolve(opts.cwd ?? process.cwd());
   const colonyRoot = opts.global ? skddHome() : cwd;
   if (opts.global) ensureGlobalColony();
-  const canonicalDir = opts.global
-    ? join(skddHome(), "skills")
-    : join(cwd, detectCanonical(cwd) ?? "skills");
+  const canonicalName = opts.global ? "skills" : (detectCanonical(cwd) ?? "skills");
+  const canonicalDir = opts.global ? join(skddHome(), "skills") : join(cwd, canonicalName);
 
   if (opts.rename) {
     const err = validateRename(opts.rename);
@@ -119,9 +119,20 @@ export async function runAdd(
     const parsedSkills: Array<{ sourceName: string; dir: string; description: string }> = [];
     for (const skillName of selection.skills) {
       assertWithin(join(dropDir, skillName), dropDir, `skill '${skillName}'`);
-      const skillMd = join(dropDir, skillName, "SKILL.md");
+      const skillDir = join(dropDir, skillName);
+      const skillMd = join(skillDir, "SKILL.md");
       if (!existsSync(skillMd)) {
         logger.error(`${selection.drop.id}/${skillName}: SKILL.md missing in the source repo.`);
+        validationFailed = true;
+        continue;
+      }
+      // A symlink anywhere in the fetched skill tree would be copied as a link
+      // into the colony (dangling once a temp clone is deleted, or pointing back
+      // into the source for a local add) — never a provenance-pinned copy. Reject.
+      if (treeHasSymlink(skillDir)) {
+        logger.error(
+          `${selection.drop.id}/${skillName}: contains a symlink — refusing (Commons skills must be self-contained regular files).`,
+        );
         validationFailed = true;
         continue;
       }
@@ -136,6 +147,11 @@ export async function runAdd(
           validationFailed = true;
           continue;
         }
+        // Note: the manifest name equals the on-disk directory name by
+        // construction (we read packs/<drop>/<skillName>/), and validateSkill
+        // already enforces frontmatter.name === directory name — so a manifest
+        // entry pointing at a differently-named skill fails strict validation
+        // above. No separate check needed.
         parsedSkills.push({
           sourceName: skillName,
           dir: join(dropDir, skillName),
@@ -180,7 +196,7 @@ export async function runAdd(
         name,
         sourceName: s.sourceName,
         path: join(relative(colonyRoot, canonicalDir) || canonicalDir, name, "SKILL.md"),
-        provenance: provenanceLabel(fetched.source, fetched.sha, selection.drop.id),
+        provenance: provenanceLabel(fetched.source, fetched.sha, selection.drop.id, fetched.dirty),
         description: s.description,
       };
     });
@@ -240,15 +256,18 @@ export async function runAdd(
         source: fetched.source.label,
         drop: selection.drop.id,
         sha: fetched.sha,
+        dirty: fetched.dirty,
         addedAt: new Date().toISOString(),
       });
       if (!opts.json) logger.success(`installed ${p.name} (${p.provenance})`);
     }
 
     // ── refresh mirrors through the existing SAFE link path (never forced) ───
+    // Pass the detected canonical dir so a .colony.json canonicalSkillsDir
+    // (e.g. "playbooks") is mirrored, not a default "skills/" that we never wrote.
     const linkCode = opts.global
       ? await runLink({ global: true, quiet: true })
-      : await runLink({ cwd, quiet: true });
+      : await runLink({ cwd, canonical: canonicalName, quiet: true });
 
     if (opts.json) {
       console.log(

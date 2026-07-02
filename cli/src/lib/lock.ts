@@ -11,6 +11,7 @@ export interface LockEntry {
   source: string; // owner/repo, git URL, or local path label
   drop: string;
   sha: string | null; // full commit sha of the source at add time
+  dirty?: boolean; // true when a local source had uncommitted changes (sha ≠ installed bytes)
   addedAt: string; // ISO timestamp
 }
 

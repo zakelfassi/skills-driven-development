@@ -1,44 +1,39 @@
 #!/usr/bin/env node
 // freeze-the-session reminder (SessionEnd + PreCompact).
 //
-// If the toggle is on, the session looks substantive (nontrivial diff), and
-// the colony registry hasn't been touched since session start, surface a
-// non-blocking reminder: freeze the learnings before the context dies.
-// PreCompact matters most. Deterministic heuristics only — and silent when
-// unsure: a chatty hook gets disabled forever.
+// If the toggle is on, the session looks substantive (files changed/added or
+// commits made since session start), and the colony registry hasn't been
+// touched since session start, surface a non-blocking reminder: freeze the
+// learnings before the context dies. PreCompact matters most. Deterministic
+// heuristics only — and silent when unsure: a chatty hook gets disabled forever.
 
-import { spawnSync } from "node:child_process";
 import { existsSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { ensureSessionStart, readHookInput, readToggles } from "./lib/state.mjs";
+import { commitsSince, loadState, readHookInput, readToggles, repoSnapshot } from "./lib/state.mjs";
 
-// "Substantive": at least this many changed lines or changed files in the working tree.
-const MIN_CHANGED_LINES = 20;
+// "Substantive": at least this many files changed/added since session start,
+// or any commit made during the session.
 const MIN_CHANGED_FILES = 3;
 
-function diffLooksSubstantive(cwd) {
-  const stat = spawnSync("git", ["diff", "--shortstat", "HEAD"], {
-    cwd,
-    encoding: "utf8",
-    timeout: 5000,
-  });
-  if (stat.status !== 0) return false; // not a git repo → unsure → silent
-  const m = (stat.stdout || "").match(
-    /(\d+) files? changed(?:, (\d+) insertions?\(\+\))?(?:, (\d+) deletions?\(-\))?/,
-  );
-  if (!m) return false;
-  const files = Number(m[1] || 0);
-  const lines = Number(m[2] || 0) + Number(m[3] || 0);
-  return files >= MIN_CHANGED_FILES || lines >= MIN_CHANGED_LINES;
+function sessionLooksSubstantive(cwd, state) {
+  // Commits made during the session count even if the tree is now clean.
+  if (commitsSince(cwd, state.startRev) > 0) return true;
+  const baseline = new Set(Array.isArray(state.baseline) ? state.baseline : []);
+  const changedSinceStart = repoSnapshot(cwd).paths.filter((p) => !baseline.has(p));
+  return changedSinceStart.length >= MIN_CHANGED_FILES;
 }
 
+/** The colony registry file (md or json), project first then global, or null. */
 function registryPath(cwd) {
-  const project = join(cwd, ".skills-registry.md");
-  if (existsSync(project)) return project;
-  const global = join(process.env.SKDD_HOME || join(homedir(), ".skdd"), ".skills-registry.md");
-  if (existsSync(global)) return global;
-  return null; // no colony anywhere → nothing to remind about
+  const home = process.env.SKDD_HOME || join(homedir(), ".skdd");
+  const candidates = [
+    join(cwd, ".skills-registry.md"),
+    join(cwd, ".skills-registry.json"),
+    join(home, ".skills-registry.md"),
+    join(home, ".skills-registry.json"),
+  ];
+  return candidates.find((p) => existsSync(p)) ?? null;
 }
 
 function main() {
@@ -48,8 +43,10 @@ function main() {
 
   if (!readToggles(cwd)["freeze-the-session"]) return;
 
-  const state = ensureSessionStart(input.session_id);
-  if (!state.sessionStart) return; // can't compare → unsure → silent
+  // Load existing state only — never invent a start time here, or the
+  // "can't compare" guard below would be unreachable when the seed is missing.
+  const state = loadState(input.session_id);
+  if (!state.sessionStart) return; // no SessionStart seed → unsure → silent
 
   const registry = registryPath(cwd);
   if (!registry) return;
@@ -57,7 +54,7 @@ function main() {
   // Registry touched during the session → learnings were frozen; stay quiet.
   if (statSync(registry).mtimeMs >= state.sessionStart) return;
 
-  if (!diffLooksSubstantive(cwd)) return;
+  if (!sessionLooksSubstantive(cwd, state)) return;
 
   const urgency =
     event === "PreCompact"
