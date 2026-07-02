@@ -67,12 +67,28 @@ export async function runPush(target: string, opts: PushOptions = {}): Promise<n
   const skillDirs: Array<{ name: string; dir: string }> = [];
   const directDir = join(canonicalDir, target);
   if (existsSync(join(directDir, "SKILL.md"))) {
+    // Guard BEFORE any read: parseSkill/readFileSync follow symlinks, so a
+    // symlinked skill dir or SKILL.md must be rejected up front — otherwise a
+    // pointer at an ssh key or /etc/passwd gets dereferenced into memory.
+    if (skillDirIsSymlinked(directDir)) {
+      logger.error(
+        `'${target}' is (or its SKILL.md is) a symlink — refusing to push linked content. Replace it with a real file to share it.`,
+      );
+      return 1;
+    }
     skillDirs.push({ name: target, dir: directDir });
   } else if (existsSync(canonicalDir)) {
     for (const entry of readdirSync(canonicalDir)) {
       const dir = join(canonicalDir, entry);
       const skillMd = join(dir, "SKILL.md");
       if (!statSync(dir).isDirectory() || !existsSync(skillMd)) continue;
+      // Skip symlinked skills during pack discovery so they are never read.
+      // A canonical skills/ entry should be a real dir; a symlink here is
+      // suspicious (mirrors point the other way), so exclude and warn.
+      if (skillDirIsSymlinked(dir)) {
+        logger.warn(`Skipping '${entry}' from pack push — it is a symlink, not a real skill dir.`);
+        continue;
+      }
       try {
         const parsed = parseSkill(skillMd);
         if (
@@ -136,9 +152,9 @@ export async function runPush(target: string, opts: PushOptions = {}): Promise<n
       );
       return 1;
     }
-    // readFileSync follows symlinks — a symlinked skill dir or SKILL.md would
-    // exfiltrate whatever it points at (an ssh key, /etc/passwd) into the PR.
-    if (lstatSync(dir).isSymbolicLink() || lstatSync(join(dir, "SKILL.md")).isSymbolicLink()) {
+    // Defense in depth: discovery already rejected symlinks, but re-check here
+    // so no future refactor can slip a dereferenced skill past the guard.
+    if (skillDirIsSymlinked(dir)) {
       logger.error(
         `'${name}' is (or its SKILL.md is) a symlink — refusing to push linked content. Replace it with a real file to share it.`,
       );
@@ -309,6 +325,18 @@ function truncate(s: string, max: number): string {
  */
 export function stripMachineLocalMetadata(raw: string): string {
   return raw.replace(/^(\s*usage-count:\s*).+$/m, `$1"0"`).replace(/^\s*last-used:.*\r?\n/m, "");
+}
+
+/**
+ * True if the skill directory itself, or its SKILL.md, is a symlink.
+ * `readFileSync`/`parseSkill`/`cpSync` all follow symlinks, so a symlinked
+ * skill would exfiltrate whatever it points at (ssh keys, /etc/passwd) into a
+ * public PR. Must run BEFORE any read of the skill.
+ */
+function skillDirIsSymlinked(dir: string): boolean {
+  if (lstatSync(dir).isSymbolicLink()) return true;
+  const skillMd = join(dir, "SKILL.md");
+  return existsSync(skillMd) && lstatSync(skillMd).isSymbolicLink();
 }
 
 // Only the spec-defined skill payload travels upstream. Everything else in the
