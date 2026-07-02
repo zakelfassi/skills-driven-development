@@ -137,80 +137,172 @@ describe("finish-loop-gate.mjs", () => {
     runHook(GATE, { session_id: newSessionId(), cwd: tmp, last_assistant_message: "done" });
     expect(Date.now() - start).toBeLessThan(2000);
   });
+
+  it("never fires on suffix-style test filenames (foo_test.go)", () => {
+    enableToggles(tmp, ["finish-the-loop"]);
+    mkdirSync(join(tmp, "src"), { recursive: true });
+    writeFileSync(join(tmp, "src", "handler_test.go"), "package x\n");
+    const res = runHook(GATE, {
+      session_id: newSessionId(),
+      cwd: tmp,
+      last_assistant_message: UNVERIFIED_REPORT,
+    });
+    expect(res.stdout.trim()).toBe("");
+  });
+
+  it("does not block for a product file that was already dirty before the session", () => {
+    enableToggles(tmp, ["finish-the-loop"]);
+    addUncommittedProductFile(tmp); // src/app.ts dirty BEFORE the session starts
+    const sessionId = newSessionId();
+    runHook(SESSION_START, { session_id: sessionId, cwd: tmp }); // baseline includes src/app.ts
+    // Session only touches docs; the pre-existing product change must not trigger.
+    writeFileSync(join(tmp, "README.md"), "# docs\n");
+    const res = runHook(GATE, {
+      session_id: sessionId,
+      cwd: tmp,
+      last_assistant_message: UNVERIFIED_REPORT,
+    });
+    expect(res.stdout.trim()).toBe("");
+  });
+
+  it("passes (does not block) when the anti-loop flag cannot be persisted", () => {
+    enableToggles(tmp, ["finish-the-loop"]);
+    addUncommittedProductFile(tmp);
+    const sessionId = newSessionId();
+    // Occupy the state-file path with a directory so writeFileSync fails.
+    const stateFile = join(
+      tmpdir(),
+      `skdd-hooks-${sessionId.replace(/[^A-Za-z0-9_-]/g, "_")}.json`,
+    );
+    mkdirSync(stateFile, { recursive: true });
+    try {
+      const res = runHook(GATE, {
+        session_id: sessionId,
+        cwd: tmp,
+        last_assistant_message: UNVERIFIED_REPORT,
+      });
+      expect(res.stdout.trim()).toBe(""); // fail-open: no block decision emitted
+    } finally {
+      rmSync(stateFile, { recursive: true, force: true });
+    }
+  });
+
+  it("honors a repo-root toggle when run from a subdirectory", () => {
+    enableToggles(tmp, ["finish-the-loop"]); // toggle at repo root
+    const sub = join(tmp, "packages", "app");
+    mkdirSync(join(sub, "src"), { recursive: true });
+    writeFileSync(join(sub, "src", "app.ts"), "export const x = 1;\n");
+    const res = runHook(GATE, {
+      session_id: newSessionId(),
+      cwd: sub,
+      last_assistant_message: UNVERIFIED_REPORT,
+    });
+    // The upward search from the subdir finds the repo-root toggle.
+    expect(JSON.parse(res.stdout).decision).toBe("block");
+  });
 });
 
-function makeSubstantiveDiff(dir: string) {
-  // freeze-reminder counts tracked changes (git diff HEAD) — commit, then modify.
-  writeFileSync(join(dir, "big.ts"), "// start\n");
-  execFileSync("git", ["add", "big.ts"], { cwd: dir });
-  execFileSync(
-    "git",
-    ["-c", "user.email=t@t", "-c", "user.name=t", "commit", "-q", "-m", "add big"],
-    { cwd: dir },
-  );
-  writeFileSync(
-    join(dir, "big.ts"),
-    Array.from({ length: 30 }, (_, i) => `line(${i});`).join("\n"),
-  );
+function addUntrackedFiles(dir: string, n: number) {
+  // New files created DURING the session (after SessionStart) — the freeze
+  // heuristic must count these even though `git diff HEAD` alone wouldn't.
+  for (let i = 0; i < n; i++)
+    writeFileSync(join(dir, `new-${i}.ts`), `export const v${i} = ${i};\n`);
+}
+
+function commitSomething(dir: string) {
+  writeFileSync(join(dir, "committed.ts"), "export const x = 1;\n");
+  execFileSync("git", ["add", "-A"], { cwd: dir });
+  execFileSync("git", ["-c", "user.email=t@t", "-c", "user.name=t", "commit", "-q", "-m", "work"], {
+    cwd: dir,
+  });
+}
+
+function oldRegistry(dir: string, name = ".skills-registry.md") {
+  const registry = join(dir, name);
+  writeFileSync(registry, "# Skills Registry\n");
+  const past = new Date(Date.now() - 60 * 60 * 1000);
+  utimesSync(registry, past, past);
+  return registry;
 }
 
 describe("freeze-reminder.mjs", () => {
   it("is inert when the toggle is off (default)", () => {
-    makeSubstantiveDiff(tmp);
-    writeFileSync(join(tmp, ".skills-registry.md"), "# Skills Registry\n");
-    const res = runHook(REMINDER, { session_id: newSessionId(), cwd: tmp }, ["PreCompact"]);
+    oldRegistry(tmp);
+    const sessionId = newSessionId();
+    runHook(SESSION_START, { session_id: sessionId, cwd: tmp });
+    addUntrackedFiles(tmp, 4);
+    const res = runHook(REMINDER, { session_id: sessionId, cwd: tmp }, ["PreCompact"]);
     expect(res.stdout.trim()).toBe("");
   });
 
-  it("reminds on PreCompact when the registry predates a substantive session", () => {
+  it("reminds on PreCompact when a session added untracked files and the registry is stale", () => {
     enableToggles(tmp, ["freeze-the-session"]);
-    makeSubstantiveDiff(tmp);
-    const registry = join(tmp, ".skills-registry.md");
-    writeFileSync(registry, "# Skills Registry\n");
-    const past = new Date(Date.now() - 60 * 60 * 1000);
-    utimesSync(registry, past, past);
-
+    oldRegistry(tmp);
     const sessionId = newSessionId();
-    runHook(SESSION_START, { session_id: sessionId, cwd: tmp }); // seed session start (now)
+    runHook(SESSION_START, { session_id: sessionId, cwd: tmp }); // baseline: clean
+    addUntrackedFiles(tmp, 4); // new files created during the session
     const res = runHook(REMINDER, { session_id: sessionId, cwd: tmp }, ["PreCompact"]);
     const payload = JSON.parse(res.stdout);
     expect(payload.systemMessage).toContain("freeze-the-session");
     expect(payload.systemMessage).toContain("compacted");
   });
 
-  it("stays silent when the registry was touched during the session", () => {
+  it("counts commits made during the session as substantive", () => {
     enableToggles(tmp, ["freeze-the-session"]);
-    makeSubstantiveDiff(tmp);
-    const registry = join(tmp, ".skills-registry.md");
-    writeFileSync(registry, "# Skills Registry\n");
+    oldRegistry(tmp);
+    const sessionId = newSessionId();
+    runHook(SESSION_START, { session_id: sessionId, cwd: tmp }); // baseline rev captured
+    commitSomething(tmp); // session commits → tree ends clean
+    const res = runHook(REMINDER, { session_id: sessionId, cwd: tmp }, ["SessionEnd"]);
+    expect(JSON.parse(res.stdout).systemMessage).toContain("freeze-the-session");
+  });
 
+  it("recognizes a JSON-only registry", () => {
+    enableToggles(tmp, ["freeze-the-session"]);
+    oldRegistry(tmp, ".skills-registry.json");
     const sessionId = newSessionId();
     runHook(SESSION_START, { session_id: sessionId, cwd: tmp });
+    addUntrackedFiles(tmp, 4);
+    const res = runHook(REMINDER, { session_id: sessionId, cwd: tmp }, ["SessionEnd"]);
+    expect(JSON.parse(res.stdout).systemMessage).toContain("freeze-the-session");
+  });
+
+  it("stays silent when the registry was touched during the session", () => {
+    enableToggles(tmp, ["freeze-the-session"]);
+    const registry = join(tmp, ".skills-registry.md");
+    writeFileSync(registry, "# Skills Registry\n");
+    const sessionId = newSessionId();
+    runHook(SESSION_START, { session_id: sessionId, cwd: tmp });
+    addUntrackedFiles(tmp, 4);
     const future = new Date(Date.now() + 60 * 60 * 1000);
     utimesSync(registry, future, future); // registry updated after session start
-
     const res = runHook(REMINDER, { session_id: sessionId, cwd: tmp }, ["SessionEnd"]);
     expect(res.stdout.trim()).toBe("");
   });
 
-  it("stays silent on a trivial session", () => {
+  it("stays silent on a trivial session (no changes since start)", () => {
     enableToggles(tmp, ["freeze-the-session"]);
-    const registry = join(tmp, ".skills-registry.md");
-    writeFileSync(registry, "# Skills Registry\n");
-    const past = new Date(Date.now() - 60 * 60 * 1000);
-    utimesSync(registry, past, past);
-
+    oldRegistry(tmp);
     const sessionId = newSessionId();
     runHook(SESSION_START, { session_id: sessionId, cwd: tmp });
     const res = runHook(REMINDER, { session_id: sessionId, cwd: tmp }, ["SessionEnd"]);
-    expect(res.stdout.trim()).toBe(""); // no diff at all → not substantive → silent
+    expect(res.stdout.trim()).toBe("");
+  });
+
+  it("stays silent (does not invent a start time) when SessionStart never seeded state", () => {
+    enableToggles(tmp, ["freeze-the-session"]);
+    oldRegistry(tmp);
+    addUntrackedFiles(tmp, 4);
+    // No SESSION_START run → no seed → must stay silent rather than fabricate now.
+    const res = runHook(REMINDER, { session_id: newSessionId(), cwd: tmp }, ["PreCompact"]);
+    expect(res.stdout.trim()).toBe("");
   });
 
   it("stays silent when there is no colony registry anywhere", () => {
     enableToggles(tmp, ["freeze-the-session"]);
-    makeSubstantiveDiff(tmp);
     const sessionId = newSessionId();
     runHook(SESSION_START, { session_id: sessionId, cwd: tmp });
+    addUntrackedFiles(tmp, 4);
     const res = runHook(REMINDER, { session_id: sessionId, cwd: tmp }, ["PreCompact"]);
     expect(res.stdout.trim()).toBe("");
   });

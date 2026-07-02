@@ -31,12 +31,12 @@ claude plugin install github.com/zakelfassi/skills-driven-development/plugins/sk
 
 > A skill is a procedure the model follows when it decides to; a hook is a gate for when it forgets.
 
-Two hooks ship with the plugin, both **inert until you enable them** with `/skdd-claude:skdd-hooks on` (state lives in `.claude/skdd.local.md`, per project, survives sessions):
+Two hooks ship with the plugin, both **inert until you enable them** with `/skdd-claude:skdd-hooks on` (state lives in `.claude/skdd.local.md`; the hooks search upward from the working directory, so a repo-root toggle applies even when Claude runs from a subdirectory):
 
-- **`finish-the-loop`** (Stop gate) — when the session changed non-test product source and the final report claims success without observed evidence ("should work now", "likely fixed"), the stop is bounced **once** with instructions to drive the change and attach what was seen — or state plainly that it's unverified. It blocks at most once per session, so a stubborn report can never trap the loop. Docs-only and test-only diffs never trigger it.
-- **`freeze-the-session`** (SessionEnd + PreCompact reminder) — when a substantive session ends (or is about to be compacted) and the colony registry hasn't been touched since session start, a non-blocking reminder surfaces: extract the learnings — skills, conventions, checklists — before the context dies. Deterministic heuristics only; silent when unsure.
+- **`finish-the-loop`** (Stop gate) — when **this session** introduced a change to non-test product source (measured against the session-start baseline, so a file that was already dirty before you started doesn't count) and the final report claims success without observed evidence ("should work now", "likely fixed"), the stop is bounced **once** with instructions to drive the change and attach what was seen — or state plainly that it's unverified. It blocks at most once per session, so a stubborn report can never trap the loop; if the anti-loop flag can't be persisted it passes rather than risk looping. Docs-only and test-only diffs (including suffix styles like `foo_test.go`) never trigger it.
+- **`freeze-the-session`** (SessionEnd + PreCompact reminder) — when a substantive session ends or is about to be compacted (files added/changed or commits made since session start) and the colony registry (`.skills-registry.md` **or** `.skills-registry.json`) hasn't been touched since session start, a non-blocking reminder surfaces: extract the learnings — skills, conventions, checklists — before the context dies. Deterministic heuristics only; silent when unsure (no SessionStart seed → no reminder).
 
-The scripts use Node ≥20 built-ins exclusively (no dependencies) and exit in milliseconds on the inactive path. Toggle each gate independently: `/skdd-claude:skdd-hooks finish-the-loop on`.
+The scripts use Node ≥20 built-ins exclusively (no dependencies) and exit in milliseconds on the inactive path. State resets on each SessionStart, so a resumed session never inherits a stale flag. Toggle each gate independently: `/skdd-claude:skdd-hooks finish-the-loop on`.
 
 The plugin does **not** bundle the example webapp-starter or the broader SkDD docs — it's a minimal runtime drop-in. For the full methodology, see the repo root at [`../../README.md`](../../README.md).
 

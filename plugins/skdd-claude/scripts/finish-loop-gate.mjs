@@ -3,20 +3,15 @@
 //
 // Fires only when ALL of:
 //   (a) the toggle in .claude/skdd.local.md is on,
-//   (b) the session's diff touches non-test product source,
+//   (b) THIS session introduced a change to non-test product source
+//       (measured against the SessionStart baseline, not just a dirty tree),
 //   (c) the final assistant message claims success without observed evidence.
 //
 // Blocks AT MOST ONCE per session (state file) — the second Stop always
-// passes, so a stubborn report can't trap the session in a loop.
+// passes, so a stubborn report can't trap the session in a loop. If the
+// anti-loop flag can't be persisted, it PASSES rather than risk looping.
 
-import { spawnSync } from "node:child_process";
-import {
-  ensureSessionStart,
-  loadState,
-  readHookInput,
-  readToggles,
-  saveState,
-} from "./lib/state.mjs";
+import { loadState, readHookInput, readToggles, repoSnapshot, saveState } from "./lib/state.mjs";
 
 const UNVERIFIED_CLAIM =
   /\bshould\s+(now\s+)?(work|be\s+(fixed|working|resolved|good))\b|\blikely\s+(fixed|fixes|resolves?d?)\b|\bprobably\s+(works|fixes|fixed|resolves?d?)\b|\bought\s+to\s+(work|fix)\b|\bshould\s+(fix|resolve|handle)\b/i;
@@ -27,22 +22,14 @@ const EVIDENCE_MARKER =
 const PRODUCT_SOURCE =
   /\.(ts|tsx|js|jsx|mjs|cjs|py|rb|go|rs|java|kt|swift|c|cc|cpp|h|hpp|cs|php|vue|svelte|sql)$/i;
 
+// Test/docs paths that never count as product source. Covers dir conventions
+// (tests/, __tests__/, spec/, docs/, examples/), infix styles (.test./.spec./
+// .stories.), and suffix styles (foo_test.go, foo_spec.rb, test_foo.py), plus
+// prose files.
 const TEST_OR_DOCS =
-  /(^|\/)(tests?|__tests__|__mocks__|spec|docs?|examples?)\/|\.(test|spec|stories)\.|\.mdx?$|\.txt$/i;
+  /(^|\/)(tests?|__tests__|__mocks__|spec|specs|docs?|examples?)\/|\.(test|spec|stories)\.|(^|\/)test_[^/]*$|_(test|spec)\.[A-Za-z0-9]+$|\.mdx?$|\.txt$/i;
 
-function changedProductFiles(cwd) {
-  // -uall lists individual untracked files (default collapses them to "dir/")
-  const res = spawnSync("git", ["status", "--porcelain", "-uall"], {
-    cwd,
-    encoding: "utf8",
-    timeout: 5000,
-  });
-  if (res.status !== 0) return []; // not a git repo → stay silent
-  return (res.stdout || "")
-    .split(/\r?\n/)
-    .map((line) => line.slice(3).trim())
-    .filter((f) => f && PRODUCT_SOURCE.test(f) && !TEST_OR_DOCS.test(f));
-}
+const isProductSource = (f) => PRODUCT_SOURCE.test(f) && !TEST_OR_DOCS.test(f);
 
 function main() {
   const input = readHookInput();
@@ -53,20 +40,29 @@ function main() {
   if (!readToggles(cwd)["finish-the-loop"]) return;
 
   // anti-loop: block at most once per session
-  const state = ensureSessionStart(sessionId);
+  const state = loadState(sessionId);
   if (state.finishLoopBlocked) return;
 
-  // (b) only when product source changed — a docs-only session can't be "unverified"
-  if (changedProductFiles(cwd).length === 0) return;
+  // (b) product source changed BY THIS SESSION — compare current changes against
+  // the SessionStart baseline so an already-dirty file the session never touched
+  // doesn't trigger the gate.
+  const baseline = new Set(Array.isArray(state.baseline) ? state.baseline : []);
+  const changedNow = repoSnapshot(cwd).paths;
+  const sessionProductChanges = changedNow.filter((f) => isProductSource(f) && !baseline.has(f));
+  if (sessionProductChanges.length === 0) return;
 
   // (c) unverified-claim language without evidence markers
   const message = String(input.last_assistant_message ?? "");
   if (!message || !UNVERIFIED_CLAIM.test(message) || EVIDENCE_MARKER.test(message)) return;
 
-  const next = loadState(sessionId);
-  next.finishLoopBlocked = true;
-  next.sessionStart = next.sessionStart || state.sessionStart;
-  saveState(sessionId, next);
+  // Persist the anti-loop flag FIRST. If we can't (unwritable/full $TMPDIR),
+  // pass instead of blocking — a gate that can't remember it fired would block
+  // every Stop, which is worse than missing one nudge.
+  const next = { ...state, finishLoopBlocked: true };
+  if (!saveState(sessionId, next)) {
+    process.stderr.write("finish-loop-gate: could not persist anti-loop state; passing.\n");
+    return;
+  }
 
   process.stdout.write(
     `${JSON.stringify({
