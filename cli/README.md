@@ -84,6 +84,13 @@ skdd link --mode=copy                  # force copy mode on Unix
 skdd link --force                      # replace a non-matching target
 ```
 
+**`--adopt`** — for a harness dir that is a **populated real directory** holding skills that aren't in the colony (common with a global `~/.claude/skills`, `~/.codex/skills`, …). Instead of replacing the whole dir with a symlink (which `--force` would do, deleting those skills), `--adopt` **copies the colony's skills into the dir**, leaving every non-colony skill untouched. It is **strictly additive — it never overwrites or deletes anything in the target**. Per skill: created if absent, skipped if byte-identical, and left as-is if a same-named skill differs (that skill may be a per-harness fork, not a drifted colony copy — content alone can't tell, so adopt won't clobber it; `--force` does *not* change this). Divergent collisions are reported for you to resolve by hand (rename/remove the target skill, then re-adopt). Adopted copies aren't tracked in `.skdd-sync.json`; it's a one-way additive push, not a managed mirror.
+
+```bash
+skdd link -g --adopt                   # push the global colony into every populated harness dir
+skdd link -g --adopt --harness=claude  # just Claude Code's global dir
+```
+
 ### `skdd doctor`
 
 Health check for a SkDD-enabled project. Inspects:

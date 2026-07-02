@@ -137,6 +137,11 @@ program
   )
   .option("-q, --quiet", "Suppress per-mirror progress output", false)
   .option("-g, --global", "Link global colony (~/.skdd/skills/) into harness global dirs")
+  .option(
+    "--adopt",
+    "Copy colony skills INTO each (possibly populated) harness dir instead of symlinking the whole dir — strictly additive: never overwrites or deletes anything in the target. A same-named skill that differs is left untouched (it may be a fork) and reported for manual resolution.",
+    false,
+  )
   .action(
     async (opts: {
       mode: LinkMode;
@@ -144,6 +149,7 @@ program
       force: boolean;
       quiet: boolean;
       global: boolean;
+      adopt: boolean;
     }) => {
       const harnesses = opts.harness
         ? (opts.harness.split(",").map((s) => s.trim()) as Harness[])
@@ -154,6 +160,7 @@ program
         force: opts.force,
         quiet: opts.quiet,
         global: opts.global,
+        adopt: opts.adopt,
       });
       process.exit(code);
     },

@@ -3,6 +3,7 @@ import {
   existsSync,
   lstatSync,
   mkdirSync,
+  readdirSync,
   readlinkSync,
   rmSync,
   type Stats,
@@ -10,11 +11,79 @@ import {
   unlinkSync,
 } from "node:fs";
 import { platform } from "node:os";
-import { dirname, relative, resolve } from "node:path";
+import { dirname, join, relative, resolve } from "node:path";
+import { dirTreeHash } from "./dir-tree-hash.js";
 
 export type LinkMode = "symlink" | "copy" | "auto";
 
 export type ResolvedLinkMode = "symlink" | "copy";
+
+export type AdoptAction =
+  | "created" // skill wasn't in the target dir — copied in
+  | "unchanged" // already byte-identical to canonical
+  | "skipped-divergent"; // a same-named skill exists but differs — left as-is (never overwritten)
+
+export interface AdoptSkillResult {
+  skill: string;
+  action: AdoptAction;
+}
+
+/** List immediate subdirectories of `canonicalPath` that are skills (have a SKILL.md). */
+function listCanonicalSkills(canonicalPath: string): string[] {
+  let entries: import("node:fs").Dirent[];
+  try {
+    entries = readdirSync(canonicalPath, { withFileTypes: true });
+  } catch {
+    return [];
+  }
+  return entries
+    .filter((e) => e.isDirectory() && existsSync(join(canonicalPath, e.name, "SKILL.md")))
+    .map((e) => e.name)
+    .sort();
+}
+
+/**
+ * Copy the colony's skills INTO an existing (possibly populated) target directory,
+ * leaving every non-colony skill in that directory untouched. This is the
+ * additive alternative to a whole-directory symlink/copy mirror: it never
+ * deletes the target dir and never touches skills that aren't in the colony —
+ * so it is safe to run against a harness dir that holds hand-authored skills.
+ *
+ * STRICTLY ADDITIVE — it never overwrites or deletes anything in the target:
+ *   - absent in target        → copied in             (created)
+ *   - present, byte-identical → left alone            (unchanged)
+ *   - present, differs        → left alone + reported (skipped-divergent)
+ *
+ * A same-named-but-divergent target skill is NOT necessarily a drifted copy of
+ * the colony skill — it may be an independent skill that happens to share the
+ * name (a per-harness fork). Since content alone can't distinguish the two,
+ * adopt never overwrites it, even with --force; the collision is surfaced for
+ * the user to resolve deliberately (rename/remove, then re-adopt).
+ */
+export function adoptSkills(canonicalPath: string, targetDir: string): AdoptSkillResult[] {
+  const results: AdoptSkillResult[] = [];
+  mkdirSync(targetDir, { recursive: true });
+  for (const skill of listCanonicalSkills(canonicalPath)) {
+    const src = join(canonicalPath, skill);
+    const dest = join(targetDir, skill);
+    if (!existsSync(dest)) {
+      cpSync(src, dest, { recursive: true });
+      results.push({ skill, action: "created" });
+      continue;
+    }
+    // A same-named target entry that isn't a directory (a regular file, a
+    // symlink, a device node) can't be hashed/compared like a skill dir — treat
+    // it as a divergent collision and leave it untouched rather than throw.
+    let sameContent = false;
+    try {
+      sameContent = lstatSync(dest).isDirectory() && dirTreeHash(dest) === dirTreeHash(src);
+    } catch {
+      sameContent = false;
+    }
+    results.push({ skill, action: sameContent ? "unchanged" : "skipped-divergent" });
+  }
+  return results;
+}
 
 export interface EnsureMirrorOptions {
   /**
