@@ -1,6 +1,7 @@
-import { existsSync, lstatSync, rmSync, unlinkSync } from "node:fs";
+import { existsSync, lstatSync, realpathSync, rmSync, unlinkSync } from "node:fs";
 import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import {
+  adoptSkills,
   type EnsureMirrorResult,
   ensureMirror,
   type LinkMode,
@@ -19,9 +20,18 @@ export interface LinkOptions {
   quiet?: boolean;
   canonical?: string;
   global?: boolean;
+  /**
+   * Copy the colony's skills INTO each (possibly populated) harness dir instead
+   * of replacing the dir with a whole-directory symlink/copy mirror. Additive
+   * and non-destructive: non-colony skills in the target are never touched.
+   */
+  adopt?: boolean;
 }
 
 export async function runLink(opts: LinkOptions = {}): Promise<number> {
+  if (opts.adopt) {
+    return runAdopt(opts);
+  }
   if (opts.global) {
     return runLinkGlobal(opts);
   }
@@ -231,6 +241,107 @@ async function runLinkGlobal(opts: LinkOptions): Promise<number> {
     return 1;
   }
   if (!quiet) logger.success(`State written to ${pc.bold(join(home, ".skdd-sync.json"))}`);
+  return 0;
+}
+
+// -- runAdopt -----------------------------------------------------------------
+
+/**
+ * Push the colony's skills INTO each harness dir additively, leaving non-colony
+ * skills in place. Unlike the symlink/copy mirror, this never replaces the
+ * target dir — so it's the safe way to get colony skills into a harness dir that
+ * already holds hand-authored skills (the common global-colony case). Adopted
+ * copies are intentionally NOT tracked in sync-state: they're a one-way push,
+ * not a managed whole-dir mirror.
+ */
+async function runAdopt(opts: LinkOptions): Promise<number> {
+  const quiet = opts.quiet ?? false;
+  const canonicalPath = opts.global
+    ? join(skddHome(), "skills")
+    : resolve(opts.cwd ?? process.cwd(), opts.canonical ?? "skills");
+
+  if (!existsSync(canonicalPath)) {
+    logger.error(`Canonical skills directory missing: ${canonicalPath}`);
+    logger.dim(opts.global ? "Run 'skdd init -g' to create it." : "Run 'skdd init' to create it.");
+    return 1;
+  }
+
+  // Target dirs: explicit --harness list, else all with an existing parent
+  // (global) / detected (project) — mirroring the normal link target selection.
+  let harnesses = opts.harnesses;
+  if (!harnesses || harnesses.length === 0) {
+    harnesses = opts.global
+      ? (Object.keys(HARNESSES) as Harness[]).filter((h) => existsSync(dirname(globalSkillsDir(h))))
+      : detectAllHarnesses(resolve(opts.cwd ?? process.cwd()));
+    if (harnesses.length === 0) harnesses = ["claude"];
+  }
+
+  const targetOf = (h: Harness) =>
+    opts.global ? globalSkillsDir(h) : resolve(opts.cwd ?? process.cwd(), HARNESSES[h].skillsDir);
+
+  if (!quiet) {
+    logger.heading(`skdd ${opts.global ? "link -g " : "link "}--adopt`);
+    logger.dim(`canonical: ${canonicalPath}`);
+    console.log("");
+  }
+
+  let created = 0;
+  let updated = 0;
+  let divergent = 0;
+  for (const harness of harnesses) {
+    const target = targetOf(harness);
+    const label = opts.global ? target : HARNESSES[harness].skillsDir;
+
+    // A dir that's already a symlink to canonical sees every skill for free.
+    let stat: ReturnType<typeof lstatSync> | null = null;
+    try {
+      stat = lstatSync(target);
+    } catch {
+      stat = null;
+    }
+    if (stat?.isSymbolicLink()) {
+      try {
+        if (realpathSync(target) === realpathSync(canonicalPath)) {
+          if (!quiet) logger.dim(`${label}: already a colony symlink — sees all skills`);
+          continue;
+        }
+      } catch {
+        // fall through to adopt if the link is dangling/foreign
+      }
+      // A symlink pointing elsewhere: don't copy into someone else's target.
+      if (!quiet) logger.warn(`${label}: symlink points outside the colony — skipping`);
+      continue;
+    }
+
+    const results = adoptSkills(canonicalPath, target, { force: opts.force });
+    const c = results.filter((r) => r.action === "created").length;
+    const u = results.filter((r) => r.action === "updated").length;
+    const d = results.filter((r) => r.action === "skipped-divergent").length;
+    created += c;
+    updated += u;
+    divergent += d;
+    if (!quiet) {
+      const parts = [`${c} added`, `${u} updated`, `${results.length - c - u - d} unchanged`];
+      if (d > 0) parts.push(pc.yellow(`${d} divergent (kept)`));
+      logger.success(`${label}: ${parts.join(", ")}`);
+      for (const r of results.filter((x) => x.action === "skipped-divergent")) {
+        logger.dim(
+          `    ~ ${r.skill}: differs from colony — kept target copy (use --force to overwrite)`,
+        );
+      }
+    }
+  }
+
+  if (!quiet) {
+    console.log("");
+    logger.success(`adopt complete: ${created} added, ${updated} updated across harness dirs.`);
+    if (divergent > 0) {
+      logger.warn(
+        `${divergent} skill(s) differ from the colony and were left as-is. Re-run with --force to overwrite them with the colony version.`,
+      );
+    }
+    logger.dim("Non-colony skills in each dir were left untouched.");
+  }
   return 0;
 }
 

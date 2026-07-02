@@ -3,6 +3,7 @@ import {
   existsSync,
   lstatSync,
   mkdirSync,
+  readdirSync,
   readlinkSync,
   rmSync,
   type Stats,
@@ -10,11 +11,80 @@ import {
   unlinkSync,
 } from "node:fs";
 import { platform } from "node:os";
-import { dirname, relative, resolve } from "node:path";
+import { dirname, join, relative, resolve } from "node:path";
+import { dirTreeHash } from "./dir-tree-hash.js";
 
 export type LinkMode = "symlink" | "copy" | "auto";
 
 export type ResolvedLinkMode = "symlink" | "copy";
+
+export type AdoptAction =
+  | "created" // skill wasn't in the target dir — copied in
+  | "updated" // colony skill existed but differed — refreshed to canonical (force only)
+  | "unchanged" // already byte-identical to canonical
+  | "skipped-divergent"; // present but differs, and --force not given — left as-is
+
+export interface AdoptSkillResult {
+  skill: string;
+  action: AdoptAction;
+}
+
+/** List immediate subdirectories of `canonicalPath` that are skills (have a SKILL.md). */
+function listCanonicalSkills(canonicalPath: string): string[] {
+  let entries: import("node:fs").Dirent[];
+  try {
+    entries = readdirSync(canonicalPath, { withFileTypes: true });
+  } catch {
+    return [];
+  }
+  return entries
+    .filter((e) => e.isDirectory() && existsSync(join(canonicalPath, e.name, "SKILL.md")))
+    .map((e) => e.name)
+    .sort();
+}
+
+/**
+ * Copy the colony's skills INTO an existing (possibly populated) target directory,
+ * leaving every non-colony skill in that directory untouched. This is the
+ * additive alternative to a whole-directory symlink/copy mirror: it never
+ * deletes the target dir and never touches skills that aren't in the colony —
+ * so it is safe to run against a harness dir that holds hand-authored skills.
+ *
+ * Per colony skill:
+ *   - absent in target        → copied in                 (created)
+ *   - present, byte-identical → left alone                (unchanged)
+ *   - present, differs, force → overwritten with canonical (updated)
+ *   - present, differs, !force→ left alone + reported     (skipped-divergent)
+ */
+export function adoptSkills(
+  canonicalPath: string,
+  targetDir: string,
+  opts: EnsureMirrorOptions = {},
+): AdoptSkillResult[] {
+  const results: AdoptSkillResult[] = [];
+  mkdirSync(targetDir, { recursive: true });
+  for (const skill of listCanonicalSkills(canonicalPath)) {
+    const src = join(canonicalPath, skill);
+    const dest = join(targetDir, skill);
+    if (!existsSync(dest)) {
+      cpSync(src, dest, { recursive: true });
+      results.push({ skill, action: "created" });
+      continue;
+    }
+    if (dirTreeHash(dest) === dirTreeHash(src)) {
+      results.push({ skill, action: "unchanged" });
+      continue;
+    }
+    if (opts.force) {
+      rmSync(dest, { recursive: true, force: true });
+      cpSync(src, dest, { recursive: true });
+      results.push({ skill, action: "updated" });
+    } else {
+      results.push({ skill, action: "skipped-divergent" });
+    }
+  }
+  return results;
+}
 
 export interface EnsureMirrorOptions {
   /**
