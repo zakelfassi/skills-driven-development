@@ -1,0 +1,49 @@
+{
+  "description": "Opt-in SkDD enforcement gates: finish-the-loop (Stop) and freeze-the-session (SessionEnd + PreCompact). Both are OFF by default — toggle with /skdd-claude:skdd-hooks.",
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/session-start.mjs\"",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/finish-loop-gate.mjs\"",
+            "timeout": 15
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/freeze-reminder.mjs\" SessionEnd",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "PreCompact": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/freeze-reminder.mjs\" PreCompact",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}
