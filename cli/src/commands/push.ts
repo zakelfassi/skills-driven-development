@@ -1,7 +1,9 @@
 import { spawnSync } from "node:child_process";
 import {
-  cpSync,
+  copyFileSync,
   existsSync,
+  lstatSync,
+  mkdirSync,
   mkdtempSync,
   readdirSync,
   readFileSync,
@@ -10,11 +12,13 @@ import {
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
+import { assertSafeManifestNames } from "../lib/commons.js";
 import { loadConfig } from "../lib/config.js";
 import { ensureGlobalColony, skddHome } from "../lib/global.js";
 import { logger } from "../lib/logger.js";
 import { parseSkill } from "../lib/skill.js";
+import { NAME_REGEX } from "../lib/spec.js";
 
 export interface PushOptions {
   cwd?: string;
@@ -38,6 +42,10 @@ interface PushItem {
   /** Repo-relative destination directory in the Commons. */
   destDir: string;
   diffSummary: string | null;
+  /** Allowlisted payload that travels (paths relative to the skill dir). */
+  files: string[];
+  /** Local files that will NOT travel, with the reason. */
+  skipped: string[];
 }
 
 interface PlannedPr {
@@ -120,8 +128,17 @@ export async function runPush(target: string, opts: PushOptions = {}): Promise<n
 
   const items: PushItem[] = [];
   for (const { name, dir } of skillDirs) {
+    // The name becomes a path segment in the Commons clone — hold local dirs
+    // to the same grammar the manifest is held to.
+    if (!NAME_REGEX.test(name)) {
+      logger.error(
+        `'${name}' is not a valid skill name (lowercase kebab-case) — refusing to push.`,
+      );
+      return 1;
+    }
     const raw = readFileSync(join(dir, "SKILL.md"), "utf8");
     const content = stripMachineLocalMetadata(raw);
+    const payload = collectPublishablePayload(dir);
     const parsed = parseSkill(join(dir, "SKILL.md"));
     const meta = (parsed.frontmatter.metadata ?? {}) as Record<string, unknown>;
     const upstreamDrop = upstream.manifest.drops.find((d) => d.skills.includes(name))?.id ?? null;
@@ -144,6 +161,8 @@ export async function runPush(target: string, opts: PushOptions = {}): Promise<n
       upstreamDrop,
       destDir,
       diffSummary,
+      files: payload.files,
+      skipped: payload.skipped,
     });
   }
 
@@ -159,6 +178,8 @@ export async function runPush(target: string, opts: PushOptions = {}): Promise<n
       logger.info(
         `  ${item.upstreamDrop ? "evolve" : "new"}: ${item.name} → ${item.destDir}/SKILL.md`,
       );
+      for (const f of item.files) logger.dim(`      travels: ${f}`);
+      for (const s of item.skipped) logger.dim(`      stays home: ${s}`);
     }
     console.log("");
     logger.info(`PR title: ${pr.title}`);
@@ -195,6 +216,8 @@ function localUpstream(dir: string): {
   readFile: (path: string) => string | null;
 } {
   const manifest = JSON.parse(readFileSync(join(dir, "drops.json"), "utf8")) as UpstreamManifest;
+  // The upstream manifest is untrusted input and its ids feed destDir paths.
+  for (const d of manifest.drops) assertSafeManifestNames(d);
   return {
     manifest,
     readFile: (path: string) => {
@@ -217,7 +240,9 @@ function remoteUpstream(repo: string): {
   if (raw === null) {
     throw new Error("no readable drops.json — is it a SkDD Commons repo you can access?");
   }
-  return { manifest: JSON.parse(raw) as UpstreamManifest, readFile };
+  const manifest = JSON.parse(raw) as UpstreamManifest;
+  for (const d of manifest.drops) assertSafeManifestNames(d);
+  return { manifest, readFile };
 }
 
 // ── PR assembly ───────────────────────────────────────────────────────────────
@@ -276,6 +301,52 @@ function truncate(s: string, max: number): string {
  */
 export function stripMachineLocalMetadata(raw: string): string {
   return raw.replace(/^(\s*usage-count:\s*).+$/m, `$1"0"`).replace(/^\s*last-used:.*\r?\n/m, "");
+}
+
+// Only the spec-defined skill payload travels upstream. Everything else in the
+// skill dir — dotfiles, logs, local notes, .env, symlinks — stays home: push is
+// a SHARING command and must never exfiltrate machine-local files.
+const PUBLISHABLE_SUBDIRS = new Set(["scripts", "references", "assets"]);
+
+export function collectPublishablePayload(skillDir: string): {
+  files: string[];
+  skipped: string[];
+} {
+  const files: string[] = ["SKILL.md"];
+  const skipped: string[] = [];
+
+  const walk = (rel: string) => {
+    for (const entry of readdirSync(join(skillDir, rel))) {
+      const relPath = join(rel, entry);
+      const stat = lstatSync(join(skillDir, relPath));
+      if (stat.isSymbolicLink()) {
+        skipped.push(`${relPath} (symlink)`);
+      } else if (entry.startsWith(".")) {
+        skipped.push(`${relPath}${stat.isDirectory() ? "/" : ""} (dotfile)`);
+      } else if (stat.isDirectory()) {
+        walk(relPath);
+      } else {
+        files.push(relPath);
+      }
+    }
+  };
+
+  for (const entry of readdirSync(skillDir)) {
+    if (entry === "SKILL.md") continue;
+    const stat = lstatSync(join(skillDir, entry));
+    if (stat.isSymbolicLink()) {
+      skipped.push(`${entry} (symlink)`);
+    } else if (entry.startsWith(".")) {
+      skipped.push(`${entry}${stat.isDirectory() ? "/" : ""} (dotfile)`);
+    } else if (stat.isDirectory() && PUBLISHABLE_SUBDIRS.has(entry)) {
+      walk(entry);
+    } else {
+      skipped.push(
+        `${entry}${stat.isDirectory() ? "/" : ""} (outside SKILL.md + scripts/references/assets)`,
+      );
+    }
+  }
+  return { files, skipped };
 }
 
 /** Dependency-free diff stat between two SKILL.md revisions. */
@@ -339,7 +410,13 @@ function openPr(repo: string, pr: PlannedPr, opts: PushOptions): number {
 
     for (const item of pr.items) {
       const dest = join(tmp, item.destDir);
-      cpSync(item.localDir, dest, { recursive: true });
+      // Copy ONLY the allowlisted payload — never the whole local directory.
+      for (const rel of item.files) {
+        if (rel === "SKILL.md") continue; // written below from the stripped content
+        mkdirSync(dirname(join(dest, rel)), { recursive: true });
+        copyFileSync(join(item.localDir, rel), join(dest, rel));
+      }
+      mkdirSync(dest, { recursive: true });
       writeFileSync(join(dest, "SKILL.md"), item.content);
     }
     // A new skill headed for an existing drop must also appear in drops.json,
