@@ -93,9 +93,23 @@ export function parseMarkdownRegistry(source: string): Registry {
   return { skills, archived };
 }
 
+/**
+ * Make a value safe to drop into a markdown table cell: newlines would break the
+ * row, and unescaped pipes would be read as extra columns by parseMarkdownRegistry
+ * (and could inject fake rows from untrusted Commons metadata).
+ */
+function cell(value: string): string {
+  return value
+    .replace(/\r?\n+/g, " ")
+    .replace(/\|/g, "\\|")
+    .trim();
+}
+
 function splitTableRow(row: string): string[] {
   const trimmed = row.replace(/^\|/, "").replace(/\|$/, "");
-  return trimmed.split("|").map((c) => c.trim());
+  // Split on unescaped pipes only, then unescape — mirrors cell()'s `\|` escaping
+  // so a description containing a literal pipe round-trips as one cell.
+  return trimmed.split(/(?<!\\)\|/).map((c) => c.replace(/\\\|/g, "|").trim());
 }
 
 /** Serialize a Registry back to markdown. Stable ordering: skills as given, archived as given. */
@@ -114,7 +128,7 @@ export function writeMarkdownRegistry(registry: Registry, projectName?: string):
 
   for (const s of registry.skills) {
     lines.push(
-      `| ${s.name} | ${s.source} | ${s.lastUsed ?? ""} | ${s.uses ?? 0} | ${s.description} |`,
+      `| ${cell(s.name)} | ${cell(s.source)} | ${cell(s.lastUsed ?? "")} | ${s.uses ?? 0} | ${cell(s.description)} |`,
     );
   }
 
@@ -127,7 +141,7 @@ export function writeMarkdownRegistry(registry: Registry, projectName?: string):
       "|-------|----------|--------|",
     );
     for (const a of registry.archived) {
-      lines.push(`| ${a.name} | ${a.lastUsed ?? ""} | ${a.description} |`);
+      lines.push(`| ${cell(a.name)} | ${cell(a.lastUsed ?? "")} | ${cell(a.description)} |`);
     }
   }
 

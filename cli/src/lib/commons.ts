@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, lstatSync, mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { isAbsolute, join, relative, resolve } from "node:path";
 import { NAME_MAX_LENGTH, NAME_REGEX } from "./spec.js";
@@ -37,22 +37,30 @@ const GIT_URL_PREFIX = /^(?:https?:\/\/|git@|ssh:\/\/)/;
  * local path — each with an optional `#ref` (branch/tag/sha) suffix on git forms.
  */
 export function parseSource(raw: string, cwd: string): CommonsSource {
-  // Local path forms first: explicit path prefixes, or a path that exists on disk.
-  if (
-    raw.startsWith(".") ||
-    raw.startsWith("/") ||
-    raw.startsWith("~") ||
-    existsSync(resolve(cwd, raw))
-  ) {
-    const localPath = raw.startsWith("~")
-      ? join(process.env.HOME ?? "", raw.slice(1))
-      : resolve(cwd, raw);
-    return { kind: "local", label: raw, localPath };
+  const toLocal = (p: string, ref?: string): CommonsSource => {
+    const localPath = p.startsWith("~")
+      ? join(process.env.HOME ?? "", p.slice(1))
+      : resolve(cwd, p);
+    return { kind: "local", label: p, localPath, ref };
+  };
+
+  // A path that exists verbatim wins first — this preserves local paths that
+  // legitimately contain a literal '#' (no ref is inferred from them).
+  if (existsSync(resolve(cwd, raw))) {
+    return toLocal(raw);
   }
 
   const hashIdx = raw.lastIndexOf("#");
   const ref = hashIdx > 0 ? raw.slice(hashIdx + 1) : undefined;
   const base = hashIdx > 0 ? raw.slice(0, hashIdx) : raw;
+
+  // Local by prefix or on-disk existence — computed AFTER stripping the #ref so
+  // e.g. ../commons#feature parses as {local ../commons, ref feature} instead of
+  // a nonexistent literal path.
+  const baseLooksLocal = base.startsWith(".") || base.startsWith("/") || base.startsWith("~");
+  if (baseLooksLocal || existsSync(resolve(cwd, base))) {
+    return toLocal(base, ref);
+  }
 
   if (GIT_URL_PREFIX.test(base)) {
     // Try to extract owner/repo from common URL shapes for the label.
@@ -74,8 +82,11 @@ export interface FetchedCommons {
   dir: string;
   /** Full commit sha of the fetched state, or null when the source isn't a git repo. */
   sha: string | null;
+  /** True when the source was a local git repo with uncommitted changes — the
+   *  recorded sha does NOT contain the installed bytes, so provenance is marked. */
+  dirty: boolean;
   source: CommonsSource;
-  /** Remove the temp clone (no-op for local sources). */
+  /** Remove the temp clone (no-op for local sources read in place). */
   cleanup: () => void;
 }
 
@@ -99,10 +110,35 @@ export function fetchCommons(source: CommonsSource): FetchedCommons {
     if (!existsSync(dir)) {
       throw new Error(`Local source does not exist: ${dir}`);
     }
+    // A local source with a #ref must be checked out from a clean clone —
+    // never mutate the user's working repo. This also yields honest provenance.
+    if (source.ref) {
+      const tmp = mkdtempSync(join(tmpdir(), "skdd-commons-"));
+      const cleanup = () => rmSync(tmp, { recursive: true, force: true });
+      const cl = git(["clone", "--quiet", dir, tmp]);
+      if (cl.status !== 0) {
+        cleanup();
+        throw new Error(`cannot clone local source '${dir}': ${cl.stderr || cl.stdout}`);
+      }
+      const co = git(["checkout", "--detach", source.ref], tmp);
+      if (co.status !== 0) {
+        cleanup();
+        throw new Error(
+          `cannot check out ref '${source.ref}' in '${dir}': ${co.stderr || co.stdout}`,
+        );
+      }
+      const rev = git(["rev-parse", "HEAD"], tmp);
+      return { dir: tmp, sha: rev.status === 0 ? rev.stdout : null, dirty: false, source, cleanup };
+    }
     const rev = git(["rev-parse", "HEAD"], dir);
+    // Working-tree read in place: if the repo is dirty, HEAD doesn't contain
+    // the bytes we're about to copy, so flag it for provenance.
+    const status = git(["status", "--porcelain"], dir);
+    const dirty = rev.status === 0 && status.status === 0 && status.stdout.length > 0;
     return {
       dir,
       sha: rev.status === 0 ? rev.stdout : null,
+      dirty,
       source,
       cleanup: () => {},
     };
@@ -136,7 +172,7 @@ export function fetchCommons(source: CommonsSource): FetchedCommons {
   }
 
   const rev = git(["rev-parse", "HEAD"], tmp);
-  return { dir: tmp, sha: rev.status === 0 ? rev.stdout : null, source, cleanup };
+  return { dir: tmp, sha: rev.status === 0 ? rev.stdout : null, dirty: false, source, cleanup };
 }
 
 /** Read and minimally validate a Commons repo's drops.json. */
@@ -225,8 +261,33 @@ export function resolveSelector(manifest: DropsManifest, selector: string): Reso
   return { drop, skills: [skillName] };
 }
 
-/** Registry Source column label for an added skill: `owner/repo@shortsha (drop-id)`. */
-export function provenanceLabel(source: CommonsSource, sha: string | null, dropId: string): string {
-  const shortSha = sha ? sha.slice(0, 7) : "local";
+/** Registry Source column label for an added skill: `owner/repo@shortsha (drop-id)`.
+ *  A dirty local source is marked `@shortsha-dirty` so the sha isn't mistaken
+ *  for a commit that actually contains the installed bytes. */
+export function provenanceLabel(
+  source: CommonsSource,
+  sha: string | null,
+  dropId: string,
+  dirty = false,
+): string {
+  const shortSha = sha ? `${sha.slice(0, 7)}${dirty ? "-dirty" : ""}` : "local";
   return `${source.label}@${shortSha} (${dropId})`;
+}
+
+/** True if `entry` (a file or dir path) is a symlink, or — for a directory —
+ *  contains any symlink at any depth. Used to keep symlinked payload out of a
+ *  provenance-pinned copy. */
+export function treeHasSymlink(entry: string): boolean {
+  let stat: ReturnType<typeof lstatSync>;
+  try {
+    stat = lstatSync(entry);
+  } catch {
+    return false;
+  }
+  if (stat.isSymbolicLink()) return true;
+  if (!stat.isDirectory()) return false;
+  for (const child of readdirSync(entry)) {
+    if (treeHasSymlink(join(entry, child))) return true;
+  }
+  return false;
 }

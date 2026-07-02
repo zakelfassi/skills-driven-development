@@ -13,12 +13,14 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
+import { canonicalDirName } from "../lib/colony.js";
 import { assertSafeManifestNames } from "../lib/commons.js";
 import { loadConfig } from "../lib/config.js";
 import { ensureGlobalColony, skddHome } from "../lib/global.js";
 import { logger } from "../lib/logger.js";
 import { parseSkill } from "../lib/skill.js";
 import { NAME_REGEX } from "../lib/spec.js";
+import { validateSkill } from "./validate.js";
 
 export interface PushOptions {
   cwd?: string;
@@ -61,7 +63,9 @@ export async function runPush(target: string, opts: PushOptions = {}): Promise<n
   const cwd = resolve(opts.cwd ?? process.cwd());
   const colonyRoot = opts.global ? skddHome() : cwd;
   if (opts.global) ensureGlobalColony();
-  const canonicalDir = join(colonyRoot, "skills");
+  // Honor .colony.json's canonicalSkillsDir so a project using e.g. "playbooks"
+  // can push the skills that add/import/doctor installed there.
+  const canonicalDir = join(colonyRoot, opts.global ? "skills" : canonicalDirName(colonyRoot));
 
   // ── locate what we're pushing: one skill dir, or every skill in a pack ─────
   const skillDirs: Array<{ name: string; dir: string }> = [];
@@ -104,6 +108,16 @@ export async function runPush(target: string, opts: PushOptions = {}): Promise<n
   if (skillDirs.length === 0) {
     logger.error(
       `'${target}' is neither a skill in ${canonicalDir} nor a pack id any local skill belongs to.`,
+    );
+    return 1;
+  }
+
+  // A multi-skill pack push uses `pack/<target>` as the branch name; a pack id
+  // with spaces or slashes yields an invalid git ref. Require a ref-safe slug.
+  const isPackPush = !existsSync(join(directDir, "SKILL.md")) && skillDirs.length > 1;
+  if (isPackPush && !/^[A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9])?$/.test(target)) {
+    logger.error(
+      `Pack id '${target}' is not a valid git branch component — use letters, digits, '.', '_', '-' (no spaces or slashes).`,
     );
     return 1;
   }
@@ -163,7 +177,21 @@ export async function runPush(target: string, opts: PushOptions = {}): Promise<n
     const raw = readFileSync(join(dir, "SKILL.md"), "utf8");
     const content = stripMachineLocalMetadata(raw);
     const payload = collectPublishablePayload(dir);
-    const parsed = parseSkill(join(dir, "SKILL.md"));
+    let parsed: ReturnType<typeof parseSkill>;
+    try {
+      parsed = parseSkill(join(dir, "SKILL.md"));
+    } catch (err) {
+      logger.error(`'${name}': cannot parse SKILL.md — ${(err as Error).message}`);
+      return 1;
+    }
+    // Validate before assembling the PR — a malformed local skill would open a
+    // PR the Commons CI just rejects. Fail locally with the actual reasons.
+    const errors = validateSkill(parsed, { strict: true }).filter((i) => i.severity === "error");
+    if (errors.length > 0) {
+      logger.error(`'${name}' fails skdd validate --strict — fix it before pushing:`);
+      for (const e of errors) logger.dim(`    ${e.field ? `[${e.field}] ` : ""}${e.message}`);
+      return 1;
+    }
     const meta = (parsed.frontmatter.metadata ?? {}) as Record<string, unknown>;
     const upstreamDrop = upstream.manifest.drops.find((d) => d.skills.includes(name))?.id ?? null;
     const destDir = upstreamDrop
@@ -321,10 +349,21 @@ function truncate(s: string, max: number): string {
 
 /**
  * Machine-local state stays home: usage-count resets, last-used is dropped.
- * Line-based on purpose — gray-matter round-trips would reformat the YAML.
+ * Scoped to the YAML frontmatter block ONLY — a body line like `usage-count: 5`
+ * inside a fenced example must not be rewritten. Line-based on purpose:
+ * gray-matter round-trips would reformat the whole YAML.
  */
 export function stripMachineLocalMetadata(raw: string): string {
-  return raw.replace(/^(\s*usage-count:\s*).+$/m, `$1"0"`).replace(/^\s*last-used:.*\r?\n/m, "");
+  const fm = raw.match(/^(---\r?\n)([\s\S]*?)(\r?\n---\r?\n?)/);
+  if (!fm) return raw; // no frontmatter → nothing machine-local to strip
+  const stripped = fm[2]!
+    .replace(/^(\s*usage-count:\s*).+$/m, `$1"0"`)
+    .replace(/^\s*last-used:.*\r?\n?/m, "");
+  return (
+    raw.slice(0, fm.index! + fm[1]!.length) +
+    stripped +
+    raw.slice(fm.index! + fm[1]!.length + fm[2]!.length)
+  );
 }
 
 /**
@@ -449,13 +488,18 @@ function openPr(repo: string, pr: PlannedPr, opts: PushOptions): number {
 
     for (const item of pr.items) {
       const dest = join(tmp, item.destDir);
+      // For an evolution the upstream dir already exists in the clone; clear it
+      // first so files the local skill deleted don't silently survive in the PR.
+      if (item.upstreamDrop && existsSync(dest)) {
+        rmSync(dest, { recursive: true, force: true });
+      }
+      mkdirSync(dest, { recursive: true });
       // Copy ONLY the allowlisted payload — never the whole local directory.
       for (const rel of item.files) {
         if (rel === "SKILL.md") continue; // written below from the stripped content
         mkdirSync(dirname(join(dest, rel)), { recursive: true });
         copyFileSync(join(item.localDir, rel), join(dest, rel));
       }
-      mkdirSync(dest, { recursive: true });
       writeFileSync(join(dest, "SKILL.md"), item.content);
     }
     // A new skill headed for an existing drop must also appear in drops.json,
@@ -471,9 +515,21 @@ function openPr(repo: string, pr: PlannedPr, opts: PushOptions): number {
     }
 
     git(["add", "-A"], tmp);
+    // Distinguish "no changes" from a real commit failure (e.g. missing git
+    // user.name/email in a fresh CI env) — reporting both as "nothing to push"
+    // hides an actionable error.
+    const staged = git(["diff", "--cached", "--quiet"], tmp);
+    if (staged.status === 0) {
+      logger.error(`Nothing to push — the Commons already has this exact content.`);
+      return 1;
+    }
     const commit = git(["commit", "-m", pr.title], tmp);
     if (commit.status !== 0) {
-      logger.error(`Nothing to push — the Commons already has this exact content.`);
+      const detail = (commit.stderr || commit.stdout).trim();
+      logger.error(`git commit failed${detail ? `: ${detail}` : ""}`);
+      if (/user\.(name|email)|author identity unknown/i.test(detail)) {
+        logger.dim(`Set a git identity: git config --global user.name/user.email, then retry.`);
+      }
       return 1;
     }
     const pushRemote = headRepo === repo ? "origin" : `https://github.com/${headRepo}.git`;
