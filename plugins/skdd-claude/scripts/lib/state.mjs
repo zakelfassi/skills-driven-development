@@ -84,6 +84,50 @@ export function commitsSince(cwd, startRev) {
   return res.status === 0 ? Number.parseInt(res.stdout.trim(), 10) || 0 : 0;
 }
 
+/** The repo root for `cwd`, or null if not a git repo. */
+export function gitRoot(cwd) {
+  const res = git(["rev-parse", "--show-toplevel"], cwd);
+  return res.status === 0 ? res.stdout.trim() : null;
+}
+
+/** Root-relative paths committed on HEAD since `startRev` (empty if unknown). */
+export function committedPathsSince(cwd, startRev) {
+  if (!startRev) return [];
+  const root = gitRoot(cwd) ?? cwd;
+  const res = git(["diff", "--name-only", `${startRev}..HEAD`], root);
+  return res.status === 0
+    ? res.stdout.split(/\r?\n/).map((l) => l.trim()).filter(Boolean)
+    : [];
+}
+
+/** Total changed line count for `paths` (root-relative): tracked edits via
+ *  numstat + full line counts of untracked/new files. Used by the freeze
+ *  heuristic so a large single-file change reads as substantive. */
+export function changedLineCount(cwd, paths) {
+  const root = gitRoot(cwd) ?? cwd;
+  const numstat = new Map();
+  const res = git(["diff", "--numstat", "HEAD"], root);
+  if (res.status === 0) {
+    for (const line of res.stdout.split(/\r?\n/)) {
+      const m = line.match(/^(\d+|-)\t(\d+|-)\t(.+)$/);
+      if (m) numstat.set(m[3], (m[1] === "-" ? 0 : +m[1]) + (m[2] === "-" ? 0 : +m[2]));
+    }
+  }
+  let total = 0;
+  for (const p of paths) {
+    if (numstat.has(p)) {
+      total += numstat.get(p);
+    } else {
+      try {
+        total += readFileSync(join(root, p), "utf8").split(/\r?\n/).length;
+      } catch {
+        // deleted/binary/unreadable — ignore
+      }
+    }
+  }
+  return total;
+}
+
 /**
  * Fresh per-run state, written at SessionStart. Called on every SessionStart —
  * including resume — so a prior run's `finishLoopBlocked` never leaks into a new
@@ -142,14 +186,15 @@ export function sessionChangedPaths(cwd, state, filter = () => true) {
 const TOGGLE_REL = join(".claude", "skdd.local.md");
 const KNOWN_GATES = ["finish-the-loop", "freeze-the-session"];
 
-/** Walk up from `start` to the filesystem root, returning the first directory
- *  that has a `.claude/skdd.local.md` — so a repo-root toggle applies even when
- *  Claude runs from a subdirectory like packages/app. */
-function findToggleFile(start) {
+/** Walk up from `start` to a `.claude/skdd.local.md`, but NOT past `ceiling`
+ *  (the repo/project root). Bounding the search keeps a toggle in an unrelated
+ *  parent workspace from silently opting a nested repo in. */
+function findToggleFile(start, ceiling) {
   let dir = start;
   for (;;) {
     const candidate = join(dir, TOGGLE_REL);
     if (existsSync(candidate)) return candidate;
+    if (ceiling && dir === ceiling) return null; // stop at the project boundary
     const parent = dirname(dir);
     if (parent === dir) return null;
     dir = parent;
@@ -158,13 +203,16 @@ function findToggleFile(start) {
 
 /**
  * Read the per-project toggle file (.claude/skdd.local.md), searching upward
- * from the project dir. Both gates are OFF unless explicitly enabled — a hook
- * that fires when nobody asked for it gets the whole plugin uninstalled.
+ * from the project dir but never above the repo root (or CLAUDE_PROJECT_DIR).
+ * Both gates are OFF unless explicitly enabled — a hook that fires when nobody
+ * asked for it gets the whole plugin uninstalled.
  */
 export function readToggles(cwd) {
   const toggles = Object.fromEntries(KNOWN_GATES.map((g) => [g, false]));
   const start = process.env.CLAUDE_PROJECT_DIR || cwd || process.cwd();
-  const p = findToggleFile(start);
+  // Ceiling: an explicit project dir wins; otherwise the git root of `start`.
+  const ceiling = process.env.CLAUDE_PROJECT_DIR || gitRoot(start) || start;
+  const p = findToggleFile(start, ceiling);
   if (!p) return toggles;
   let raw;
   try {

@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { platform, tmpdir } from "node:os";
 import { join } from "node:path";
@@ -113,6 +114,20 @@ Example config:
     expect(stripped).toContain(`    usage-count: "5"`);
     expect(stripped).toContain(`    last-used: "2020-01-01"`);
   });
+
+  it("drops a metadata block emptied by removing last-used (no dangling null key)", () => {
+    const raw = `---
+name: x
+description: A skill. Use when testing.
+metadata:
+  last-used: "2026-06-30"
+---
+body`;
+    const stripped = stripMachineLocalMetadata(raw);
+    expect(stripped).not.toMatch(/^metadata:\s*$/m); // no dangling `metadata:` → null
+    expect(stripped).not.toContain("last-used");
+    expect(stripped).toContain("name: x");
+  });
 });
 
 describe("summarizeDiff", () => {
@@ -145,6 +160,19 @@ describe("collectPublishablePayload", () => {
     expect(skipped).toContain("logs/ (outside SKILL.md + scripts/references/assets)");
     expect(skipped).toContain("scripts/.cache (dotfile)");
     expect(skipped).toContain("scripts/link.sh (symlink)");
+  });
+
+  runUnix("skips non-regular files (a FIFO) instead of trying to copy them", () => {
+    const dir = join(tmp, "skills", "fifo-skill");
+    mkdirSync(join(dir, "scripts"), { recursive: true });
+    writeFileSync(join(dir, "SKILL.md"), "---\nname: fifo-skill\n---\nbody");
+    writeFileSync(join(dir, "scripts", "ok.sh"), "echo ok");
+    execFileSync("mkfifo", [join(dir, "scripts", "pipe")]);
+
+    const { files, skipped } = collectPublishablePayload(dir);
+    expect(files).toContain("scripts/ok.sh");
+    expect(files).not.toContain("scripts/pipe");
+    expect(skipped).toContain("scripts/pipe (not a regular file)");
   });
 });
 

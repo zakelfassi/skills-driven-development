@@ -13,8 +13,9 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
+import matter from "gray-matter";
 import { canonicalDirName } from "../lib/colony.js";
-import { assertSafeManifestNames } from "../lib/commons.js";
+import { assertSafeManifestNames, isGitRefComponent } from "../lib/commons.js";
 import { loadConfig } from "../lib/config.js";
 import { ensureGlobalColony, skddHome } from "../lib/global.js";
 import { logger } from "../lib/logger.js";
@@ -113,11 +114,12 @@ export async function runPush(target: string, opts: PushOptions = {}): Promise<n
   }
 
   // A multi-skill pack push uses `pack/<target>` as the branch name; a pack id
-  // with spaces or slashes yields an invalid git ref. Require a ref-safe slug.
+  // that isn't a valid git ref component (e.g. `foo.lock`, `a..b`, spaces) would
+  // fail at checkout/push after cloning. Reject up front.
   const isPackPush = !existsSync(join(directDir, "SKILL.md")) && skillDirs.length > 1;
-  if (isPackPush && !/^[A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9])?$/.test(target)) {
+  if (isPackPush && !isGitRefComponent(target)) {
     logger.error(
-      `Pack id '${target}' is not a valid git branch component — use letters, digits, '.', '_', '-' (no spaces or slashes).`,
+      `Pack id '${target}' is not a valid git branch component (no spaces, '..', trailing '.lock', or leading '.'/'-').`,
     );
     return 1;
   }
@@ -184,9 +186,10 @@ export async function runPush(target: string, opts: PushOptions = {}): Promise<n
       logger.error(`'${name}': cannot parse SKILL.md — ${(err as Error).message}`);
       return 1;
     }
-    // Validate before assembling the PR — a malformed local skill would open a
-    // PR the Commons CI just rejects. Fail locally with the actual reasons.
-    const errors = validateSkill(parsed, { strict: true }).filter((i) => i.severity === "error");
+    // Validate the STRIPPED content — that's the SKILL.md the Commons CI will
+    // see. Validating the local original could pass while the pushed payload
+    // (e.g. an emptied metadata block) fails upstream.
+    const errors = validateStrippedSkill(name, content).filter((i) => i.severity === "error");
     if (errors.length > 0) {
       logger.error(`'${name}' fails skdd validate --strict — fix it before pushing:`);
       for (const e of errors) logger.dim(`    ${e.field ? `[${e.field}] ` : ""}${e.message}`);
@@ -356,14 +359,48 @@ function truncate(s: string, max: number): string {
 export function stripMachineLocalMetadata(raw: string): string {
   const fm = raw.match(/^(---\r?\n)([\s\S]*?)(\r?\n---\r?\n?)/);
   if (!fm) return raw; // no frontmatter → nothing machine-local to strip
-  const stripped = fm[2]!
+  let stripped = fm[2]!
     .replace(/^(\s*usage-count:\s*).+$/m, `$1"0"`)
     .replace(/^\s*last-used:.*\r?\n?/m, "");
+  // If removing last-used emptied the metadata block (a `metadata:` key with no
+  // remaining indented children), drop the dangling key too — otherwise the
+  // pushed SKILL.md carries `metadata:` as YAML null.
+  stripped = dropEmptyMetadata(stripped);
   return (
     raw.slice(0, fm.index! + fm[1]!.length) +
     stripped +
     raw.slice(fm.index! + fm[1]!.length + fm[2]!.length)
   );
+}
+
+/** Validate the stripped SKILL.md content that will actually travel upstream. */
+function validateStrippedSkill(name: string, content: string) {
+  const parsed = matter(content);
+  const body = parsed.content;
+  const skill = {
+    path: `${name}/SKILL.md`,
+    dir: name,
+    dirName: name,
+    frontmatter: (parsed.data ?? {}) as Record<string, unknown>,
+    body,
+    lineCount: content.split(/\r?\n/).length,
+    hasScripts: false,
+    hasReferences: false,
+    hasAssets: false,
+  };
+  return validateSkill(skill, { strict: true });
+}
+
+/** Remove a `metadata:` key whose block has no indented children left. */
+function dropEmptyMetadata(yaml: string): string {
+  const lines = yaml.split(/\r?\n/);
+  const idx = lines.findIndex((l) => /^metadata:\s*$/.test(l));
+  if (idx === -1) return yaml;
+  const next = lines[idx + 1];
+  const hasChild = next !== undefined && /^\s+\S/.test(next);
+  if (hasChild) return yaml;
+  lines.splice(idx, 1);
+  return lines.join("\n");
 }
 
 /**
@@ -403,8 +440,11 @@ export function collectPublishablePayload(skillDir: string): {
         skipped.push(`${relPath}${stat.isDirectory() ? "/" : ""} (dotfile)`);
       } else if (stat.isDirectory()) {
         walk(relPath);
-      } else {
+      } else if (stat.isFile()) {
         files.push(relPath);
+      } else {
+        // FIFO, socket, device node — copyFileSync would hang or fail. Skip.
+        skipped.push(`${relPath} (not a regular file)`);
       }
     }
   };
@@ -418,6 +458,8 @@ export function collectPublishablePayload(skillDir: string): {
       skipped.push(`${entry}${stat.isDirectory() ? "/" : ""} (dotfile)`);
     } else if (stat.isDirectory() && PUBLISHABLE_SUBDIRS.has(entry)) {
       walk(entry);
+    } else if (!stat.isFile() && !stat.isDirectory()) {
+      skipped.push(`${entry} (not a regular file)`);
     } else {
       skipped.push(
         `${entry}${stat.isDirectory() ? "/" : ""} (outside SKILL.md + scripts/references/assets)`,
@@ -502,16 +544,22 @@ function openPr(repo: string, pr: PlannedPr, opts: PushOptions): number {
       }
       writeFileSync(join(dest, "SKILL.md"), item.content);
     }
-    // A new skill headed for an existing drop must also appear in drops.json,
+    // A NEW skill headed for an existing drop must also appear in drops.json,
     // or the Commons' manifest-check job fails the PR on a stray directory.
-    if (opts.drop) {
+    // Only rewrite the manifest when we actually add a name — an evolution-only
+    // push must not gain an unrelated manifest reformat.
+    if (opts.drop && pr.items.some((i) => !i.upstreamDrop)) {
       const manifestPath = join(tmp, "drops.json");
       const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
       const drop = manifest.drops.find((d: { id: string }) => d.id === opts.drop);
+      let added = false;
       for (const item of pr.items) {
-        if (!item.upstreamDrop && !drop.skills.includes(item.name)) drop.skills.push(item.name);
+        if (!item.upstreamDrop && !drop.skills.includes(item.name)) {
+          drop.skills.push(item.name);
+          added = true;
+        }
       }
-      writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
+      if (added) writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
     }
 
     git(["add", "-A"], tmp);
