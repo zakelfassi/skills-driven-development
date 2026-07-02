@@ -50,8 +50,14 @@ function git(args, cwd) {
 /** A snapshot of the repo at a point in time: HEAD sha + the set of changed/
  *  untracked paths (porcelain -uall so new files count individually). */
 export function repoSnapshot(cwd) {
-  const rev = git(["rev-parse", "HEAD"], cwd);
-  const status = git(["status", "--porcelain", "-uall"], cwd);
+  // Anchor to the repo root so paths and their hashes are identical no matter
+  // which subdirectory each hook was invoked from. `git status` emits
+  // cwd-relative paths, so running it from a subdir would key the baseline
+  // differently than the Stop pass and miss (or misattribute) changes.
+  const top = git(["rev-parse", "--show-toplevel"], cwd);
+  const root = top.status === 0 ? top.stdout.trim() : cwd;
+  const rev = git(["rev-parse", "HEAD"], root);
+  const status = git(["status", "--porcelain", "-uall"], root);
   const paths =
     status.status === 0
       ? status.stdout
@@ -59,7 +65,7 @@ export function repoSnapshot(cwd) {
           .map((l) => l.slice(3).trim())
           .filter(Boolean)
       : [];
-  return { rev: rev.status === 0 ? rev.stdout.trim() : null, paths };
+  return { rev: rev.status === 0 ? rev.stdout.trim() : null, root, paths };
 }
 
 /** sha256 of a file's bytes, or null if it can't be read (missing/deleted). */
@@ -91,7 +97,7 @@ export function resetSessionStart(sessionId, cwd) {
   // can't distinguish the two.
   const baselineHashes = {};
   for (const p of snap.paths) {
-    const h = hashFile(join(cwd, p));
+    const h = hashFile(join(snap.root, p)); // root-relative paths → resolve against root
     if (h) baselineHashes[p] = h;
   }
   const state = {
@@ -113,19 +119,20 @@ export function resetSessionStart(sessionId, cwd) {
 export function sessionChangedPaths(cwd, state, filter = () => true) {
   const baselineHashes = state.baselineHashes ?? {};
   const baselineSet = new Set(Array.isArray(state.baseline) ? state.baseline : []);
-  return repoSnapshot(cwd).paths.filter((p) => {
+  const snap = repoSnapshot(cwd);
+  return snap.paths.filter((p) => {
     if (!filter(p)) return false;
     const base = baselineHashes[p];
     if (base !== undefined) {
       // Dirty at start with a known hash → changed iff content differs now
       // (a now-unreadable/deleted file counts as changed).
-      const now = hashFile(join(cwd, p));
+      const now = hashFile(join(snap.root, p));
       return now === null || now !== base;
     }
     if (baselineSet.has(p)) {
       // Dirty at start but unhashable then (e.g. a staged deletion) → count as
       // a session change only if it's now readable (re-created / modified).
-      return hashFile(join(cwd, p)) !== null;
+      return hashFile(join(snap.root, p)) !== null;
     }
     // Not dirty at start → this session made it dirty.
     return true;
