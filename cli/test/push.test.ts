@@ -1,8 +1,15 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { platform, tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { runPush, stripMachineLocalMetadata, summarizeDiff } from "../src/commands/push.js";
+import {
+  collectPublishablePayload,
+  runPush,
+  stripMachineLocalMetadata,
+  summarizeDiff,
+} from "../src/commands/push.js";
+
+const runUnix = platform() === "win32" ? it.skip : it;
 
 const FIXTURES = join(__dirname, "fixtures");
 const MINI_COMMONS = join(FIXTURES, "mini-commons");
@@ -94,7 +101,51 @@ describe("summarizeDiff", () => {
   });
 });
 
+describe("collectPublishablePayload", () => {
+  runUnix("allows only the skill payload; skips dotfiles, strays, and symlinks", () => {
+    const dir = join(tmp, "skills", "payload-skill");
+    mkdirSync(join(dir, "scripts"), { recursive: true });
+    mkdirSync(join(dir, "references"), { recursive: true });
+    mkdirSync(join(dir, "logs"), { recursive: true });
+    writeFileSync(join(dir, "SKILL.md"), "---\nname: payload-skill\n---\nbody");
+    writeFileSync(join(dir, "scripts", "run.sh"), "echo ok");
+    writeFileSync(join(dir, "references", "guide.md"), "# guide");
+    writeFileSync(join(dir, ".env"), "SECRET=1");
+    writeFileSync(join(dir, "notes.log"), "local notes");
+    writeFileSync(join(dir, "scripts", ".cache"), "x");
+    writeFileSync(join(dir, "logs", "debug.log"), "x");
+    symlinkSync("/etc/hosts", join(dir, "scripts", "link.sh"));
+
+    const { files, skipped } = collectPublishablePayload(dir);
+    expect(files.sort()).toEqual(["SKILL.md", "references/guide.md", "scripts/run.sh"]);
+    expect(skipped).toContain(".env (dotfile)");
+    expect(skipped).toContain("notes.log (outside SKILL.md + scripts/references/assets)");
+    expect(skipped).toContain("logs/ (outside SKILL.md + scripts/references/assets)");
+    expect(skipped).toContain("scripts/.cache (dotfile)");
+    expect(skipped).toContain("scripts/link.sh (symlink)");
+  });
+});
+
 describe("runPush --dry-run against a local commons", () => {
+  runUnix("enumerates traveling files and keeps secrets home in the dry-run output", async () => {
+    writeColonySkill("gamma-skill");
+    const dir = join(tmp, "skills", "gamma-skill");
+    mkdirSync(join(dir, "scripts"), { recursive: true });
+    writeFileSync(join(dir, "scripts", "helper.sh"), "echo hi");
+    writeFileSync(join(dir, ".env"), "TOKEN=supersecret");
+    symlinkSync("/etc/hosts", join(dir, "hosts-link"));
+
+    const code = await runPush("gamma-skill", { cwd: tmp, to: MINI_COMMONS, dryRun: true });
+    restoreConsole();
+    expect(code).toBe(0);
+    const out = logs.join("\n");
+    expect(out).toContain("travels: SKILL.md");
+    expect(out).toContain("travels: scripts/helper.sh");
+    expect(out).toContain("stays home: .env (dotfile)");
+    expect(out).toContain("stays home: hosts-link (symlink)");
+    expect(out).not.toContain("supersecret");
+  });
+
   it("classifies an upstream-known skill as an evolution with a diff summary", async () => {
     writeColonySkill("alpha-skill", { body: "2. A new edge case learned in the wild.\n" });
     const code = await runPush("alpha-skill", { cwd: tmp, to: MINI_COMMONS, dryRun: true });

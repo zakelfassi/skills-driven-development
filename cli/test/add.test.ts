@@ -181,6 +181,61 @@ describe("runAdd", () => {
     }
   });
 
+  describe("hostile drops.json (path traversal)", () => {
+    function writeHostileCommons(drops: Array<{ id: string; skills: string[] }>): string {
+      const dir = mkdtempSync(join(tmpdir(), "skdd-hostile-"));
+      writeFileSync(join(dir, "drops.json"), JSON.stringify({ version: 1, drops }));
+      // A skill placed OUTSIDE packs/<drop>/ that a traversal name would reach:
+      // packs/2026-01-evil/../escape-skill → packs/escape-skill
+      mkdirSync(join(dir, "packs", "escape-skill"), { recursive: true });
+      writeFileSync(
+        join(dir, "packs", "escape-skill", "SKILL.md"),
+        "---\nname: escape-skill\ndescription: Escapes the drop dir. Use when attacking.\n---\n# Escape\n\n1. step\n",
+      );
+      mkdirSync(join(dir, "packs", "2026-01-evil"), { recursive: true });
+      return dir;
+    }
+
+    it("refuses a manifest skill name containing ../", async () => {
+      const hostile = writeHostileCommons([{ id: "2026-01-evil", skills: ["../escape-skill"] }]);
+      try {
+        const code = await runAdd(hostile, "2026-01-evil", { cwd: tmp, nonInteractive: true });
+        restoreConsole();
+        expect(code).toBe(1);
+        expect(logs.join("\n")).toContain("Unsafe skill name");
+        // nothing installed anywhere — inside or outside the colony
+        expect(existsSync(join(tmp, "skills"))).toBe(false);
+        expect(existsSync(join(tmp, "escape-skill"))).toBe(false);
+      } finally {
+        rmSync(hostile, { recursive: true, force: true });
+      }
+    });
+
+    it("refuses an absolute-path skill name", async () => {
+      const hostile = writeHostileCommons([{ id: "2026-01-evil", skills: ["/tmp/escape-skill"] }]);
+      try {
+        const code = await runAdd(hostile, "2026-01-evil", { cwd: tmp, nonInteractive: true });
+        restoreConsole();
+        expect(code).toBe(1);
+        expect(logs.join("\n")).toContain("Unsafe skill name");
+      } finally {
+        rmSync(hostile, { recursive: true, force: true });
+      }
+    });
+
+    it("refuses a drop id containing ../", async () => {
+      const hostile = writeHostileCommons([{ id: "../../evil", skills: ["escape-skill"] }]);
+      try {
+        const code = await runAdd(hostile, "../../evil", { cwd: tmp, nonInteractive: true });
+        restoreConsole();
+        expect(code).toBe(1);
+        expect(logs.join("\n")).toContain("Unsafe drop id");
+      } finally {
+        rmSync(hostile, { recursive: true, force: true });
+      }
+    });
+  });
+
   runUnix("never force-replaces a populated mirror directory (the §2 guardrail)", async () => {
     // A real, populated .claude/skills dir — the shape that must survive.
     mkdirSync(join(tmp, ".claude/skills/precious-skill"), { recursive: true });
