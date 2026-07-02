@@ -11,33 +11,50 @@ import { existsSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import {
+  changedLineCount,
   commitsSince,
+  gitRoot,
   loadState,
   readHookInput,
   readToggles,
   sessionChangedPaths,
 } from "./lib/state.mjs";
 
-// "Substantive": at least this many files changed/added since session start,
-// or any commit made during the session.
+// "Substantive": this many files changed/added, or this many lines changed,
+// since session start — or any commit made during the session.
 const MIN_CHANGED_FILES = 3;
+const MIN_CHANGED_LINES = 20;
 
 function sessionLooksSubstantive(cwd, state) {
   // Commits made during the session count even if the tree is now clean.
   if (commitsSince(cwd, state.startRev) > 0) return true;
-  return sessionChangedPaths(cwd, state).length >= MIN_CHANGED_FILES;
+  const paths = sessionChangedPaths(cwd, state);
+  if (paths.length >= MIN_CHANGED_FILES) return true;
+  // A large single-file change (forging/rewriting one SKILL.md) is substantive
+  // even though it's only one path.
+  return paths.length > 0 && changedLineCount(cwd, paths) >= MIN_CHANGED_LINES;
 }
 
-/** The colony registry file (md or json), project first then global, or null. */
-function registryPath(cwd) {
+/**
+ * Latest mtime among the colony's registry files, checking the repo root first
+ * (so a subdirectory session still finds a root registry), then the global
+ * colony. Both md + json are considered: touching EITHER active format counts
+ * as "frozen" (the CLI treats json as the source of truth when both exist).
+ * Returns null when no registry exists anywhere.
+ */
+function registryMtime(cwd) {
   const home = process.env.SKDD_HOME || join(homedir(), ".skdd");
-  const candidates = [
-    join(cwd, ".skills-registry.md"),
-    join(cwd, ".skills-registry.json"),
-    join(home, ".skills-registry.md"),
-    join(home, ".skills-registry.json"),
-  ];
-  return candidates.find((p) => existsSync(p)) ?? null;
+  const root = gitRoot(cwd) ?? cwd;
+  for (const base of [root, cwd, home]) {
+    const files = [
+      join(base, ".skills-registry.md"),
+      join(base, ".skills-registry.json"),
+    ].filter((p) => existsSync(p));
+    if (files.length > 0) {
+      return Math.max(...files.map((p) => statSync(p).mtimeMs));
+    }
+  }
+  return null;
 }
 
 function main() {
@@ -52,11 +69,11 @@ function main() {
   const state = loadState(input.session_id);
   if (!state.sessionStart) return; // no SessionStart seed → unsure → silent
 
-  const registry = registryPath(cwd);
-  if (!registry) return;
+  const mtime = registryMtime(cwd);
+  if (mtime === null) return; // no colony registry anywhere → nothing to remind
 
   // Registry touched during the session → learnings were frozen; stay quiet.
-  if (statSync(registry).mtimeMs >= state.sessionStart) return;
+  if (mtime >= state.sessionStart) return;
 
   if (!sessionLooksSubstantive(cwd, state)) return;
 

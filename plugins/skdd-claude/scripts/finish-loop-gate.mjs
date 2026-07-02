@@ -11,13 +11,20 @@
 // passes, so a stubborn report can't trap the session in a loop. If the
 // anti-loop flag can't be persisted, it PASSES rather than risk looping.
 
-import { loadState, readHookInput, readToggles, saveState, sessionChangedPaths } from "./lib/state.mjs";
+import {
+  committedPathsSince,
+  loadState,
+  readHookInput,
+  readToggles,
+  saveState,
+  sessionChangedPaths,
+} from "./lib/state.mjs";
 
 const UNVERIFIED_CLAIM =
   /\bshould\s+(now\s+)?(work|be\s+(fixed|working|resolved|good))\b|\blikely\s+(fixed|fixes|resolves?d?)\b|\bprobably\s+(works|fixes|fixed|resolves?d?)\b|\bought\s+to\s+(work|fix)\b|\bshould\s+(fix|resolve|handle)\b/i;
 
 const EVIDENCE_MARKER =
-  /\bverified\b|\bobserved\b|\bscreenshot\b|\bwatched\s+it\b|\btests?\s+(pass|passed|passing|green)\b|\bI\s+ran\b|\boutput\s+(shows|below|above)\b|\bexit\s+code\s+0\b|\ball\s+\d+\s+tests?\b|\bconfirmed\b/i;
+  /\bverified\b|\bobserved\b|\bscreenshot\b|\bwatched\s+it\b|\btests?\s+(pass|passed|passing|green)\b|\bI\s+ran\s+(it|them|the\b|tests?\b|npm\b|pnpm\b|yarn\b|node\b|python\b|the\s+(app|server|build|suite|command)\b)|\boutput\s+(shows|below|above)\b|\bexit\s+code\s+0\b|\ball\s+\d+\s+tests?\b|\bconfirmed\b/i;
 
 const PRODUCT_SOURCE =
   /\.(ts|tsx|js|jsx|mjs|cjs|py|rb|go|rs|java|kt|swift|c|cc|cpp|h|hpp|cs|php|vue|svelte|sql)$/i;
@@ -43,11 +50,19 @@ function main() {
   const state = loadState(sessionId);
   if (state.finishLoopBlocked) return;
 
+  // Fail open when we have no SessionStart baseline (state file missing/cleaned,
+  // or SessionStart never ran): without it we can't attribute changes to this
+  // session, and the gate is documented to stay quiet when unsure.
+  if (!state.sessionStart) return;
+
   // (b) product source changed BY THIS SESSION — content-compared against the
-  // SessionStart baseline, so an already-dirty file the session never touched is
-  // ignored, but a further edit to a pre-dirty file still counts.
-  const sessionProductChanges = sessionChangedPaths(cwd, state, isProductSource);
-  if (sessionProductChanges.length === 0) return;
+  // SessionStart baseline (an already-dirty file the session never touched is
+  // ignored; a further edit to a pre-dirty file counts) PLUS anything committed
+  // since session start (the commit-before-final-report workflow leaves a clean
+  // worktree but still changed product source).
+  const worktreeChanges = sessionChangedPaths(cwd, state, isProductSource);
+  const committedChanges = committedPathsSince(cwd, state.startRev).filter(isProductSource);
+  if (worktreeChanges.length === 0 && committedChanges.length === 0) return;
 
   // (c) unverified-claim language without evidence markers
   const message = String(input.last_assistant_message ?? "");

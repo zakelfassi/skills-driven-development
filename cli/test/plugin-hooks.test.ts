@@ -1,5 +1,5 @@
 import { execFileSync, spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -82,8 +82,9 @@ describe("finish-loop-gate.mjs", () => {
 
   it("blocks a planted 'should work' report exactly once, then passes", () => {
     enableToggles(tmp, ["finish-the-loop"]);
-    addUncommittedProductFile(tmp);
     const sessionId = newSessionId();
+    runHook(SESSION_START, { session_id: sessionId, cwd: tmp }); // clean baseline
+    addUncommittedProductFile(tmp); // product change introduced this session
     const input = { session_id: sessionId, cwd: tmp, last_assistant_message: UNVERIFIED_REPORT };
 
     const first = runHook(GATE, input);
@@ -100,9 +101,11 @@ describe("finish-loop-gate.mjs", () => {
 
   it("passes an evidence-bearing report", () => {
     enableToggles(tmp, ["finish-the-loop"]);
-    addUncommittedProductFile(tmp);
+    const sessionId = newSessionId();
+    runHook(SESSION_START, { session_id: sessionId, cwd: tmp });
+    addUncommittedProductFile(tmp); // real product change, but the report has evidence
     const res = runHook(GATE, {
-      session_id: newSessionId(),
+      session_id: sessionId,
       cwd: tmp,
       last_assistant_message: EVIDENCE_REPORT,
     });
@@ -111,9 +114,11 @@ describe("finish-loop-gate.mjs", () => {
 
   it("never fires on docs-only diffs", () => {
     enableToggles(tmp, ["finish-the-loop"]);
+    const sessionId = newSessionId();
+    runHook(SESSION_START, { session_id: sessionId, cwd: tmp });
     writeFileSync(join(tmp, "README.md"), "# docs only\n");
     const res = runHook(GATE, {
-      session_id: newSessionId(),
+      session_id: sessionId,
       cwd: tmp,
       last_assistant_message: UNVERIFIED_REPORT,
     });
@@ -123,9 +128,11 @@ describe("finish-loop-gate.mjs", () => {
   it("never fires on test-only diffs", () => {
     enableToggles(tmp, ["finish-the-loop"]);
     mkdirSync(join(tmp, "src"), { recursive: true });
+    const sessionId = newSessionId();
+    runHook(SESSION_START, { session_id: sessionId, cwd: tmp });
     writeFileSync(join(tmp, "src", "app.test.ts"), "it('x', () => {});\n");
     const res = runHook(GATE, {
-      session_id: newSessionId(),
+      session_id: sessionId,
       cwd: tmp,
       last_assistant_message: UNVERIFIED_REPORT,
     });
@@ -141,9 +148,11 @@ describe("finish-loop-gate.mjs", () => {
   it("never fires on suffix-style test filenames (foo_test.go)", () => {
     enableToggles(tmp, ["finish-the-loop"]);
     mkdirSync(join(tmp, "src"), { recursive: true });
+    const sessionId = newSessionId();
+    runHook(SESSION_START, { session_id: sessionId, cwd: tmp });
     writeFileSync(join(tmp, "src", "handler_test.go"), "package x\n");
     const res = runHook(GATE, {
-      session_id: newSessionId(),
+      session_id: sessionId,
       cwd: tmp,
       last_assistant_message: UNVERIFIED_REPORT,
     });
@@ -199,23 +208,24 @@ describe("finish-loop-gate.mjs", () => {
 
   it("passes (does not block) when the anti-loop flag cannot be persisted", () => {
     enableToggles(tmp, ["finish-the-loop"]);
-    addUncommittedProductFile(tmp);
     const sessionId = newSessionId();
-    // Occupy the state-file path with a directory so writeFileSync fails.
+    runHook(SESSION_START, { session_id: sessionId, cwd: tmp }); // writes a valid baseline
+    addUncommittedProductFile(tmp); // session product change
     const stateFile = join(
       tmpdir(),
       `skdd-hooks-${sessionId.replace(/[^A-Za-z0-9_-]/g, "_")}.json`,
     );
-    mkdirSync(stateFile, { recursive: true });
+    chmodSync(stateFile, 0o444); // readable (baseline loads) but not writable
     try {
       const res = runHook(GATE, {
         session_id: sessionId,
         cwd: tmp,
         last_assistant_message: UNVERIFIED_REPORT,
       });
-      expect(res.stdout.trim()).toBe(""); // fail-open: no block decision emitted
+      // Save of the anti-loop flag fails → pass rather than block-every-Stop.
+      expect(res.stdout.trim()).toBe("");
     } finally {
-      rmSync(stateFile, { recursive: true, force: true });
+      chmodSync(stateFile, 0o644);
     }
   });
 
@@ -223,13 +233,46 @@ describe("finish-loop-gate.mjs", () => {
     enableToggles(tmp, ["finish-the-loop"]); // toggle at repo root
     const sub = join(tmp, "packages", "app");
     mkdirSync(join(sub, "src"), { recursive: true });
-    writeFileSync(join(sub, "src", "app.ts"), "export const x = 1;\n");
+    const sessionId = newSessionId();
+    runHook(SESSION_START, { session_id: sessionId, cwd: sub }); // clean baseline
+    writeFileSync(join(sub, "src", "app.ts"), "export const x = 1;\n"); // session change
     const res = runHook(GATE, {
-      session_id: newSessionId(),
+      session_id: sessionId,
       cwd: sub,
       last_assistant_message: UNVERIFIED_REPORT,
     });
     // The upward search from the subdir finds the repo-root toggle.
+    expect(JSON.parse(res.stdout).decision).toBe("block");
+  });
+
+  it("fails open (passes) when SessionStart never seeded a baseline", () => {
+    enableToggles(tmp, ["finish-the-loop"]);
+    addUncommittedProductFile(tmp); // dirty, but no SessionStart ran
+    const res = runHook(GATE, {
+      session_id: newSessionId(),
+      cwd: tmp,
+      last_assistant_message: UNVERIFIED_REPORT,
+    });
+    expect(res.stdout.trim()).toBe(""); // no baseline → can't attribute → pass
+  });
+
+  it("blocks when the session committed its product change before reporting", () => {
+    enableToggles(tmp, ["finish-the-loop"]);
+    const sessionId = newSessionId();
+    runHook(SESSION_START, { session_id: sessionId, cwd: tmp }); // baseline rev captured
+    addUncommittedProductFile(tmp);
+    execFileSync("git", ["add", "-A"], { cwd: tmp });
+    execFileSync(
+      "git",
+      ["-c", "user.email=t@t", "-c", "user.name=t", "commit", "-q", "-m", "feat"],
+      { cwd: tmp },
+    );
+    // Worktree is now clean, but the session changed product source via a commit.
+    const res = runHook(GATE, {
+      session_id: sessionId,
+      cwd: tmp,
+      last_assistant_message: UNVERIFIED_REPORT,
+    });
     expect(JSON.parse(res.stdout).decision).toBe("block");
   });
 });
@@ -296,6 +339,32 @@ describe("freeze-reminder.mjs", () => {
     runHook(SESSION_START, { session_id: sessionId, cwd: tmp });
     addUntrackedFiles(tmp, 4);
     const res = runHook(REMINDER, { session_id: sessionId, cwd: tmp }, ["SessionEnd"]);
+    expect(JSON.parse(res.stdout).systemMessage).toContain("freeze-the-session");
+  });
+
+  it("treats a large single-file change as substantive", () => {
+    enableToggles(tmp, ["freeze-the-session"]);
+    oldRegistry(tmp);
+    const sessionId = newSessionId();
+    runHook(SESSION_START, { session_id: sessionId, cwd: tmp });
+    // One new file, but with many lines (a forged/rewritten SKILL.md).
+    writeFileSync(
+      join(tmp, "big-skill.md"),
+      Array.from({ length: 40 }, (_, i) => `line ${i}`).join("\n"),
+    );
+    const res = runHook(REMINDER, { session_id: sessionId, cwd: tmp }, ["SessionEnd"]);
+    expect(JSON.parse(res.stdout).systemMessage).toContain("freeze-the-session");
+  });
+
+  it("finds a repo-root registry when the session runs from a subdirectory", () => {
+    enableToggles(tmp, ["freeze-the-session"]); // toggle + registry at repo root
+    oldRegistry(tmp);
+    const sub = join(tmp, "packages", "app");
+    mkdirSync(sub, { recursive: true });
+    const sessionId = newSessionId();
+    runHook(SESSION_START, { session_id: sessionId, cwd: sub });
+    for (let i = 0; i < 4; i++) writeFileSync(join(sub, `n${i}.ts`), `export const v${i}=${i};\n`);
+    const res = runHook(REMINDER, { session_id: sessionId, cwd: sub }, ["PreCompact"]);
     expect(JSON.parse(res.stdout).systemMessage).toContain("freeze-the-session");
   });
 
