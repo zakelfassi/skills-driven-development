@@ -180,6 +180,23 @@ describe("finish-loop-gate.mjs", () => {
     expect(JSON.parse(res.stdout).decision).toBe("block");
   });
 
+  it("detects a pre-dirty edit even when the hooks run from different subdirs", () => {
+    enableToggles(tmp, ["finish-the-loop"]);
+    const sub = join(tmp, "packages", "app");
+    mkdirSync(join(sub, "src"), { recursive: true });
+    writeFileSync(join(sub, "src", "app.ts"), "export const answer = 42;\n"); // dirty before session
+    const sessionId = newSessionId();
+    // SessionStart from the repo ROOT; the edit + Stop happen from the SUBDIR.
+    runHook(SESSION_START, { session_id: sessionId, cwd: tmp });
+    writeFileSync(join(sub, "src", "app.ts"), "export const answer = 43; // edited\n");
+    const res = runHook(GATE, {
+      session_id: sessionId,
+      cwd: sub,
+      last_assistant_message: UNVERIFIED_REPORT,
+    });
+    expect(JSON.parse(res.stdout).decision).toBe("block");
+  });
+
   it("passes (does not block) when the anti-loop flag cannot be persisted", () => {
     enableToggles(tmp, ["finish-the-loop"]);
     addUncommittedProductFile(tmp);
