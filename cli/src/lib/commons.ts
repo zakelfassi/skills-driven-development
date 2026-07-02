@@ -1,5 +1,13 @@
 import { spawnSync } from "node:child_process";
-import { existsSync, lstatSync, mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
+import {
+  existsSync,
+  lstatSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { isAbsolute, join, relative, resolve } from "node:path";
 import { NAME_MAX_LENGTH, NAME_REGEX } from "./spec.js";
@@ -115,17 +123,24 @@ export function fetchCommons(source: CommonsSource): FetchedCommons {
     if (source.ref) {
       const tmp = mkdtempSync(join(tmpdir(), "skdd-commons-"));
       const cleanup = () => rmSync(tmp, { recursive: true, force: true });
-      const cl = git(["clone", "--quiet", dir, tmp]);
-      if (cl.status !== 0) {
-        cleanup();
-        throw new Error(`cannot clone local source '${dir}': ${cl.stderr || cl.stdout}`);
-      }
-      const co = git(["checkout", "--detach", source.ref], tmp);
-      if (co.status !== 0) {
-        cleanup();
-        throw new Error(
-          `cannot check out ref '${source.ref}' in '${dir}': ${co.stderr || co.stdout}`,
-        );
+      // `--branch <ref>` resolves branches AND tags (a fresh clone of a local
+      // repo only has origin/<branch>, so a bare `checkout --detach <branch>`
+      // would fail). Fall back to a plain clone + detach for a raw sha.
+      let cloned = git(["clone", "--quiet", "--branch", source.ref, dir, tmp]).status === 0;
+      if (!cloned) {
+        const cl = git(["clone", "--quiet", dir, tmp]);
+        if (cl.status !== 0) {
+          cleanup();
+          throw new Error(`cannot clone local source '${dir}': ${cl.stderr || cl.stdout}`);
+        }
+        const co = git(["checkout", "--detach", source.ref], tmp);
+        if (co.status !== 0) {
+          cleanup();
+          throw new Error(
+            `cannot check out ref '${source.ref}' in '${dir}': ${co.stderr || co.stdout}`,
+          );
+        }
+        cloned = true;
       }
       const rev = git(["rev-parse", "HEAD"], tmp);
       return { dir: tmp, sha: rev.status === 0 ? rev.stdout : null, dirty: false, source, cleanup };
@@ -227,6 +242,42 @@ export function assertWithin(child: string, parent: string, label: string): void
   if (rel === "" || rel.startsWith("..") || isAbsolute(rel)) {
     throw new Error(`${label} resolves outside ${parent} — refusing.`);
   }
+}
+
+/**
+ * Assert `child`'s REAL path (symlinks resolved) stays inside `parent`'s real
+ * path. Catches a symlinked ancestor (e.g. a Commons making `packs/` a symlink)
+ * that a plain string containment check would miss.
+ */
+export function assertRealpathWithin(child: string, parent: string, label: string): void {
+  let realChild: string;
+  let realParent: string;
+  try {
+    realParent = realpathSync(parent);
+    realChild = realpathSync(child);
+  } catch {
+    throw new Error(`${label} could not be resolved (dangling symlink?) — refusing.`);
+  }
+  const rel = relative(realParent, realChild);
+  if (rel !== "" && (rel.startsWith("..") || isAbsolute(rel))) {
+    throw new Error(`${label} resolves (via symlink) outside ${parent} — refusing.`);
+  }
+}
+
+/**
+ * Whether `name` is a safe single git branch/ref component: rejects `..`,
+ * a trailing `.lock`, control/space/special chars, leading/trailing dots or
+ * dashes, and `@{` — matching what `git check-ref-format` would reject, without
+ * shelling out.
+ */
+export function isGitRefComponent(name: string): boolean {
+  if (!name || name.length > 200) return false;
+  if (name.includes("..") || name.includes("@{")) return false;
+  if (name.endsWith(".lock") || name.endsWith(".") || name.endsWith("/")) return false;
+  if (name.startsWith(".") || name.startsWith("-") || name.startsWith("/")) return false;
+  // No spaces, control chars, or any of the git-forbidden set ~^:?*[\
+  // (also excludes '/', keeping this a single component).
+  return /^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(name);
 }
 
 export interface ResolvedSelection {

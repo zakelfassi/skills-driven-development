@@ -149,6 +149,25 @@ describe("runAdd", () => {
     expect(logs.join("\n")).toContain("would install alpha-skill");
   });
 
+  it("-g --dry-run does not create the global colony", async () => {
+    const fakeHome = join(tmp, "fake-skdd-home");
+    const prev = process.env.SKDD_HOME;
+    process.env.SKDD_HOME = fakeHome;
+    try {
+      const code = await runAdd(MINI_COMMONS, "2026-01-test", {
+        global: true,
+        nonInteractive: true,
+        dryRun: true,
+      });
+      restoreConsole();
+      expect(code).toBe(0);
+      expect(existsSync(fakeHome)).toBe(false); // ~/.skdd never materialized
+    } finally {
+      if (prev === undefined) delete process.env.SKDD_HOME;
+      else process.env.SKDD_HOME = prev;
+    }
+  });
+
   it("--json emits a machine-readable report", async () => {
     const code = await runAdd(MINI_COMMONS, "2026-01-test", {
       cwd: tmp,
