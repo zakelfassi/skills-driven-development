@@ -165,6 +165,21 @@ describe("finish-loop-gate.mjs", () => {
     expect(res.stdout.trim()).toBe("");
   });
 
+  it("blocks when the session edits a file that was already dirty at start", () => {
+    enableToggles(tmp, ["finish-the-loop"]);
+    addUncommittedProductFile(tmp); // src/app.ts dirty BEFORE the session
+    const sessionId = newSessionId();
+    runHook(SESSION_START, { session_id: sessionId, cwd: tmp }); // baseline hashes src/app.ts
+    // The session edits that same pre-dirty file further.
+    writeFileSync(join(tmp, "src", "app.ts"), "export const answer = 43; // edited this session\n");
+    const res = runHook(GATE, {
+      session_id: sessionId,
+      cwd: tmp,
+      last_assistant_message: UNVERIFIED_REPORT,
+    });
+    expect(JSON.parse(res.stdout).decision).toBe("block");
+  });
+
   it("passes (does not block) when the anti-loop flag cannot be persisted", () => {
     enableToggles(tmp, ["finish-the-loop"]);
     addUncommittedProductFile(tmp);

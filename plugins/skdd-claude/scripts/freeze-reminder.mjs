@@ -10,7 +10,13 @@
 import { existsSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { commitsSince, loadState, readHookInput, readToggles, repoSnapshot } from "./lib/state.mjs";
+import {
+  commitsSince,
+  loadState,
+  readHookInput,
+  readToggles,
+  sessionChangedPaths,
+} from "./lib/state.mjs";
 
 // "Substantive": at least this many files changed/added since session start,
 // or any commit made during the session.
@@ -19,9 +25,7 @@ const MIN_CHANGED_FILES = 3;
 function sessionLooksSubstantive(cwd, state) {
   // Commits made during the session count even if the tree is now clean.
   if (commitsSince(cwd, state.startRev) > 0) return true;
-  const baseline = new Set(Array.isArray(state.baseline) ? state.baseline : []);
-  const changedSinceStart = repoSnapshot(cwd).paths.filter((p) => !baseline.has(p));
-  return changedSinceStart.length >= MIN_CHANGED_FILES;
+  return sessionChangedPaths(cwd, state).length >= MIN_CHANGED_FILES;
 }
 
 /** The colony registry file (md or json), project first then global, or null. */
