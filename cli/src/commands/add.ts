@@ -2,6 +2,7 @@ import { cpSync, existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join, relative, resolve } from "node:path";
 import { select } from "@inquirer/prompts";
 import {
+  assertWithin,
   type DropsManifest,
   fetchCommons,
   parseSource,
@@ -109,10 +110,15 @@ export async function runAdd(
     }
 
     // ── validate every selected skill (refuse on any strict failure) ─────────
+    // Manifest ids/names are grammar-checked in readDropsManifest (untrusted
+    // input → no slashes/dots), and these asserts are the defense-in-depth
+    // layer: no source or destination path may leave its expected root.
     const dropDir = join(fetched.dir, "packs", selection.drop.id);
+    assertWithin(dropDir, join(fetched.dir, "packs"), `drop '${selection.drop.id}'`);
     let validationFailed = false;
     const parsedSkills: Array<{ sourceName: string; dir: string; description: string }> = [];
     for (const skillName of selection.skills) {
+      assertWithin(join(dropDir, skillName), dropDir, `skill '${skillName}'`);
       const skillMd = join(dropDir, skillName, "SKILL.md");
       if (!existsSync(skillMd)) {
         logger.error(`${selection.drop.id}/${skillName}: SKILL.md missing in the source repo.`);
@@ -216,6 +222,7 @@ export async function runAdd(
       const s = parsedSkills[i]!;
       const p = planned[i]!;
       const dest = join(canonicalDir, p.name);
+      assertWithin(dest, canonicalDir, `install target '${p.name}'`);
       cpSync(s.dir, dest, { recursive: true });
       if (p.name !== s.sourceName) {
         rewriteSkillName(join(dest, "SKILL.md"), p.name);

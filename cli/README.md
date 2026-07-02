@@ -125,7 +125,7 @@ skdd import ../some-other-project --apply       # operate on a different root
 
 Install skills from a **Commons repo** — a git repo with a `drops.json` manifest and `packs/<drop-id>/<skill>/` directories (see [SkDD Commons](https://github.com/zakelfassi/skdd-commons)). Sources: GitHub shorthand (`owner/repo`), a full git URL, or a local path, each with an optional `#ref`. Selector: a drop id, `drop/skill` for a single skill, or omitted for an interactive pick.
 
-Every skill is validated with `--strict` before install (refused on failure), checked for name collisions against the target colony (`--rename` resolves single-skill collisions), registered with provenance (`owner/repo@shortsha (drop-id)` in the Source column, full sha in `.skdd-lock.json`), and mirrored via the same **safe, never-forced** link path as `skdd link`.
+Every skill is validated with `--strict` before install (refused on failure), checked for name collisions against the target colony (`--rename` resolves single-skill collisions), registered with provenance (`owner/repo@shortsha (drop-id)` in the Source column, full sha in `.skdd-lock.json`), and mirrored via the same **safe, never-forced** link path as `skdd link`. The manifest is treated as hostile input: drop ids and skill names must match the lowercase-kebab-case grammar (no slashes, no `..`), so a malicious `drops.json` can never write outside your `skills/` directory.
 
 ```bash
 skdd add zakelfassi/skdd-commons 2026-07-frontier                       # whole drop
@@ -137,7 +137,7 @@ skdd add ../my-commons 2026-01-test --dry-run                           # local 
 
 Ship a skill (or every local skill sharing a `metadata.pack` id) upstream to a Commons as a PR. Needs the [GitHub CLI](https://cli.github.com) authenticated. The default target repo comes from `~/.skdd/config.toml` (`commons = "owner/repo"`).
 
-Machine-local state is stripped before travel (`usage-count` resets to `"0"`, `last-used` is dropped); `forged-*` provenance is preserved. Skills that already exist upstream branch as `evolve/<name>` with a diff summary; new skills branch as `skill/<name>` and land in `incoming/` for maintainer triage, or in an existing drop with `--drop <id>`. `--dry-run` prints the full would-be PR without network writes.
+Machine-local state is stripped before travel (`usage-count` resets to `"0"`, `last-used` is dropped); `forged-*` provenance is preserved. **Only the skill payload travels** — `SKILL.md` plus regular files under `scripts/`, `references/`, and `assets/`; dotfiles, symlinks, and anything else in the skill directory stay home, and `--dry-run` enumerates exactly which files travel and which don't. Skills that already exist upstream branch as `evolve/<name>` with a diff summary; new skills branch as `skill/<name>` and land in `incoming/` for maintainer triage, or in an existing drop with `--drop <id>`.
 
 ```bash
 skdd push what-would-you-cut --dry-run     # inspect the PR before sending it

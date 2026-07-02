@@ -40,7 +40,6 @@ What `add` guarantees:
 2. **Collision safety** — an existing skill with the same name refuses the install; `--rename <new-name>` installs a single skill under a different name.
 3. **Provenance** — the registry's Source column records `owner/repo@shortsha (drop-id)`; the full sha lands in `.skdd-lock.json` so future tooling can detect upstream drift.
 4. **Mirror safety** — mirrors refresh through the same safe link path as `skdd link`: a populated harness directory is never replaced silently.
-5. **Hostile-manifest safety** — `drops.json` ids and names are grammar-checked (lowercase kebab-case, no slashes or `..`) before any path is built, so a malicious Commons can never write outside your `skills/` directory.
 
 `--dry-run` previews, `--json` emits a machine-readable report.
 
@@ -58,7 +57,6 @@ skdd push what-would-you-cut
 
 - Skills that exist upstream branch as `evolve/<name>` and the PR includes a diff summary; new skills branch as `skill/<name>` and land in `incoming/` for maintainer triage (or an existing drop via `--drop <id>`).
 - **Machine-local state never travels**: `usage-count` resets to `"0"` and `last-used` is dropped. Your usage stats are your colony's truth. `forged-*` provenance always travels.
-- **Only the skill payload travels**: `SKILL.md` plus regular files under `scripts/`, `references/`, `assets/`. Dotfiles, symlinks, logs, and anything else in the skill directory stay home — `--dry-run` lists exactly what travels and what doesn't.
 - The default target repo comes from `~/.skdd/config.toml`:
 
 ```toml

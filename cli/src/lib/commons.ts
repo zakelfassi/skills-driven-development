@@ -1,7 +1,8 @@
 import { spawnSync } from "node:child_process";
 import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { isAbsolute, join, relative, resolve } from "node:path";
+import { NAME_MAX_LENGTH, NAME_REGEX } from "./spec.js";
 
 /** A drop entry in a Commons repo's drops.json manifest. */
 export interface DropEntry {
@@ -158,8 +159,38 @@ export function readDropsManifest(dir: string): DropsManifest {
     if (typeof d.id !== "string" || !Array.isArray(d.skills)) {
       throw new Error(`Malformed drops.json: each drop needs an "id" and a "skills" array.`);
     }
+    assertSafeManifestNames(d);
   }
   return { version: manifest.version ?? 1, drops: manifest.drops as DropEntry[] };
+}
+
+/**
+ * drops.json comes from an UNTRUSTED repo, and its ids/names become filesystem
+ * paths on both the read side (packs/<drop>/<skill>) and the write side
+ * (skills/<skill>). Enforce the skill-name grammar before any path is built —
+ * it admits no slashes, dots, or absolute paths, so traversal is impossible.
+ */
+export function assertSafeManifestNames(drop: { id: string; skills: unknown[] }): void {
+  if (!NAME_REGEX.test(drop.id) || drop.id.length > NAME_MAX_LENGTH) {
+    throw new Error(
+      `Unsafe drop id '${drop.id}' in drops.json — ids must be lowercase kebab-case (letters, digits, dashes only).`,
+    );
+  }
+  for (const s of drop.skills) {
+    if (typeof s !== "string" || s.length > NAME_MAX_LENGTH || !NAME_REGEX.test(s)) {
+      throw new Error(
+        `Unsafe skill name '${String(s)}' in drop '${drop.id}' — names must be lowercase kebab-case (letters, digits, dashes only).`,
+      );
+    }
+  }
+}
+
+/** Defense-in-depth: assert a resolved path stayed inside its expected root. */
+export function assertWithin(child: string, parent: string, label: string): void {
+  const rel = relative(resolve(parent), resolve(child));
+  if (rel === "" || rel.startsWith("..") || isAbsolute(rel)) {
+    throw new Error(`${label} resolves outside ${parent} — refusing.`);
+  }
 }
 
 export interface ResolvedSelection {
