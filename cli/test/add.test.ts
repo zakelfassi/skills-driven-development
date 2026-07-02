@@ -1,4 +1,12 @@
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { platform, tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -220,6 +228,56 @@ describe("runAdd", () => {
         expect(logs.join("\n")).toContain("Unsafe skill name");
       } finally {
         rmSync(hostile, { recursive: true, force: true });
+      }
+    });
+
+    runUnix("refuses a source skill whose tree contains a symlink", async () => {
+      const dir = mkdtempSync(join(tmpdir(), "skdd-symcommons-"));
+      try {
+        writeFileSync(
+          join(dir, "drops.json"),
+          JSON.stringify({ version: 1, drops: [{ id: "2026-01-x", skills: ["linky"] }] }),
+        );
+        const sd = join(dir, "packs", "2026-01-x", "linky");
+        mkdirSync(join(sd, "scripts"), { recursive: true });
+        writeFileSync(
+          join(sd, "SKILL.md"),
+          "---\nname: linky\ndescription: has a symlink. Use when testing.\n---\n# L\n1. x\n",
+        );
+        writeFileSync(join(dir, "secret.txt"), "SECRET");
+        symlinkSync(join(dir, "secret.txt"), join(sd, "scripts", "leak"));
+        const code = await runAdd(dir, "2026-01-x", { cwd: tmp, nonInteractive: true });
+        restoreConsole();
+        expect(code).toBe(1);
+        expect(logs.join("\n")).toContain("contains a symlink");
+        expect(existsSync(join(tmp, "skills", "linky"))).toBe(false);
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
+
+    it("refuses when a skill's frontmatter name does not match its manifest/dir name", async () => {
+      // manifest name == directory name by construction; validateSkill enforces
+      // frontmatter.name == directory, so a mismatch fails strict validation.
+      const dir = mkdtempSync(join(tmpdir(), "skdd-namecommons-"));
+      try {
+        writeFileSync(
+          join(dir, "drops.json"),
+          JSON.stringify({ version: 1, drops: [{ id: "2026-01-x", skills: ["claimed"] }] }),
+        );
+        const sd = join(dir, "packs", "2026-01-x", "claimed");
+        mkdirSync(sd, { recursive: true });
+        writeFileSync(
+          join(sd, "SKILL.md"),
+          "---\nname: actually-different\ndescription: mismatch. Use when testing.\n---\n# X\n1. y\n",
+        );
+        const code = await runAdd(dir, "2026-01-x", { cwd: tmp, nonInteractive: true });
+        restoreConsole();
+        expect(code).toBe(1);
+        expect(logs.join("\n")).toContain("does not match directory");
+        expect(existsSync(join(tmp, "skills", "claimed"))).toBe(false);
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
       }
     });
 

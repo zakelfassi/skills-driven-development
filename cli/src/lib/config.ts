@@ -19,12 +19,15 @@ export function loadConfig(): SkddConfig {
   const defaults: SkddConfig = { commons: DEFAULT_COMMONS };
   const p = configPath();
   if (!existsSync(p)) return defaults;
+  // A present-but-broken config is a user error, not "no config" — surface it,
+  // so a typo in a configured private Commons doesn't silently target the default.
+  let raw: Record<string, unknown>;
   try {
-    const raw = parseToml(readFileSync(p, "utf8")) as Record<string, unknown>;
-    return {
-      commons: typeof raw["commons"] === "string" ? (raw["commons"] as string) : defaults.commons,
-    };
-  } catch {
-    return defaults;
+    raw = parseToml(readFileSync(p, "utf8")) as Record<string, unknown>;
+  } catch (err) {
+    throw new Error(`Malformed ${p}: ${(err as Error).message}`);
   }
+  return {
+    commons: typeof raw["commons"] === "string" ? (raw["commons"] as string) : defaults.commons,
+  };
 }

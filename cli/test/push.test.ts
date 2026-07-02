@@ -91,6 +91,28 @@ body`;
     expect(stripped).toContain("forged-by: claude-fable-5");
     expect(stripped).toContain(`forged-reason: "why"`);
   });
+
+  it("only touches the frontmatter, not example lines in the body", () => {
+    const raw = `---
+name: x
+metadata:
+  usage-count: "9"
+  last-used: "2026-06-30"
+---
+# Docs
+
+Example config:
+
+    usage-count: "5"
+    last-used: "2020-01-01"
+`;
+    const stripped = stripMachineLocalMetadata(raw);
+    // frontmatter reset/dropped
+    expect(stripped).toContain(`  usage-count: "0"`);
+    // body example preserved verbatim
+    expect(stripped).toContain(`    usage-count: "5"`);
+    expect(stripped).toContain(`    last-used: "2020-01-01"`);
+  });
 });
 
 describe("summarizeDiff", () => {
