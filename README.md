@@ -34,9 +34,27 @@ SkDD treats skills as *living artifacts* — discovered, forked, evolved, and co
 
 ---
 
+## Install the CLI
+
+The `skdd` CLI ships on npm as [`@zakelfassi/skdd`](https://www.npmjs.com/package/@zakelfassi/skdd) (Node ≥ 20, public — no auth):
+
+```bash
+# Global — gives you the `skdd` command everywhere
+pnpm add -g @zakelfassi/skdd        # or: npm i -g @zakelfassi/skdd
+skdd --version
+
+# Or run it one-shot, no install (what the snippets below use)
+pnpm dlx @zakelfassi/skdd <command>
+
+# Or pin it as a project dev-dependency
+pnpm add -D @zakelfassi/skdd
+```
+
 ## Quickstart
 
-Run these three commands in **your own project** (not this repo):
+Run these three commands in **your own project** (not this repo). Use `skdd`
+directly if you installed globally, or `pnpm dlx @zakelfassi/skdd` for a
+zero-install run:
 
 ```bash
 # 1. Scaffold the colony (adds skills/, registry, CLAUDE.md block, harness mirror)
