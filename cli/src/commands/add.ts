@@ -2,6 +2,7 @@ import { cpSync, existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join, relative, resolve } from "node:path";
 import { select } from "@inquirer/prompts";
 import {
+  assertRealpathWithin,
   assertWithin,
   type DropsManifest,
   fetchCommons,
@@ -45,7 +46,8 @@ export async function runAdd(
 ): Promise<number> {
   const cwd = resolve(opts.cwd ?? process.cwd());
   const colonyRoot = opts.global ? skddHome() : cwd;
-  if (opts.global) ensureGlobalColony();
+  // NOTE: don't ensureGlobalColony() here — a --dry-run must not create
+  // ~/.skdd. It's created only on the real install path below.
   const canonicalName = opts.global ? "skills" : (detectCanonical(cwd) ?? "skills");
   const canonicalDir = opts.global ? join(skddHome(), "skills") : join(cwd, canonicalName);
 
@@ -115,6 +117,16 @@ export async function runAdd(
     // layer: no source or destination path may leave its expected root.
     const dropDir = join(fetched.dir, "packs", selection.drop.id);
     assertWithin(dropDir, join(fetched.dir, "packs"), `drop '${selection.drop.id}'`);
+    // Reject a symlinked ancestor (packs/, the drop dir): a lstat-based tree walk
+    // starting at the skill dir wouldn't see it, but existsSync/parseSkill/cpSync
+    // all follow it — so a Commons could serve bytes from outside the fetched
+    // tree while recording Commons provenance. realpath-contain the drop dir.
+    try {
+      assertRealpathWithin(dropDir, fetched.dir, `drop '${selection.drop.id}'`);
+    } catch (err) {
+      logger.error((err as Error).message);
+      return 1;
+    }
     let validationFailed = false;
     const parsedSkills: Array<{ sourceName: string; dir: string; description: string }> = [];
     for (const skillName of selection.skills) {
@@ -126,9 +138,17 @@ export async function runAdd(
         validationFailed = true;
         continue;
       }
-      // A symlink anywhere in the fetched skill tree would be copied as a link
-      // into the colony (dangling once a temp clone is deleted, or pointing back
-      // into the source for a local add) — never a provenance-pinned copy. Reject.
+      // The skill dir's realpath must also stay inside the fetched tree...
+      try {
+        assertRealpathWithin(skillDir, fetched.dir, `skill '${skillName}'`);
+      } catch (err) {
+        logger.error((err as Error).message);
+        validationFailed = true;
+        continue;
+      }
+      // ...and no symlink may appear anywhere inside it (dangling once a temp
+      // clone is deleted, or pointing back into the source for a local add) —
+      // never a provenance-pinned copy. Reject.
       if (treeHasSymlink(skillDir)) {
         logger.error(
           `${selection.drop.id}/${skillName}: contains a symlink — refusing (Commons skills must be self-contained regular files).`,
@@ -234,6 +254,9 @@ export async function runAdd(
     }
 
     // ── install: copy, rename, register, lock ───────────────────────────────
+    // Now (and only now) materialize the global colony — deferred from the top
+    // so a --dry-run never touches ~/.skdd.
+    if (opts.global) ensureGlobalColony();
     for (let i = 0; i < parsedSkills.length; i++) {
       const s = parsedSkills[i]!;
       const p = planned[i]!;

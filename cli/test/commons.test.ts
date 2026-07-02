@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { parseSource, provenanceLabel } from "../src/lib/commons.js";
+import { isGitRefComponent, parseSource, provenanceLabel } from "../src/lib/commons.js";
 
 let tmp: string;
 
@@ -64,5 +64,24 @@ describe("provenanceLabel", () => {
 
   it("falls back to @local when no sha is known", () => {
     expect(provenanceLabel({ kind: "local", label: "../c" }, null, "d")).toBe("../c@local (d)");
+  });
+});
+
+describe("isGitRefComponent", () => {
+  it("accepts ordinary drop/pack ids", () => {
+    expect(isGitRefComponent("2026-07-frontier")).toBe(true);
+    expect(isGitRefComponent("my-pack")).toBe(true);
+    expect(isGitRefComponent("v1.2.3")).toBe(true);
+  });
+
+  it("rejects git-invalid names", () => {
+    expect(isGitRefComponent("foo.lock")).toBe(false); // trailing .lock
+    expect(isGitRefComponent("a..b")).toBe(false); // double dot
+    expect(isGitRefComponent("my pack")).toBe(false); // space
+    expect(isGitRefComponent("has/slash")).toBe(false); // slash
+    expect(isGitRefComponent(".hidden")).toBe(false); // leading dot
+    expect(isGitRefComponent("-dash")).toBe(false); // leading dash
+    expect(isGitRefComponent("bad@{ref")).toBe(false); // @{
+    expect(isGitRefComponent("")).toBe(false);
   });
 });
