@@ -2,6 +2,7 @@
 // Node ≥20 built-ins only — no dependencies, by design.
 
 import { spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
@@ -61,6 +62,15 @@ export function repoSnapshot(cwd) {
   return { rev: rev.status === 0 ? rev.stdout.trim() : null, paths };
 }
 
+/** sha256 of a file's bytes, or null if it can't be read (missing/deleted). */
+export function hashFile(path) {
+  try {
+    return createHash("sha256").update(readFileSync(path)).digest("hex");
+  } catch {
+    return null;
+  }
+}
+
 /** Commits made on HEAD since `startRev` (0 if unknown or not a repo). */
 export function commitsSince(cwd, startRev) {
   if (!startRev) return 0;
@@ -75,13 +85,51 @@ export function commitsSince(cwd, startRev) {
  */
 export function resetSessionStart(sessionId, cwd) {
   const snap = repoSnapshot(cwd);
+  // Hash the files that are already dirty at session start. This lets the
+  // Stop gate tell "the session edited a pre-dirty file" (hash changed) from
+  // "a pre-dirty file was left untouched" (hash identical) — a path set alone
+  // can't distinguish the two.
+  const baselineHashes = {};
+  for (const p of snap.paths) {
+    const h = hashFile(join(cwd, p));
+    if (h) baselineHashes[p] = h;
+  }
   const state = {
     sessionStart: Date.now(),
     startRev: snap.rev,
     baseline: snap.paths,
+    baselineHashes,
   };
   saveState(sessionId, state);
   return state;
+}
+
+/**
+ * Given the SessionStart state, return the subset of currently-changed paths
+ * (optionally filtered) that THIS session actually touched: newly-dirty files,
+ * or pre-dirty files whose content changed since start. Pre-dirty files left
+ * untouched are excluded.
+ */
+export function sessionChangedPaths(cwd, state, filter = () => true) {
+  const baselineHashes = state.baselineHashes ?? {};
+  const baselineSet = new Set(Array.isArray(state.baseline) ? state.baseline : []);
+  return repoSnapshot(cwd).paths.filter((p) => {
+    if (!filter(p)) return false;
+    const base = baselineHashes[p];
+    if (base !== undefined) {
+      // Dirty at start with a known hash → changed iff content differs now
+      // (a now-unreadable/deleted file counts as changed).
+      const now = hashFile(join(cwd, p));
+      return now === null || now !== base;
+    }
+    if (baselineSet.has(p)) {
+      // Dirty at start but unhashable then (e.g. a staged deletion) → count as
+      // a session change only if it's now readable (re-created / modified).
+      return hashFile(join(cwd, p)) !== null;
+    }
+    // Not dirty at start → this session made it dirty.
+    return true;
+  });
 }
 
 const TOGGLE_REL = join(".claude", "skdd.local.md");

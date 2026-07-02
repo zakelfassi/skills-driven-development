@@ -11,7 +11,7 @@
 // passes, so a stubborn report can't trap the session in a loop. If the
 // anti-loop flag can't be persisted, it PASSES rather than risk looping.
 
-import { loadState, readHookInput, readToggles, repoSnapshot, saveState } from "./lib/state.mjs";
+import { loadState, readHookInput, readToggles, saveState, sessionChangedPaths } from "./lib/state.mjs";
 
 const UNVERIFIED_CLAIM =
   /\bshould\s+(now\s+)?(work|be\s+(fixed|working|resolved|good))\b|\blikely\s+(fixed|fixes|resolves?d?)\b|\bprobably\s+(works|fixes|fixed|resolves?d?)\b|\bought\s+to\s+(work|fix)\b|\bshould\s+(fix|resolve|handle)\b/i;
@@ -43,12 +43,10 @@ function main() {
   const state = loadState(sessionId);
   if (state.finishLoopBlocked) return;
 
-  // (b) product source changed BY THIS SESSION — compare current changes against
-  // the SessionStart baseline so an already-dirty file the session never touched
-  // doesn't trigger the gate.
-  const baseline = new Set(Array.isArray(state.baseline) ? state.baseline : []);
-  const changedNow = repoSnapshot(cwd).paths;
-  const sessionProductChanges = changedNow.filter((f) => isProductSource(f) && !baseline.has(f));
+  // (b) product source changed BY THIS SESSION — content-compared against the
+  // SessionStart baseline, so an already-dirty file the session never touched is
+  // ignored, but a further edit to a pre-dirty file still counts.
+  const sessionProductChanges = sessionChangedPaths(cwd, state, isProductSource);
   if (sessionProductChanges.length === 0) return;
 
   // (c) unverified-claim language without evidence markers
