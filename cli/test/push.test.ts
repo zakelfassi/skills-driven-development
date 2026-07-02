@@ -209,6 +209,27 @@ describe("runPush --dry-run against a local commons", () => {
     expect(out).toContain("delta-skill");
   });
 
+  runUnix("excludes a symlinked skill from a pack push without dereferencing it", async () => {
+    writeColonySkill("gamma-skill", { pack: "my-pack" });
+    // A symlinked SKILL.md pointing at a secret, whose target claims the pack —
+    // discovery must skip it (never read it) rather than dereference it.
+    writeFileSync(
+      join(tmp, "planted.md"),
+      "---\nname: evil\nmetadata:\n  pack: my-pack\n---\nPRIVATE KEY MATERIAL",
+    );
+    const evilDir = join(tmp, "skills", "evil-skill");
+    mkdirSync(evilDir, { recursive: true });
+    symlinkSync(join(tmp, "planted.md"), join(evilDir, "SKILL.md"));
+
+    const code = await runPush("my-pack", { cwd: tmp, to: MINI_COMMONS, dryRun: true });
+    restoreConsole();
+    expect(code).toBe(0);
+    const out = logs.join("\n");
+    expect(out).toContain("gamma-skill");
+    expect(out).toContain("Skipping 'evil-skill'");
+    expect(out).not.toContain("PRIVATE KEY MATERIAL");
+  });
+
   runUnix("refuses to push a skill whose SKILL.md is a symlink", async () => {
     const dir = join(tmp, "skills", "sneaky-skill");
     mkdirSync(dir, { recursive: true });
