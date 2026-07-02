@@ -20,9 +20,8 @@ export type ResolvedLinkMode = "symlink" | "copy";
 
 export type AdoptAction =
   | "created" // skill wasn't in the target dir — copied in
-  | "updated" // colony skill existed but differed — refreshed to canonical (force only)
   | "unchanged" // already byte-identical to canonical
-  | "skipped-divergent"; // present but differs, and --force not given — left as-is
+  | "skipped-divergent"; // a same-named skill exists but differs — left as-is (never overwritten)
 
 export interface AdoptSkillResult {
   skill: string;
@@ -50,17 +49,18 @@ function listCanonicalSkills(canonicalPath: string): string[] {
  * deletes the target dir and never touches skills that aren't in the colony —
  * so it is safe to run against a harness dir that holds hand-authored skills.
  *
- * Per colony skill:
- *   - absent in target        → copied in                 (created)
- *   - present, byte-identical → left alone                (unchanged)
- *   - present, differs, force → overwritten with canonical (updated)
- *   - present, differs, !force→ left alone + reported     (skipped-divergent)
+ * STRICTLY ADDITIVE — it never overwrites or deletes anything in the target:
+ *   - absent in target        → copied in             (created)
+ *   - present, byte-identical → left alone            (unchanged)
+ *   - present, differs        → left alone + reported (skipped-divergent)
+ *
+ * A same-named-but-divergent target skill is NOT necessarily a drifted copy of
+ * the colony skill — it may be an independent skill that happens to share the
+ * name (a per-harness fork). Since content alone can't distinguish the two,
+ * adopt never overwrites it, even with --force; the collision is surfaced for
+ * the user to resolve deliberately (rename/remove, then re-adopt).
  */
-export function adoptSkills(
-  canonicalPath: string,
-  targetDir: string,
-  opts: EnsureMirrorOptions = {},
-): AdoptSkillResult[] {
+export function adoptSkills(canonicalPath: string, targetDir: string): AdoptSkillResult[] {
   const results: AdoptSkillResult[] = [];
   mkdirSync(targetDir, { recursive: true });
   for (const skill of listCanonicalSkills(canonicalPath)) {
@@ -69,16 +69,8 @@ export function adoptSkills(
     if (!existsSync(dest)) {
       cpSync(src, dest, { recursive: true });
       results.push({ skill, action: "created" });
-      continue;
-    }
-    if (dirTreeHash(dest) === dirTreeHash(src)) {
+    } else if (dirTreeHash(dest) === dirTreeHash(src)) {
       results.push({ skill, action: "unchanged" });
-      continue;
-    }
-    if (opts.force) {
-      rmSync(dest, { recursive: true, force: true });
-      cpSync(src, dest, { recursive: true });
-      results.push({ skill, action: "updated" });
     } else {
       results.push({ skill, action: "skipped-divergent" });
     }

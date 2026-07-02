@@ -139,7 +139,7 @@ program
   .option("-g, --global", "Link global colony (~/.skdd/skills/) into harness global dirs")
   .option(
     "--adopt",
-    "Copy colony skills INTO each (possibly populated) harness dir instead of symlinking the whole dir — additive, never touches non-colony skills. Add --force to overwrite a colony skill that diverges in the target.",
+    "Copy colony skills INTO each (possibly populated) harness dir instead of symlinking the whole dir — strictly additive: never overwrites or deletes anything in the target. A same-named skill that differs is left untouched (it may be a fork) and reported for manual resolution.",
     false,
   )
   .action(

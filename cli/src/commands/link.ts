@@ -282,11 +282,15 @@ async function runAdopt(opts: LinkOptions): Promise<number> {
   if (!quiet) {
     logger.heading(`skdd ${opts.global ? "link -g " : "link "}--adopt`);
     logger.dim(`canonical: ${canonicalPath}`);
+    if (opts.force) {
+      logger.warn(
+        "--force does not overwrite in --adopt mode: adopt is strictly additive and never replaces a same-named target skill (it may be a fork). Resolve divergences manually.",
+      );
+    }
     console.log("");
   }
 
   let created = 0;
-  let updated = 0;
   let divergent = 0;
   for (const harness of harnesses) {
     const target = targetOf(harness);
@@ -313,20 +317,18 @@ async function runAdopt(opts: LinkOptions): Promise<number> {
       continue;
     }
 
-    const results = adoptSkills(canonicalPath, target, { force: opts.force });
+    const results = adoptSkills(canonicalPath, target);
     const c = results.filter((r) => r.action === "created").length;
-    const u = results.filter((r) => r.action === "updated").length;
     const d = results.filter((r) => r.action === "skipped-divergent").length;
     created += c;
-    updated += u;
     divergent += d;
     if (!quiet) {
-      const parts = [`${c} added`, `${u} updated`, `${results.length - c - u - d} unchanged`];
+      const parts = [`${c} added`, `${results.length - c - d} unchanged`];
       if (d > 0) parts.push(pc.yellow(`${d} divergent (kept)`));
       logger.success(`${label}: ${parts.join(", ")}`);
       for (const r of results.filter((x) => x.action === "skipped-divergent")) {
         logger.dim(
-          `    ~ ${r.skill}: differs from colony — kept target copy (use --force to overwrite)`,
+          `    ~ ${r.skill}: a different skill of the same name exists here — kept it (rename/remove it, then re-adopt, to take the colony version)`,
         );
       }
     }
@@ -334,13 +336,13 @@ async function runAdopt(opts: LinkOptions): Promise<number> {
 
   if (!quiet) {
     console.log("");
-    logger.success(`adopt complete: ${created} added, ${updated} updated across harness dirs.`);
+    logger.success(`adopt complete: ${created} added across harness dirs.`);
     if (divergent > 0) {
       logger.warn(
-        `${divergent} skill(s) differ from the colony and were left as-is. Re-run with --force to overwrite them with the colony version.`,
+        `${divergent} same-named skill(s) differ from the colony and were left untouched — adopt never overwrites. Resolve each collision by hand to take the colony version.`,
       );
     }
-    logger.dim("Non-colony skills in each dir were left untouched.");
+    logger.dim("Nothing in any target dir was overwritten or deleted.");
   }
   return 0;
 }

@@ -98,15 +98,17 @@ describe("adoptSkills", () => {
     expect(readFileSync(join(target, "alpha/SKILL.md"), "utf8")).toContain("LOCAL FORK");
   });
 
-  it("overwrites a divergent colony skill with --force (updated)", () => {
+  it("never overwrites a divergent same-named target skill (no clobber)", () => {
+    // A same-named skill in the target may be an independent fork, not a drifted
+    // colony copy — adopt must not destroy it. There is no force-overwrite path.
     const canonical = join(tmp, "canonical");
     writeSkill(canonical, "alpha", "canonical body");
     const target = join(tmp, "target");
-    writeSkill(target, "alpha", "old");
-    const results = adoptSkills(canonical, target, { force: true });
+    writeSkill(target, "alpha", "INDEPENDENT FORK — must survive");
+    const results = adoptSkills(canonical, target);
     restore();
-    expect(results).toEqual([{ skill: "alpha", action: "updated" }]);
-    expect(readFileSync(join(target, "alpha/SKILL.md"), "utf8")).toContain("canonical body");
+    expect(results).toEqual([{ skill: "alpha", action: "skipped-divergent" }]);
+    expect(readFileSync(join(target, "alpha/SKILL.md"), "utf8")).toContain("INDEPENDENT FORK");
   });
 });
 
@@ -132,6 +134,23 @@ describe("runLink --adopt (project)", () => {
       expect(existsSync(join(tmp, ".skdd-sync.json"))).toBe(false);
     },
   );
+
+  runUnix("does not clobber a divergent target skill even with --force", async () => {
+    writeSkill(join(tmp, "skills"), "alpha", "canonical body");
+    writeSkill(join(tmp, ".claude/skills"), "alpha", "HARNESS FORK — keep");
+    const code = await runLink({
+      cwd: tmp,
+      harnesses: ["claude"],
+      adopt: true,
+      force: true,
+      quiet: true,
+    });
+    restore();
+    expect(code).toBe(0);
+    expect(readFileSync(join(tmp, ".claude/skills/alpha/SKILL.md"), "utf8")).toContain(
+      "HARNESS FORK",
+    );
+  });
 
   runUnix("skips a dir already symlinked to the colony", async () => {
     writeSkill(join(tmp, "skills"), "alpha", "a");
