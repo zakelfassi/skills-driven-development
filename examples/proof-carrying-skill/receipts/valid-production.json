@@ -1,0 +1,44 @@
+{
+  "schema": "https://skdd.dev/schemas/proof-receipt/v1",
+  "run_id": "fixture-valid-production",
+  "skill": {
+    "name": "finish-the-loop",
+    "digest": "cad0c670e11bd6ab9f66a762e51df1c7e59de09ca2deb6734f664d38184d8d31"
+  },
+  "executor": { "id": "agent:builder", "credential_scope": "production:writer" },
+  "started_at": "2026-07-16T03:00:00.000Z",
+  "completed_at": "2026-07-16T03:10:00.000Z",
+  "acceptance": [
+    {
+      "id": "observable-outcome",
+      "statement": "The requested behavior is observed on the pinned target tuple.",
+      "target": {
+        "environment": "production",
+        "resource": "app.example.test/forms",
+        "revision": "git:abc123"
+      },
+      "digest": "35b6e8a2d0859955b3c2328d256cade5750124d82df55f0dfaddac9e0c5d9964"
+    }
+  ],
+  "evidence": [
+    {
+      "id": "browser-production-001",
+      "acceptance_id": "observable-outcome",
+      "provider": {
+        "id": "probe:browser-readonly",
+        "kind": "browser",
+        "credential_scope": "production:reader"
+      },
+      "probe": "submit form and observe saved record",
+      "target": {
+        "environment": "production",
+        "resource": "app.example.test/forms",
+        "revision": "git:abc123"
+      },
+      "observed_at": "2026-07-16T03:09:00.000Z",
+      "outcome": "pass",
+      "payload_digest": "5ae43f4a6f90ab40681f19cb0efdbef475253a6021241ee421d6c643b9f988d6"
+    }
+  ],
+  "verdict": { "status": "pass", "reason_codes": [] }
+}

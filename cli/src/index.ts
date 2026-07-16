@@ -9,6 +9,7 @@ import { runInit } from "./commands/init.js";
 import { runLink } from "./commands/link.js";
 import { runList } from "./commands/list.js";
 import { runMcpAdd, runMcpList, runMcpRemove, runMcpSync } from "./commands/mcp.js";
+import { runProofVerify } from "./commands/proof.js";
 import { runPush } from "./commands/push.js";
 import { runShow } from "./commands/show.js";
 import { runValidate } from "./commands/validate.js";
@@ -72,6 +73,19 @@ program
   .option("--strict", "Treat warnings as errors (exit 1 on any issue)", false)
   .action(async (paths: string[], opts: { strict: boolean }) => {
     const code = await runValidate(paths, { strict: opts.strict });
+    process.exit(code);
+  });
+
+const proof = program.command("proof").description("Verify proof-carrying skill receipts");
+
+proof
+  .command("verify")
+  .description("Recompute a proof receipt verdict from target-bound independent evidence")
+  .argument("<receipt>", "Path to a proof-receipt/v1 JSON file")
+  .option("--skill <path>", "Bind the receipt to the exact SKILL.md bytes")
+  .option("-j, --json", "Emit a machine-readable verification result", false)
+  .action(async (receipt: string, opts: { skill?: string; json: boolean }) => {
+    const code = await runProofVerify(receipt, { skill: opts.skill, json: opts.json });
     process.exit(code);
   });
 

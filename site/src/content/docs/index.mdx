@@ -1,131 +1,24 @@
 ---
-title: Skills-Driven Development
-description: A methodology where AI agents create, evolve, and share reusable skills as a byproduct of their work. Spec-aligned with agentskills.io/v1.
+title: Skills should carry workflows
+description: SkDD turns the orchestration model inside out — the skill owns its lifecycle, the substrate governs proof, and a deterministic verifier decides what counts as done.
 template: splash
-hero:
-  tagline: Agents that learn by doing — and remember how they did it.
-  image:
-    dark: ../../assets/mark.svg
-    light: ../../assets/logo-light.svg
-  actions:
-    - text: Why SkDD?
-      link: /skills-driven-development/why-skdd/
-      icon: right-arrow
-      variant: primary
-    - text: Quick start
-      link: /skills-driven-development/configuration/
-      icon: rocket
-      variant: secondary
-    - text: GitHub
-      link: https://github.com/zakelfassi/skills-driven-development
-      icon: external
-      variant: minimal
+head:
+  - tag: title
+    content: SkDD — Skills should carry workflows
 ---
 
-import { Card, CardGrid, LinkCard } from "@astrojs/starlight/components";
-import TerminalCast from "../../components/TerminalCast.astro";
+import HomeHero from "../../components/home/HomeHero.astro";
+import ProofPlane from "../../components/home/ProofPlane.astro";
+import Constitution from "../../components/home/Constitution.astro";
+import Architecture from "../../components/home/Architecture.astro";
+import FinalCta from "../../components/home/FinalCta.astro";
 
-export const base = import.meta.env.BASE_URL.endsWith("/")
-  ? import.meta.env.BASE_URL
-  : `${import.meta.env.BASE_URL}/`;
+<HomeHero />
 
-<TerminalCast />
+<ProofPlane />
 
-## The one-minute pitch
+<Constitution />
 
-A **skill** is a reusable, discoverable playbook — a markdown file plus optional scripts — that an agent follows to accomplish a specific, repeatable task. SkDD adds a lifecycle on top of the [Agent Skills](https://agentskills.io) spec: **forge → register → discover → evolve → archive**. The skills get better the more your agents work, because your agents are the ones forging and evolving them.
+<Architecture />
 
-## Quick start
-
-```bash
-pnpm dlx @zakelfassi/skdd init --harness=claude       # or codex, cursor, copilot, gemini, opencode, goose, amp
-```
-
-That one command scaffolds a canonical `skills/` directory, writes `.skills-registry.md`, appends a Skills block to your harness instruction file, and materializes a `.claude/skills` symlink → `../skills` so the harness finds the colony at its conventional path. See [Configuration](./configuration/) for details.
-
-## One canonical colony, many harness mirrors
-
-SkDD keeps a single source of truth — the `skills/` directory at your repo root — and fans it out to each harness's conventional path via symlinks. Edit in one place; every agent sees the change.
-
-```mermaid
-flowchart LR
-  canonical["skills/ (canonical)"]
-  claude[".claude/skills → ../skills"]
-  codex[".codex/skills → ../skills"]
-  cursor[".cursor/skills → ../skills"]
-  copilot[".github/skills → ../skills"]
-  canonical -- symlink --> claude
-  canonical -- symlink --> codex
-  canonical -- symlink --> cursor
-  canonical -- symlink --> copilot
-```
-
-## Examples gallery
-
-Three reference colonies — each with real structure, a lived-in registry, and at least one executable script.
-
-<CardGrid>
-  <LinkCard
-    title="webapp-starter"
-    href={`${base}examples/#webapp-starter`}
-    description="TypeScript + React/Express colony. 4 skills: deploy-preview (runs), api-endpoint, component-scaffold, bug-triage."
-  />
-  <LinkCard
-    title="cli-tool"
-    href={`${base}examples/#cli-tool`}
-    description="Cross-platform CLI (shipctl) colony. 5 skills: release-cut (runs), cross-compile-matrix, flag-add, manpage-sync, breaking-change-audit."
-  />
-  <LinkCard
-    title="data-pipeline"
-    href={`${base}examples/#data-pipeline`}
-    description="Python data-engineering + ML colony. 5 skills: experiment-log (runs), dataset-onboard, pipeline-stage, data-quality-gate (forked), backfill-runbook."
-  />
-</CardGrid>
-
-## Explore
-
-<CardGrid>
-  <LinkCard
-    title="Why SkDD?"
-    href={`${base}why-skdd/`}
-    description="The pitch, the lifecycle diagram, and who it's for. Start here if you want the narrative."
-  />
-  <LinkCard
-    title="Configuration"
-    href={`${base}configuration/`}
-    description="Per-harness wiring: Claude Code, Codex, Cursor, Copilot, Gemini CLI, OpenCode, Goose, Amp."
-  />
-  <LinkCard
-    title="Skill colony concept"
-    href={`${base}skill-colony/`}
-    description="What a colony is, how it differs from a static library, and the architecture diagram."
-  />
-  <LinkCard
-    title="Forging skills"
-    href={`${base}forging-skills/`}
-    description="The skillforge meta-skill checklist and what the agent actually does when you say 'forge this.'"
-  />
-  <LinkCard
-    title="Specification alignment"
-    href={`${base}specification-alignment/`}
-    description="How SkDD maps onto the agentskills.io v1 spec — what's spec-native vs SkDD-added."
-  />
-  <LinkCard
-    title="Harness integrations"
-    href={`${base}integrations/claude-code/`}
-    description="Dedicated guides for 11 harnesses: Claude Code, Codex, Cursor, Copilot, Gemini CLI, OpenCode, Goose, Amp, VS Code, Junie, Roo Code."
-  />
-  <LinkCard
-    title="Examples gallery"
-    href={`${base}examples/`}
-    description="Three reference colonies (webapp-starter, cli-tool, data-pipeline) with real skills, registries, and executable stubs — every example passes skdd validate and skdd doctor."
-  />
-</CardGrid>
-
-## Principles
-
-1. **Forge, don't front-load** — let agents create skills when they notice patterns during real work.
-2. **Small skills, composed loosely** — complex workflows emerge from composing small skills.
-3. **Skills are living documents** — agents should evolve them when they hit edge cases.
-4. **The colony is the product** — invest in the registry and discovery mechanisms.
-5. **Human-readable, machine-executable** — markdown for humans, frontmatter for agents.
+<FinalCta />

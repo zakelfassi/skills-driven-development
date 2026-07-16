@@ -4,10 +4,14 @@ import starlight from "@astrojs/starlight";
 import rehypeMermaid from "rehype-mermaid";
 
 // Deployed to GitHub Pages under the repo name by default.
-// If a custom domain is set up later, swap `site` + `base` accordingly.
+// If a custom domain (skdd.dev) is set up later, change SITE + BASE here —
+// every head link below derives from BASE, so nothing else needs edits.
+const SITE = "https://zakelfassi.github.io";
+const BASE = "/skills-driven-development";
+
 export default defineConfig({
-  site: "https://zakelfassi.github.io",
-  base: "/skills-driven-development",
+  site: SITE,
+  base: BASE,
   markdown: {
     // Render ```mermaid fenced code blocks to inline SVG at build time.
     // `img-svg` emits SVG so the site works without client-side JS.
@@ -17,15 +21,21 @@ export default defineConfig({
     starlight({
       title: "Skills-Driven Development",
       description:
-        "A methodology where AI agents create, evolve, and share reusable skills as a byproduct of their work. Spec-aligned with agentskills.io/v1.",
+        "Skills should carry workflows. SkDD turns the orchestration model inside out — the skill owns its lifecycle, the substrate governs proof, and a deterministic verifier decides what counts as done.",
       favicon: "/favicon.svg",
       head: [
+        // Authored default theme is light; respect any stored user choice.
+        {
+          tag: "script",
+          content:
+            "if(!localStorage.getItem('starlight-theme'))localStorage.setItem('starlight-theme','light');",
+        },
         // PNG favicon fallback for browsers that don't support SVG favicons
         {
           tag: "link",
           attrs: {
             rel: "icon",
-            href: "/skills-driven-development/favicon-32.png",
+            href: `${BASE}/favicon-32.png`,
             type: "image/png",
             sizes: "32x32",
           },
@@ -35,7 +45,7 @@ export default defineConfig({
           tag: "link",
           attrs: {
             rel: "apple-touch-icon",
-            href: "/skills-driven-development/apple-touch-icon.png",
+            href: `${BASE}/apple-touch-icon.png`,
           },
         },
         // Open Graph image
@@ -43,8 +53,7 @@ export default defineConfig({
           tag: "meta",
           attrs: {
             property: "og:image",
-            content:
-              "https://zakelfassi.github.io/skills-driven-development/og-image.png",
+            content: `${SITE}${BASE}/og-image.png`,
           },
         },
         // Twitter card

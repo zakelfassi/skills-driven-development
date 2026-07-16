@@ -1,0 +1,47 @@
+{
+  "schema": "https://skdd.dev/schemas/proof-receipt/v1",
+  "run_id": "fixture-calendar-user-broken",
+  "skill": {
+    "name": "finish-the-loop",
+    "digest": "cad0c670e11bd6ab9f66a762e51df1c7e59de09ca2deb6734f664d38184d8d31"
+  },
+  "executor": { "id": "agent:builder", "credential_scope": "production:writer" },
+  "started_at": "2026-07-16T03:00:00.000Z",
+  "completed_at": "2026-07-16T03:10:00.000Z",
+  "acceptance": [
+    {
+      "id": "calendar-project-discovery",
+      "statement": "A signed-in user sees every authorized project in the production calendar.",
+      "target": {
+        "environment": "production",
+        "resource": "theedit.me/calendar",
+        "revision": "git:calendar123"
+      },
+      "digest": "a7bb38f0c9d18ffb2b2398f443a45234361c156dcf73cda6faf40074461d69a9"
+    }
+  ],
+  "evidence": [
+    {
+      "id": "browser-user-flow-001",
+      "acceptance_id": "calendar-project-discovery",
+      "provider": {
+        "id": "probe:browser-readonly",
+        "kind": "browser",
+        "credential_scope": "production:reader"
+      },
+      "probe": "open the calendar without a project query and inspect the project selector",
+      "target": {
+        "environment": "production",
+        "resource": "theedit.me/calendar",
+        "revision": "git:calendar123"
+      },
+      "observed_at": "2026-07-16T03:09:00.000Z",
+      "outcome": "fail",
+      "payload_digest": "c3bab9a0244469867e8d2a334af41cfc59ff72a6b521040509653d67cf1eac8f"
+    }
+  ],
+  "verdict": {
+    "status": "fail",
+    "reason_codes": ["EVIDENCE_FAILED", "MISSING_EVIDENCE"]
+  }
+}

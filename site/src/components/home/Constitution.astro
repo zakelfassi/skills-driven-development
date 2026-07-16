@@ -1,0 +1,77 @@
+---
+/**
+ * Constitution.astro — the four-line constitution as the quotable center.
+ */
+const lines = [
+  "The skill owns procedure.",
+  "The contract owns done.",
+  "The ledger owns history.",
+  "The conductor resolves conflict.",
+];
+---
+
+<section class="constitution not-content" aria-labelledby="constitution-title">
+  <h2 class="sr-only" id="constitution-title">The constitution</h2>
+  <blockquote class="const-quote">
+    <ol class="const-lines">
+      {lines.map((line, i) => (
+        <li class="const-line">
+          <span class="const-num" aria-hidden="true">{String(i + 1).padStart(2, "0")}</span>
+          <span class="const-text">{line}</span>
+        </li>
+      ))}
+    </ol>
+  </blockquote>
+</section>
+
+<style>
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+  .constitution {
+    padding: clamp(3.5rem, 10vh, 6rem) 0;
+  }
+  .const-quote {
+    margin: 0;
+    padding: 0;
+    border: none;
+    border-left: 4px solid var(--skdd-orange);
+    padding-left: clamp(1.25rem, 4vw, 2.5rem);
+  }
+  .const-lines {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+  .const-line {
+    display: flex;
+    align-items: baseline;
+    gap: 1rem;
+  }
+  .const-num {
+    font-family: var(--skdd-font-mono);
+    font-size: 0.8rem;
+    color: var(--skdd-orange-text);
+    min-width: 2ch;
+  }
+  :global([data-theme="dark"]) .const-num {
+    color: var(--skdd-orange-dark);
+  }
+  .const-text {
+    font-family: var(--skdd-font-display);
+    font-size: clamp(1.5rem, 4.2vw, 2.6rem);
+    line-height: 1.25;
+    color: var(--sl-color-text);
+  }
+</style>

@@ -1,0 +1,311 @@
+---
+/**
+ * ProofPlane.astro — geometric-dark proof section.
+ * One valid receipt passes; three historical false-success fixtures refuse
+ * with their real deterministic reason codes. All data comes from
+ * examples/proof-carrying-skill/receipts/ and was reproduced locally with
+ * the built CLI. No invented numbers.
+ *
+ * Scroll-linked reveal: IntersectionObserver toggles a class; CSS does the
+ * rest. Without JS (or with reduced motion) everything is fully visible.
+ */
+const repo = "https://github.com/zakelfassi/skills-driven-development";
+const fixtures = repo + "/tree/main/examples/proof-carrying-skill";
+
+const receipts = [
+  {
+    id: "valid-production",
+    label: "receipts/valid-production.json",
+    story:
+      "Browser probe with its own identity and read-only credentials observed the outcome on the pinned production target.",
+    verdict: "verified",
+    codes: [],
+  },
+  {
+    id: "d1-wrong-environment",
+    label: "receipts/d1-wrong-environment.json",
+    story:
+      "Local SQLite evidence was offered for a Cloudflare D1 production target. Right query, wrong world.",
+    verdict: "refused",
+    codes: ["TARGET_MISMATCH", "MISSING_EVIDENCE"],
+  },
+  {
+    id: "sentry-circular-evidence",
+    label: "receipts/sentry-circular-evidence.json",
+    story:
+      "The executor graded its own homework: evidence produced under the executor's identity and credential scope.",
+    verdict: "refused",
+    codes: ["CIRCULAR_EVIDENCE", "SHARED_CREDENTIAL_SCOPE", "MISSING_EVIDENCE"],
+  },
+  {
+    id: "calendar-user-broken",
+    label: "receipts/calendar-user-broken.json",
+    story:
+      "The build was green, but the user-visible probe failed. A green build is not a user outcome.",
+    verdict: "refused",
+    codes: ["EVIDENCE_FAILED", "MISSING_EVIDENCE"],
+  },
+];
+---
+
+<section class="plane not-content" id="proof" aria-labelledby="proof-title">
+  <div class="plane-inner">
+    <p class="plane-eyebrow">Executable proof, not a promise</p>
+    <h2 class="plane-title" id="proof-title">
+      One deterministic verifier. Four real receipts.
+    </h2>
+    <p class="plane-dek">
+      <code>skdd proof verify</code> recomputes a receipt's verdict from its
+      acceptance contracts and evidence — target binding, provider
+      independence, credential-scope separation, run chronology, digests.
+      Agent-authored evidence cannot certify its own claim. These are the
+      fixtures shipped in the repo, reproduced verbatim.
+    </p>
+
+    <ol class="receipts">
+      {receipts.map((r, i) => (
+        <li class={`receipt reveal ${r.verdict}`} style={`--d:${i * 110}ms`}>
+          <div class="receipt-head">
+            <code class="receipt-path">{r.label}</code>
+            <span class={`verdict verdict-${r.verdict}`}>
+              {r.verdict === "verified" ? "✓ verified" : "✗ refused"}
+            </span>
+          </div>
+          <p class="receipt-story">{r.story}</p>
+          {r.codes.length > 0 && (
+            <p class="receipt-codes">
+              {r.codes.map((c) => (
+                <code class="code-chip">{c}</code>
+              ))}
+            </p>
+          )}
+        </li>
+      ))}
+    </ol>
+
+    <figure class="verify-block reveal" style="--d:440ms">
+      <figcaption class="verify-caption">
+        Run it yourself — from a clone of the repo:
+      </figcaption>
+      <pre
+        class="verify-pre"><code>pnpm --dir cli install && pnpm --dir cli build
+node cli/dist/index.js proof verify \
+  examples/proof-carrying-skill/receipts/valid-production.json \
+  --skill examples/proof-carrying-skill/finish-the-loop/SKILL.md
+<span class="out-pass">✓ proof receipt verified</span>
+
+node cli/dist/index.js proof verify \
+  examples/proof-carrying-skill/receipts/sentry-circular-evidence.json
+<span class="out-fail">✗ proof receipt refused
+✗ CIRCULAR_EVIDENCE: Evidence 'poller-self-report-001' was produced by the run executor.
+✗ SHARED_CREDENTIAL_SCOPE: Evidence 'poller-self-report-001' shares the executor's credential scope.
+✗ MISSING_EVIDENCE: Acceptance 'sentry-auth-health' has no qualifying independent evidence.</span></code></pre>
+    </figure>
+
+    <p class="plane-links">
+      <a href={fixtures}>Fixtures &amp; skill&nbsp;&#8599;</a>
+      <a href={`${repo}/blob/main/docs/spec/proof-receipt-v1.schema.json`}>proof-receipt/v1 schema&nbsp;&#8599;</a>
+      <a href={`${repo}/blob/main/docs/spec/workflow-bearing-skill-v1.schema.json`}>workflow-bearing-skill/v1 schema&nbsp;&#8599;</a>
+    </p>
+    <p class="plane-note">
+      <strong>Refused</strong> and <strong>unverified</strong> are different
+      states: refused means the verifier found disqualifying findings;
+      unverified means no receipt was checked at all. The verifier is
+      deterministic and portable — it never executes workflows or trusts prose.
+    </p>
+  </div>
+</section>
+
+<style>
+  .plane {
+    background: var(--skdd-plane-950);
+    color: var(--skdd-plane-text);
+    margin: clamp(3rem, 8vh, 5.5rem) calc(50% - 50vw) 0;
+    padding: clamp(3rem, 8vh, 5rem) calc(50vw - 50%);
+    border-top: 3px solid var(--skdd-orange);
+  }
+  .plane-inner {
+    max-width: 100%;
+  }
+  .plane-eyebrow {
+    font-family: var(--skdd-font-mono);
+    font-size: 0.78rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--skdd-orange-dark);
+    margin: 0 0 0.9rem;
+  }
+  .plane-title {
+    font-family: var(--skdd-font-display);
+    font-weight: 400;
+    font-size: clamp(1.9rem, 4.5vw, 3rem);
+    line-height: 1.1;
+    color: var(--skdd-plane-text);
+    margin: 0 0 1rem;
+    max-width: 24ch;
+  }
+  .plane-dek {
+    color: var(--skdd-plane-muted);
+    max-width: 62ch;
+    line-height: 1.65;
+    margin: 0 0 2.2rem;
+  }
+  .plane-dek code {
+    font-family: var(--skdd-font-mono);
+    color: var(--skdd-plane-text);
+    background: var(--skdd-plane-900);
+    padding: 0.1em 0.35em;
+    border-radius: 2px;
+    border: 1px solid var(--skdd-plane-hairline);
+  }
+
+  .receipts {
+    list-style: none;
+    margin: 0 0 2.2rem;
+    padding: 0;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 310px), 1fr));
+    gap: 1rem;
+  }
+  .receipt {
+    border: 1px solid var(--skdd-plane-hairline);
+    border-radius: 3px;
+    background: var(--skdd-plane-900);
+    padding: 1rem 1.1rem 1.1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+  }
+  .receipt.verified {
+    border-color: color-mix(in srgb, var(--skdd-pass-dark) 45%, var(--skdd-plane-hairline));
+  }
+  .receipt-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+  }
+  .receipt-path {
+    font-family: var(--skdd-font-mono);
+    font-size: 0.74rem;
+    color: var(--skdd-plane-muted);
+    word-break: break-all;
+  }
+  .verdict {
+    font-family: var(--skdd-font-mono);
+    font-size: 0.78rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    white-space: nowrap;
+  }
+  .verdict-verified { color: var(--skdd-pass-dark); }
+  .verdict-refused { color: var(--skdd-orange-dark); }
+  .receipt-story {
+    margin: 0;
+    font-size: 0.9rem;
+    line-height: 1.6;
+    color: var(--skdd-plane-text);
+  }
+  .receipt-codes {
+    margin: auto 0 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+  }
+  .code-chip {
+    font-family: var(--skdd-font-mono);
+    font-size: 0.68rem;
+    color: var(--skdd-orange-dark);
+    border: 1px solid color-mix(in srgb, var(--skdd-orange-dark) 40%, transparent);
+    border-radius: 2px;
+    padding: 0.15em 0.45em;
+    background: transparent;
+  }
+
+  .verify-block {
+    margin: 0 0 1.8rem;
+  }
+  .verify-caption {
+    font-family: var(--skdd-font-mono);
+    font-size: 0.78rem;
+    letter-spacing: 0.05em;
+    color: var(--skdd-plane-muted);
+    margin-bottom: 0.6rem;
+  }
+  .verify-pre {
+    font-family: var(--skdd-font-mono);
+    font-size: 0.78rem;
+    line-height: 1.7;
+    background: #100e0c;
+    border: 1px solid var(--skdd-plane-hairline);
+    border-left: 3px solid var(--skdd-orange);
+    border-radius: 3px;
+    padding: 1.1rem 1.25rem;
+    overflow-x: auto;
+    color: var(--skdd-plane-text);
+    margin: 0;
+  }
+  .verify-pre .out-pass { color: var(--skdd-pass-dark); }
+  .verify-pre .out-fail { color: var(--skdd-orange-dark); }
+
+  .plane-links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem 1.75rem;
+    margin: 0 0 1.2rem;
+  }
+  .plane-links a {
+    font-family: var(--skdd-font-mono);
+    font-size: 0.82rem;
+    color: var(--skdd-plane-text);
+    text-decoration: underline;
+    text-decoration-color: var(--skdd-orange-dark);
+    text-underline-offset: 3px;
+  }
+  .plane-links a:hover,
+  .plane-links a:focus-visible {
+    color: var(--skdd-orange-dark);
+  }
+  .plane-note {
+    font-size: 0.85rem;
+    line-height: 1.65;
+    color: var(--skdd-plane-muted);
+    max-width: 62ch;
+    margin: 0;
+  }
+  .plane-note strong { color: var(--skdd-plane-text); }
+
+  /* Scroll-linked reveal — JS adds .in; no JS ⇒ visible by default */
+  @media (prefers-reduced-motion: no-preference) {
+    :global(.js-reveal) .reveal {
+      opacity: 0;
+      transform: translateY(16px);
+      transition: opacity 360ms ease var(--d, 0ms), transform 360ms ease var(--d, 0ms);
+    }
+    :global(.js-reveal) .reveal.in {
+      opacity: 1;
+      transform: none;
+    }
+  }
+</style>
+
+<script>
+  // Progressive enhancement: only hide-and-reveal when JS runs.
+  const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  if (!reduce) {
+    document.documentElement.classList.add("js-reveal");
+    const io = new IntersectionObserver(
+      (entries) => {
+        for (const e of entries) {
+          if (e.isIntersecting) {
+            e.target.classList.add("in");
+            io.unobserve(e.target);
+          }
+        }
+      },
+      { threshold: 0.15 },
+    );
+    for (const el of document.querySelectorAll(".reveal")) io.observe(el);
+  }
+</script>

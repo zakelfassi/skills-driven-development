@@ -1,0 +1,47 @@
+{
+  "schema": "https://skdd.dev/schemas/proof-receipt/v1",
+  "run_id": "fixture-d1-wrong-environment",
+  "skill": {
+    "name": "finish-the-loop",
+    "digest": "cad0c670e11bd6ab9f66a762e51df1c7e59de09ca2deb6734f664d38184d8d31"
+  },
+  "executor": { "id": "agent:builder", "credential_scope": "worker:writer" },
+  "started_at": "2026-07-16T03:00:00.000Z",
+  "completed_at": "2026-07-16T03:10:00.000Z",
+  "acceptance": [
+    {
+      "id": "d1-variable-limit",
+      "statement": "The production D1 endpoint returns the requested 180 samples.",
+      "target": {
+        "environment": "cloudflare-d1-production",
+        "resource": "api/beauty/samples",
+        "revision": "git:beauty123"
+      },
+      "digest": "2279fa78efd1b7caee072d6022b34bac0a7114b8686219305872dd4a064a898e"
+    }
+  ],
+  "evidence": [
+    {
+      "id": "sqlite-local-001",
+      "acceptance_id": "d1-variable-limit",
+      "provider": {
+        "id": "probe:sqlite-harness",
+        "kind": "system",
+        "credential_scope": "local:reader"
+      },
+      "probe": "query local SQLite harness",
+      "target": {
+        "environment": "local-sqlite",
+        "resource": "api/beauty/samples",
+        "revision": "git:beauty123"
+      },
+      "observed_at": "2026-07-16T03:09:00.000Z",
+      "outcome": "pass",
+      "payload_digest": "90d5911a923e43c95ddd62c46c4652850cdc99fbacc90b6b54932d2290f55099"
+    }
+  ],
+  "verdict": {
+    "status": "fail",
+    "reason_codes": ["MISSING_EVIDENCE", "TARGET_MISMATCH"]
+  }
+}
