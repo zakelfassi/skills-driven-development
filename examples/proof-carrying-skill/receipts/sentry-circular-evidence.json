@@ -1,0 +1,47 @@
+{
+  "schema": "https://skdd.dev/schemas/proof-receipt/v1",
+  "run_id": "fixture-sentry-circular-evidence",
+  "skill": {
+    "name": "finish-the-loop",
+    "digest": "cad0c670e11bd6ab9f66a762e51df1c7e59de09ca2deb6734f664d38184d8d31"
+  },
+  "executor": { "id": "agent:sentry-poller", "credential_scope": "sentry:event-read" },
+  "started_at": "2026-07-16T03:00:00.000Z",
+  "completed_at": "2026-07-16T03:10:00.000Z",
+  "acceptance": [
+    {
+      "id": "sentry-auth-health",
+      "statement": "The Sentry poller reports authorization failure instead of a healthy no-op.",
+      "target": {
+        "environment": "production",
+        "resource": "sentry-poller",
+        "revision": "git:sentry123"
+      },
+      "digest": "a6c2b4ea751c39497fbb2d323430daafecbb674f1d75bf605e00e88fa410b3ba"
+    }
+  ],
+  "evidence": [
+    {
+      "id": "poller-self-report-001",
+      "acceptance_id": "sentry-auth-health",
+      "provider": {
+        "id": "agent:sentry-poller",
+        "kind": "system",
+        "credential_scope": "sentry:event-read"
+      },
+      "probe": "poller interprets its own API response",
+      "target": {
+        "environment": "production",
+        "resource": "sentry-poller",
+        "revision": "git:sentry123"
+      },
+      "observed_at": "2026-07-16T03:09:00.000Z",
+      "outcome": "pass",
+      "payload_digest": "6e701b07ddf76d473ec9bcdaed121b82ec4f6f41e43d14aecb7656baeaa93068"
+    }
+  ],
+  "verdict": {
+    "status": "fail",
+    "reason_codes": ["CIRCULAR_EVIDENCE", "MISSING_EVIDENCE", "SHARED_CREDENTIAL_SCOPE"]
+  }
+}

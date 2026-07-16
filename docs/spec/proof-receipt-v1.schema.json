@@ -1,0 +1,135 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://skdd.dev/schemas/proof-receipt/v1",
+  "title": "SkDD proof receipt v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "run_id",
+    "skill",
+    "executor",
+    "started_at",
+    "completed_at",
+    "acceptance",
+    "evidence",
+    "verdict"
+  ],
+  "properties": {
+    "schema": { "const": "https://skdd.dev/schemas/proof-receipt/v1" },
+    "run_id": { "type": "string", "minLength": 1 },
+    "skill": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "digest"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "digest": { "$ref": "#/$defs/digest" }
+      }
+    },
+    "executor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "credential_scope"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "credential_scope": { "type": "string", "minLength": 1 }
+      }
+    },
+    "started_at": { "type": "string", "format": "date-time" },
+    "completed_at": { "type": "string", "format": "date-time" },
+    "acceptance": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/acceptance" }
+    },
+    "evidence": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/evidence" }
+    },
+    "verdict": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "reason_codes"],
+      "properties": {
+        "status": { "enum": ["pass", "fail"] },
+        "reason_codes": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "SCHEMA_INVALID",
+              "SKILL_DIGEST_MISMATCH",
+              "SKILL_DIGEST_UNCHECKED",
+              "ACCEPTANCE_DIGEST_MISMATCH",
+              "MISSING_EVIDENCE",
+              "TARGET_MISMATCH",
+              "CIRCULAR_EVIDENCE",
+              "SHARED_CREDENTIAL_SCOPE",
+              "EVIDENCE_FAILED",
+              "EVIDENCE_OUTSIDE_RUN",
+              "VERDICT_MISMATCH"
+            ]
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "digest": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "target": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["environment", "resource", "revision"],
+      "properties": {
+        "environment": { "type": "string", "minLength": 1 },
+        "resource": { "type": "string", "minLength": 1 },
+        "revision": { "type": "string", "minLength": 1 }
+      }
+    },
+    "acceptance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "statement", "target", "digest"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "statement": { "type": "string", "minLength": 1 },
+        "target": { "$ref": "#/$defs/target" },
+        "digest": { "$ref": "#/$defs/digest" }
+      }
+    },
+    "evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "acceptance_id",
+        "provider",
+        "probe",
+        "target",
+        "observed_at",
+        "outcome",
+        "payload_digest"
+      ],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "acceptance_id": { "type": "string", "minLength": 1 },
+        "provider": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["id", "kind", "credential_scope"],
+          "properties": {
+            "id": { "type": "string", "minLength": 1 },
+            "kind": { "enum": ["external-probe", "ci", "browser", "human", "system"] },
+            "credential_scope": { "type": "string", "minLength": 1 }
+          }
+        },
+        "probe": { "type": "string", "minLength": 1 },
+        "target": { "$ref": "#/$defs/target" },
+        "observed_at": { "type": "string", "format": "date-time" },
+        "outcome": { "enum": ["pass", "fail"] },
+        "payload_digest": { "$ref": "#/$defs/digest" }
+      }
+    }
+  }
+}

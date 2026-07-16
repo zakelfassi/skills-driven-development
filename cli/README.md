@@ -21,6 +21,7 @@ This repo uses pnpm exclusively — do not use npm or yarn.
 ```
 skdd init [--harness=claude|codex|cursor|copilot|gemini|opencode|goose|amp|auto] [--no-canonical] [-g]
 skdd validate [path...] [--strict]
+skdd proof verify <receipt.json> [--skill=<SKILL.md>] [--json]
 skdd forge <name> [--from-description="..."] [--non-interactive] [--no-canonical] [--skip-link] [-g]
 skdd list [--format=table|json] [-g]
 skdd link [--mode=symlink|copy|auto] [--harness=<list>] [--force] [--quiet] [-g]
@@ -57,6 +58,18 @@ skdd validate                                    # walks the current dir
 skdd validate skills/                             # one directory
 skdd validate .claude/skills/*/SKILL.md           # glob
 ```
+
+### `skdd proof verify`
+
+Recompute a proof-carrying skill receipt from its acceptance contracts and evidence. The verifier refuses target mismatches, evidence produced by the executor or its credential scope, failed probes, evidence outside the run interval, missing evidence, digest tampering, and a recorded verdict that disagrees with the recomputed result.
+
+```bash
+skdd proof verify receipt.json
+skdd proof verify receipt.json --skill skills/finish-the-loop/SKILL.md
+skdd proof verify receipt.json --json
+```
+
+Without `--skill`, the receipt's recorded skill digest is preserved but reported as unchecked. The verifier never treats a build result as proof of a different user-visible acceptance line; every evidence item must match the contract's environment, resource, and revision exactly.
 
 ### `skdd forge`
 

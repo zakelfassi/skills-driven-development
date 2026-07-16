@@ -1,0 +1,22 @@
+{
+  "schema": "https://skdd.dev/schemas/workflow-bearing-skill/v1",
+  "skill": "finish-the-loop",
+  "outcome": "Every completion claim is bound to the intended target and independently observed.",
+  "acceptance": [
+    {
+      "id": "observable-outcome",
+      "statement": "The requested behavior is observed on the pinned target tuple.",
+      "target_required": true
+    }
+  ],
+  "state": {
+    "path": ".skdd/runs/{run_id}/state.json",
+    "resume_required": true
+  },
+  "evidence": {
+    "receipt_schema": "https://skdd.dev/schemas/proof-receipt/v1",
+    "independent_provider_required": true,
+    "target_fields": ["environment", "resource", "revision"]
+  },
+  "terminal_states": ["verified", "refused", "blocked", "open"]
+}
