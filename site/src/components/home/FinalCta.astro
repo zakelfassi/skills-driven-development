@@ -1,0 +1,143 @@
+---
+/**
+ * FinalCta.astro — install / try the verifier / GitHub.
+ * Commands verified against the repo:
+ *  - `pnpm dlx @zakelfassi/skdd init` is published (npm 1.1.0).
+ *  - `skdd proof verify` is in the repo at HEAD but not yet in the published
+ *    npm release, so the verifier path is shown from a clone.
+ */
+const repo = "https://github.com/zakelfassi/skills-driven-development";
+---
+
+<section class="final not-content" aria-labelledby="final-title">
+  <h2 class="final-title" id="final-title">Start where you are.</h2>
+
+  <div class="final-grid">
+    <div class="final-cell">
+      <h3 class="final-label">Install the colony</h3>
+      <pre class="final-pre"><code>pnpm dlx @zakelfassi/skdd init --harness=claude</code></pre>
+      <p class="final-note">
+        Scaffolds <code>skills/</code>, the registry, and your harness mirror.
+        Works with Claude Code, Codex, Cursor, Copilot, Gemini CLI, OpenCode,
+        Goose, and Amp.
+      </p>
+    </div>
+    <div class="final-cell">
+      <h3 class="final-label">Try the verifier</h3>
+      <pre class="final-pre"><code>git clone {repo.replace("https://", "https://")}.git
+cd skills-driven-development
+pnpm --dir cli install && pnpm --dir cli build
+node cli/dist/index.js proof verify \
+  examples/proof-carrying-skill/receipts/valid-production.json</code></pre>
+      <p class="final-note">
+        The proof verifier ships in the repo today and lands in the next npm
+        release of <code>@zakelfassi/skdd</code>.
+      </p>
+    </div>
+  </div>
+
+  <p class="final-links">
+    <a class="btn-final" href={repo}>GitHub&nbsp;&#8599;</a>
+    <a class="link-final" href="https://www.npmjs.com/package/@zakelfassi/skdd">npm: @zakelfassi/skdd&nbsp;&#8599;</a>
+    {/* LAUNCH-LINK: when the X Article is live, add its URL here as
+        <a class="link-final" href="...">Read the launch essay ↗</a> */}
+  </p>
+</section>
+
+<style>
+  .final {
+    padding: clamp(2rem, 6vh, 4rem) 0 clamp(3rem, 8vh, 5rem);
+    border-top: 1px solid var(--sl-color-hairline);
+  }
+  .final-title {
+    font-family: var(--skdd-font-display);
+    font-weight: 400;
+    font-size: clamp(2rem, 5vw, 3.2rem);
+    margin: 2rem 0 1.6rem;
+    color: var(--sl-color-text);
+  }
+  .final-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr));
+    gap: 1.25rem;
+    margin-bottom: 2rem;
+  }
+  .final-cell {
+    border: 1px solid var(--sl-color-hairline);
+    border-radius: 3px;
+    padding: 1.2rem 1.25rem 1.3rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.8rem;
+  }
+  .final-label {
+    font-family: var(--skdd-font-mono);
+    font-size: 0.78rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    font-weight: 700;
+    color: var(--skdd-orange-text);
+    margin: 0;
+  }
+  :global([data-theme="dark"]) .final-label {
+    color: var(--skdd-orange-dark);
+  }
+  .final-pre {
+    font-family: var(--skdd-font-mono);
+    font-size: 0.76rem;
+    line-height: 1.65;
+    background: var(--skdd-ink-900);
+    color: var(--skdd-paper-50);
+    border-radius: 3px;
+    padding: 0.9rem 1rem;
+    overflow-x: auto;
+    margin: 0;
+  }
+  .final-note {
+    font-size: 0.85rem;
+    line-height: 1.6;
+    color: var(--skdd-ink-600);
+    margin: 0;
+  }
+  :global([data-theme="dark"]) .final-note { color: var(--skdd-plane-muted); }
+  .final-note code { font-family: var(--skdd-font-mono); font-size: 0.9em; }
+
+  .final-links {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 1.5rem;
+    margin: 0;
+  }
+  .btn-final {
+    display: inline-flex;
+    align-items: center;
+    min-height: 48px;
+    padding: 0.6rem 1.5rem;
+    background: var(--skdd-orange);
+    color: #fff;
+    font-family: var(--skdd-font-mono);
+    font-weight: 700;
+    font-size: 0.92rem;
+    text-decoration: none;
+    border-radius: 2px;
+    transition: background-color 220ms ease;
+  }
+  .btn-final:hover,
+  .btn-final:focus-visible {
+    background: var(--skdd-ink-900);
+    color: var(--skdd-paper-50);
+  }
+  .link-final {
+    font-family: var(--skdd-font-mono);
+    font-size: 0.88rem;
+    color: var(--sl-color-text);
+    text-decoration: underline;
+    text-decoration-color: var(--skdd-orange);
+    text-underline-offset: 3px;
+  }
+  .link-final:hover,
+  .link-final:focus-visible {
+    color: var(--skdd-orange-text);
+  }
+</style>

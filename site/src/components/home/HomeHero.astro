@@ -1,0 +1,272 @@
+---
+/**
+ * HomeHero.astro — poster first viewport for skdd.dev.
+ * Coordinated entrance (CSS-only, staggered, reduced-motion aware)
+ * plus the inversion diagram: old model → new model.
+ */
+const rawBase = import.meta.env.BASE_URL;
+const base = rawBase.endsWith("/") ? rawBase : `${rawBase}/`;
+const repo = "https://github.com/zakelfassi/skills-driven-development";
+---
+
+<section class="poster not-content" aria-labelledby="thesis">
+  <p class="eyebrow poster-item" style="--i:0">SkDD &middot; Skills-Driven Development</p>
+  <h1 class="headline poster-item" id="thesis" style="--i:1">
+    Skills should carry <em>workflows.</em>
+  </h1>
+  <p class="dek poster-item" style="--i:2">
+    SkDD turns the orchestration glove inside out: the skill owns its own
+    lifecycle, and a deterministic verifier — not the agent — decides what
+    counts as done.
+  </p>
+  <div class="actions poster-item" style="--i:3">
+    <a class="btn btn-primary" href={`${base}configuration/`}>Quick start</a>
+    <a class="btn btn-secondary" href="#proof">See the proof</a>
+    <a class="btn btn-minimal" href={repo}>GitHub&nbsp;&#8599;</a>
+  </div>
+
+  <figure class="inversion poster-item" style="--i:4" aria-label="The inversion: in the old model the workflow owns state and skills are verbs. In the new model the skill owns its lifecycle and the substrate governs proof.">
+    <div class="inv-panel inv-old">
+      <span class="inv-tag">the old model</span>
+      <p class="inv-line">workflow owns state</p>
+      <p class="inv-line">skills are verbs</p>
+      <p class="inv-line inv-quiet">the runtime decides done</p>
+    </div>
+    <div class="inv-turn" aria-hidden="true">
+      <svg viewBox="0 0 48 48" width="40" height="40" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square">
+        <path d="M10 30a15 15 0 0 1 28-7" />
+        <path d="M38 15v8h-8" />
+        <path d="M38 18a15 15 0 0 1-28 7" transform="rotate(180 24 24)" opacity="0.35" />
+      </svg>
+      <span class="inv-turn-label">turned inside&nbsp;out</span>
+    </div>
+    <div class="inv-panel inv-new">
+      <span class="inv-tag">the new model</span>
+      <p class="inv-line">skill owns lifecycle</p>
+      <p class="inv-line">substrate governs proof</p>
+      <p class="inv-line inv-quiet">the verifier decides done</p>
+    </div>
+  </figure>
+</section>
+
+<style is:global>
+  /* Homepage only (this component is only used there):
+     the poster h1 replaces Starlight's generated page title. */
+  .sl-markdown-content > h1#_top,
+  main h1#_top {
+    display: none;
+  }
+</style>
+
+<style>
+  .poster {
+    padding: clamp(2.5rem, 8vh, 6rem) 0 clamp(2.5rem, 6vh, 4rem);
+    display: flex;
+    flex-direction: column;
+    gap: 1.4rem;
+  }
+
+  .eyebrow {
+    font-family: var(--skdd-font-mono);
+    font-size: 0.8rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--skdd-orange-text);
+    margin: 0;
+  }
+
+  .headline {
+    font-family: var(--skdd-font-display);
+    font-weight: 400;
+    font-size: clamp(2.9rem, 8.5vw, 6rem);
+    line-height: 1.02;
+    letter-spacing: -0.01em;
+    color: var(--sl-color-text);
+    margin: 0;
+    max-width: 15ch;
+  }
+  .headline em {
+    font-style: italic;
+    color: var(--skdd-orange-text);
+  }
+
+  .dek {
+    font-size: clamp(1.05rem, 2.2vw, 1.3rem);
+    line-height: 1.55;
+    color: var(--skdd-ink-600);
+    max-width: 46ch;
+    margin: 0;
+  }
+  :global([data-theme="dark"]) .dek {
+    color: var(--skdd-plane-muted);
+  }
+  :global([data-theme="dark"]) .eyebrow,
+  :global([data-theme="dark"]) .headline em,
+  :global([data-theme="dark"]) .inv-new .inv-tag,
+  :global([data-theme="dark"]) .inv-turn {
+    color: var(--skdd-orange-dark);
+  }
+  :global([data-theme="dark"]) .inv-old,
+  :global([data-theme="dark"]) .inv-old .inv-tag {
+    color: var(--skdd-plane-muted);
+  }
+
+  .actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    align-items: center;
+    margin-top: 0.4rem;
+  }
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    min-height: 48px;
+    padding: 0.6rem 1.4rem;
+    font-family: var(--skdd-font-mono);
+    font-size: 0.92rem;
+    font-weight: 500;
+    text-decoration: none;
+    border-radius: 2px;
+    border: 1.5px solid transparent;
+    transition: background-color 250ms ease, color 250ms ease, border-color 250ms ease;
+  }
+  .btn-primary {
+    background: var(--skdd-ink-900);
+    color: var(--skdd-paper-50);
+  }
+  :global([data-theme="dark"]) .btn-primary {
+    background: var(--skdd-paper-50);
+    color: var(--skdd-ink-900);
+  }
+  .btn-primary:hover,
+  .btn-primary:focus-visible {
+    background: var(--skdd-orange);
+    color: #fff;
+  }
+  .btn-secondary {
+    border-color: var(--skdd-ink-900);
+    color: var(--skdd-ink-900);
+  }
+  :global([data-theme="dark"]) .btn-secondary {
+    border-color: var(--skdd-plane-text);
+    color: var(--skdd-plane-text);
+  }
+  .btn-secondary:hover,
+  .btn-secondary:focus-visible {
+    border-color: var(--skdd-orange-text);
+    color: var(--skdd-orange-text);
+  }
+  :global([data-theme="dark"]) .btn-secondary:hover,
+  :global([data-theme="dark"]) .btn-secondary:focus-visible {
+    border-color: var(--skdd-orange-dark);
+    color: var(--skdd-orange-dark);
+  }
+  .btn-minimal {
+    color: var(--skdd-ink-600);
+    padding-inline: 0.6rem;
+  }
+  :global([data-theme="dark"]) .btn-minimal {
+    color: var(--skdd-plane-muted);
+  }
+  .btn-minimal:hover,
+  .btn-minimal:focus-visible {
+    color: var(--skdd-orange-text);
+  }
+
+  /* ── Inversion diagram ── */
+  .inversion {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: stretch;
+    gap: clamp(0.75rem, 2.5vw, 1.75rem);
+    margin: clamp(1.2rem, 4vh, 2.5rem) 0 0;
+  }
+  .inv-panel {
+    border: 1.5px solid var(--sl-color-hairline);
+    border-radius: 3px;
+    padding: 1.1rem 1.25rem 1.2rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+  }
+  .inv-old {
+    color: var(--skdd-ink-600);
+    background: transparent;
+  }
+  .inv-old .inv-line {
+    text-decoration: line-through;
+    text-decoration-color: color-mix(in srgb, var(--skdd-orange) 55%, transparent);
+    text-decoration-thickness: 1.5px;
+  }
+  .inv-new {
+    border-color: var(--skdd-orange);
+    background: color-mix(in srgb, var(--skdd-orange) 5%, transparent);
+    color: var(--sl-color-text);
+  }
+  .inv-tag {
+    font-family: var(--skdd-font-mono);
+    font-size: 0.68rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    margin-bottom: 0.45rem;
+  }
+  .inv-old .inv-tag { color: var(--skdd-ink-600); }
+  .inv-new .inv-tag { color: var(--skdd-orange-text); }
+  .inv-line {
+    font-family: var(--skdd-font-mono);
+    font-size: clamp(0.82rem, 1.7vw, 1rem);
+    margin: 0;
+    line-height: 1.6;
+  }
+  .inv-quiet { opacity: 0.6; }
+
+  .inv-turn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.35rem;
+    color: var(--skdd-orange-text);
+  }
+  .inv-turn-label {
+    font-family: var(--skdd-font-mono);
+    font-size: 0.66rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    text-align: center;
+    max-width: 8ch;
+  }
+
+  @media (max-width: 640px) {
+    .inversion {
+      grid-template-columns: 1fr;
+    }
+    .inv-turn {
+      flex-direction: row;
+      padding: 0.2rem 0;
+    }
+    .inv-turn svg {
+      transform: rotate(90deg);
+      width: 30px;
+      height: 30px;
+    }
+    .inv-turn-label { max-width: none; }
+  }
+
+  /* ── Coordinated entrance ── */
+  @media (prefers-reduced-motion: no-preference) {
+    .poster-item {
+      opacity: 0;
+      transform: translateY(14px);
+      animation: poster-in 380ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+      animation-delay: calc(var(--i) * 90ms);
+    }
+    @keyframes poster-in {
+      to {
+        opacity: 1;
+        transform: none;
+      }
+    }
+  }
+</style>

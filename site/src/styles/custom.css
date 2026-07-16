@@ -1,74 +1,99 @@
 /* ========================================================
    SkDD brand tokens — single source of truth.
+   Launch palette: Editorial-Warm paper + blood-orange thread,
+   with a restrained geometric-dark proof plane on the homepage.
    All --skdd-* custom properties are defined here and
    mapped onto Starlight's theme variables below.
    ======================================================== */
 
+@import "@fontsource/instrument-serif/400.css";
+@import "@fontsource/instrument-serif/400-italic.css";
+@import "@fontsource/jetbrains-mono/400.css";
+@import "@fontsource/jetbrains-mono/500.css";
+@import "@fontsource/jetbrains-mono/700.css";
+
 :root {
-  /* ── Ink (slate-dark) ── */
-  --skdd-ink-900: #0f172a; /* bg gradient start */
-  --skdd-ink-800: #1e293b; /* bg gradient end   */
-  --skdd-ink-600: #334155; /* archive node fill / code borders */
-
-  /* ── Slate (neutral) ── */
-  --skdd-slate-400: #94a3b8; /* secondary text */
-
-  /* ── Forge (amber → red) ── */
-  --skdd-forge-500: #f59e0b; /* anvil gradient start — "forge" amber */
-  --skdd-forge-600: #ef4444; /* anvil gradient end   — heat red      */
-
-  /* ── Spark ── */
-  --skdd-spark-100: #fef3c7; /* spark diamond */
-
-  /* ── Loop / Discover (sky) ── */
-  --skdd-loop-400: #38bdf8; /* loop arc — "discover" sky = Starlight accent */
-  --skdd-loop-900: #0c4a6e; /* accent-low (dark surfaces)                   */
+  /* ── Warm ink ── */
+  --skdd-ink-900: #1c1917; /* warm near-black text */
+  --skdd-ink-800: #292524; /* dark surface */
+  --skdd-ink-600: #57534e; /* secondary text on paper */
 
   /* ── Paper (light surface) ── */
-  --skdd-paper-50: #f8fafc; /* light text / light-mode bg */
+  --skdd-paper-50: #faf6ef; /* warm cream canvas */
+  --skdd-paper-100: #f3ecdf; /* warm cream, one step deeper */
+
+  /* ── Blood-orange thread ── */
+  --skdd-orange: #ff4d00; /* display accents, rules, marks */
+  --skdd-orange-text: #bf3a00; /* text-safe orange on paper */
+  --skdd-orange-dark: #ff6a2b; /* accent on dark surfaces */
+
+  /* ── Proof plane (geometric dark) ── */
+  --skdd-plane-950: #161311; /* proof plane canvas */
+  --skdd-plane-900: #1e1a17; /* proof plane surface */
+  --skdd-plane-hairline: #35302b;
+  --skdd-plane-text: #e8e0d4;
+  --skdd-plane-muted: #a39a8c;
+
+  /* ── Verdicts ── */
+  --skdd-pass: #2e7d43;
+  --skdd-pass-dark: #6fce8b;
+  --skdd-refuse: var(--skdd-orange);
+
+  /* ── Type ── */
+  --skdd-font-display: "Instrument Serif", "Iowan Old Style", Georgia, serif;
+  --skdd-font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
 
   /* ── Map onto Starlight accent vars (light mode defaults) ── */
-  --sl-color-accent-low:  var(--skdd-loop-900);
-  --sl-color-accent:      var(--skdd-loop-400);
-  --sl-color-accent-high: #e0f2fe; /* sky-100 */
+  --sl-color-accent-low: #ffe3d5;
+  --sl-color-accent: var(--skdd-orange-text);
+  --sl-color-accent-high: #7c2d12;
+  --sl-color-text-accent: var(--skdd-orange-text);
 }
 
-/* Dark-mode overrides */
+/* Warm paper canvas for light mode */
+:root[data-theme="light"] {
+  --sl-color-bg: var(--skdd-paper-50);
+  --sl-color-bg-nav: var(--skdd-paper-50);
+  --sl-color-bg-sidebar: var(--skdd-paper-50);
+  --sl-color-text: var(--skdd-ink-900);
+  --sl-color-text-accent: var(--skdd-orange-text);
+  --sl-color-accent-low: #ffe3d5;
+  --sl-color-accent: var(--skdd-orange-text);
+  --sl-color-accent-high: #7c2d12;
+  --sl-color-hairline: #e4dccc;
+  --sl-color-hairline-light: #e4dccc;
+  --sl-color-hairline-shade: #e4dccc;
+}
+
+/* Dark-mode overrides — warm dark, not slate SaaS */
 :root[data-theme="dark"] {
-  --sl-color-accent-low:  #082f49;
-  --sl-color-accent:      var(--skdd-loop-400);
-  --sl-color-accent-high: #f0f9ff; /* sky-50 */
+  --sl-color-accent-low: #4a1a02;
+  --sl-color-accent: var(--skdd-orange-dark);
+  --sl-color-accent-high: #ffd9c7;
+  --sl-color-text-accent: var(--skdd-orange-dark);
 
-  /* Ink-900 dark background feel */
-  --sl-color-bg:          var(--skdd-ink-900);
-  --sl-color-bg-nav:      var(--skdd-ink-900);
-  --sl-color-bg-sidebar:  var(--skdd-ink-800);
+  --sl-color-bg: var(--skdd-plane-950);
+  --sl-color-bg-nav: var(--skdd-plane-950);
+  --sl-color-bg-sidebar: var(--skdd-plane-900);
 
-  /* ink-600 code-block borders */
-  --sl-color-gray-6:      var(--skdd-ink-600);
-  --sl-color-hairline:    var(--skdd-ink-600);
+  --sl-color-gray-6: var(--skdd-plane-hairline);
+  --sl-color-hairline: var(--skdd-plane-hairline);
 }
 
-/* ── Hero image glow ── */
-.hero img {
-  filter: drop-shadow(0 10px 30px rgba(56, 189, 248, 0.2));
+/* ── Code uses JetBrains Mono everywhere ── */
+code,
+pre,
+kbd {
+  font-family: var(--skdd-font-mono);
 }
 
-/* ── Hero CTA — amber hover accent ── */
-.hero .action.primary:hover,
-.hero .action.primary:focus-visible {
-  background-color: var(--skdd-forge-500);
-  border-color:     var(--skdd-forge-500);
-  color:            var(--skdd-ink-900);
-}
-
-/* ── Code-block borders use ink-600 in dark mode ── */
+/* ── Code-block borders in dark mode ── */
 :root[data-theme="dark"] .sl-markdown-content pre,
 :root[data-theme="dark"] code {
-  border-color: var(--skdd-ink-600);
+  border-color: var(--skdd-plane-hairline);
 }
 
 /* ── Inline code slight tint ── */
 :root[data-theme="dark"] .sl-markdown-content :not(pre) > code {
-  border: 1px solid var(--skdd-ink-600);
+  border: 1px solid var(--skdd-plane-hairline);
 }

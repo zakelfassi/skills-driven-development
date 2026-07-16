@@ -1,0 +1,205 @@
+---
+/**
+ * Architecture.astro — small, precise ownership/lifecycle explanation with
+ * links into the existing deep docs. Continuity: proof-carrying workflow
+ * skills live on top of the existing colony lifecycle.
+ */
+const rawBase = import.meta.env.BASE_URL;
+const base = rawBase.endsWith("/") ? rawBase : `${rawBase}/`;
+
+const artifacts = [
+  {
+    file: "SKILL.md",
+    owns: "adaptive procedure — the steps an agent follows",
+  },
+  {
+    file: "WORKFLOW.json",
+    owns: "the portable lifecycle contract: acceptance, state path, terminal states",
+  },
+  {
+    file: ".skdd/runs/<id>/state.json",
+    owns: "resumable local run state — survives interruption",
+  },
+  {
+    file: "receipt.json",
+    owns: "the completion claim, target tuples, and evidence references",
+  },
+  {
+    file: "skdd proof verify",
+    owns: "recomputes the verdict; refuses what it cannot independently confirm",
+  },
+];
+
+const docs = [
+  { label: "Why SkDD?", href: `${base}why-skdd/`, note: "the narrative & lifecycle" },
+  { label: "Quick start & configuration", href: `${base}configuration/`, note: "per-harness wiring" },
+  { label: "Skill colony concept", href: `${base}skill-colony/`, note: "forge → register → discover → evolve → archive" },
+  { label: "Forging skills", href: `${base}forging-skills/`, note: "the skillforge meta-skill" },
+  { label: "Spec alignment", href: `${base}specification-alignment/`, note: "agentskills.io/v1 mapping" },
+  { label: "SkDD Commons", href: `${base}commons/`, note: "community drops" },
+];
+---
+
+<section class="arch not-content" aria-labelledby="arch-title">
+  <p class="arch-eyebrow">How it fits together</p>
+  <h2 class="arch-title" id="arch-title">Each artifact owns one thing.</h2>
+  <p class="arch-dek">
+    SkDD already gives skills a lifecycle — forge, register, discover, evolve,
+    archive — across a colony your agents maintain. Workflow-bearing skills
+    extend that colony: the same <code>SKILL.md</code> now travels with its
+    contract, its state, and its proof.
+  </p>
+
+  <dl class="arch-table">
+    {artifacts.map((a) => (
+      <div class="arch-row">
+        <dt><code>{a.file}</code></dt>
+        <dd>{a.owns}</dd>
+      </div>
+    ))}
+  </dl>
+
+  <nav class="arch-docs" aria-label="Documentation">
+    <h3 class="arch-docs-title">Go deeper</h3>
+    <ul class="arch-links">
+      {docs.map((d) => (
+        <li>
+          <a href={d.href}>{d.label}</a>
+          <span class="arch-note">{d.note}</span>
+        </li>
+      ))}
+    </ul>
+  </nav>
+</section>
+
+<style>
+  .arch {
+    padding: clamp(1.5rem, 4vh, 3rem) 0 clamp(2.5rem, 6vh, 4rem);
+    border-top: 1px solid var(--sl-color-hairline);
+  }
+  .arch-eyebrow {
+    font-family: var(--skdd-font-mono);
+    font-size: 0.78rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--skdd-orange-text);
+    margin: 2rem 0 0.75rem;
+  }
+  :global([data-theme="dark"]) .arch-eyebrow {
+    color: var(--skdd-orange-dark);
+  }
+  .arch-title {
+    font-family: var(--skdd-font-display);
+    font-weight: 400;
+    font-size: clamp(1.8rem, 4vw, 2.8rem);
+    line-height: 1.1;
+    margin: 0 0 0.9rem;
+    color: var(--sl-color-text);
+  }
+  .arch-dek {
+    max-width: 60ch;
+    line-height: 1.65;
+    color: var(--skdd-ink-600);
+    margin: 0 0 2rem;
+  }
+  .arch-dek code {
+    font-family: var(--skdd-font-mono);
+    font-size: 0.9em;
+  }
+
+  .arch-table {
+    margin: 0 0 2.5rem;
+    border: 1.5px solid var(--sl-color-text);
+    border-radius: 3px;
+    overflow: hidden;
+  }
+  .arch-row {
+    display: grid;
+    grid-template-columns: minmax(180px, 260px) 1fr;
+    border-bottom: 1px solid var(--sl-color-hairline);
+  }
+  .arch-row:last-child { border-bottom: none; }
+  .arch-row dt {
+    padding: 0.8rem 1rem;
+    background: var(--skdd-paper-100);
+    border-right: 1px solid var(--sl-color-hairline);
+  }
+  .arch-row dt code {
+    font-family: var(--skdd-font-mono);
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: var(--sl-color-text);
+  }
+  .arch-row dd {
+    margin: 0;
+    padding: 0.8rem 1rem;
+    font-size: 0.92rem;
+    line-height: 1.55;
+    color: var(--skdd-ink-600);
+    transition: background-color 220ms ease;
+  }
+  .arch-row:hover dd {
+    background: color-mix(in srgb, var(--skdd-orange) 5%, transparent);
+  }
+  :global([data-theme="dark"]) .arch-row dt {
+    background: var(--skdd-plane-900);
+  }
+  :global([data-theme="dark"]) .arch-row dd,
+  :global([data-theme="dark"]) .arch-dek {
+    color: var(--skdd-plane-muted);
+  }
+
+  @media (max-width: 560px) {
+    .arch-row {
+      grid-template-columns: 1fr;
+    }
+    .arch-row dt {
+      border-right: none;
+      border-bottom: 1px dashed var(--sl-color-hairline);
+      padding-bottom: 0.5rem;
+    }
+  }
+
+  .arch-docs-title {
+    font-family: var(--skdd-font-mono);
+    font-size: 0.78rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    font-weight: 500;
+    color: var(--skdd-ink-600);
+    margin: 0 0 0.9rem;
+  }
+  :global([data-theme="dark"]) .arch-docs-title { color: var(--skdd-plane-muted); }
+  .arch-links {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr));
+    gap: 0.6rem 2rem;
+  }
+  .arch-links li {
+    display: flex;
+    align-items: baseline;
+    gap: 0.6rem;
+    min-height: 44px;
+  }
+  .arch-links a {
+    font-family: var(--skdd-font-mono);
+    font-size: 0.88rem;
+    color: var(--sl-color-text);
+    text-decoration: underline;
+    text-decoration-color: var(--skdd-orange);
+    text-underline-offset: 3px;
+    white-space: nowrap;
+  }
+  .arch-links a:hover,
+  .arch-links a:focus-visible {
+    color: var(--skdd-orange-text);
+  }
+  .arch-note {
+    font-size: 0.78rem;
+    color: var(--skdd-ink-600);
+  }
+  :global([data-theme="dark"]) .arch-note { color: var(--skdd-plane-muted); }
+</style>
