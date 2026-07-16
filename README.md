@@ -1,5 +1,5 @@
 <p align="center">
-  <a href="https://zakelfassi.github.io/skills-driven-development">
+  <a href="https://skdd.dev">
     <picture>
       <source media="(prefers-color-scheme: dark)" srcset="./assets/wordmark.svg">
       <source media="(prefers-color-scheme: light)" srcset="./assets/wordmark-light.svg">
@@ -19,7 +19,7 @@
   <a href="./LICENSE"><img alt="license" src="https://img.shields.io/badge/license-MIT-0ea5e9"></a>
   <a href="https://github.com/zakelfassi/skills-driven-development/stargazers"><img alt="stars" src="https://img.shields.io/github/stars/zakelfassi/skills-driven-development?color=f59e0b&label=stars&logo=github"></a>
   <a href="https://agentskills.io/specification.md"><img alt="agentskills.io v1" src="https://img.shields.io/badge/spec-agentskills.io%2Fv1-f59e0b"></a>
-  <a href="https://zakelfassi.github.io/skills-driven-development"><img alt="docs" src="https://img.shields.io/badge/docs-skdd.dev-38bdf8"></a>
+  <a href="https://skdd.dev"><img alt="docs" src="https://img.shields.io/badge/docs-skdd.dev-38bdf8"></a>
 </p>
 
 ---
@@ -67,7 +67,7 @@ pnpm dlx @zakelfassi/skdd init --harness=claude
 # "What skills are available in this project?"
 ```
 
-See [watch the loop run →](https://zakelfassi.github.io/skills-driven-development) for a recorded terminal walkthrough: `init → forge → doctor`.
+See [watch the loop run →](https://skdd.dev) for a recorded terminal walkthrough: `init → forge → doctor`.
 
 ---
 
@@ -162,7 +162,7 @@ Three reference colonies — every example passes `skdd validate` and `skdd doct
 | [`examples/cli-tool`](examples/cli-tool/) | Cross-platform CLI (`shipctl`) | 5 | Release pipelines, build matrices, flag management, man pages, breaking-change audits |
 | [`examples/data-pipeline`](examples/data-pipeline/) | Python ETL + ML project | 5 | Dataset onboarding, pipeline scaffolding, experiment logging, data quality gates, backfills |
 
-Each colony ships with `AGENTS.md`, `CLAUDE.md`, `.skills-registry.md` (including archived + forked rows), `.colony.json`, and at least one executable stub script. Browse the [Examples gallery →](https://zakelfassi.github.io/skills-driven-development/examples/) for full walkthroughs.
+Each colony ships with `AGENTS.md`, `CLAUDE.md`, `.skills-registry.md` (including archived + forked rows), `.colony.json`, and at least one executable stub script. Browse the [Examples gallery →](https://skdd.dev/examples/) for full walkthroughs.
 
 ---
 
@@ -233,7 +233,7 @@ SkDD doesn't replace the spec — it adds a **lifecycle** on top of it.
 - **Contributing:** See [CONTRIBUTING.md](CONTRIBUTING.md) — conventional commits, PR template, issue labels.
 - **Code of Conduct:** [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)
 - **Security:** [SECURITY.md](SECURITY.md)
-- **Docs site:** [zakelfassi.github.io/skills-driven-development](https://zakelfassi.github.io/skills-driven-development)
+- **Docs site:** [skdd.dev](https://skdd.dev)
 - **Changelog:** [CHANGELOG.md](CHANGELOG.md)
 
 ---
