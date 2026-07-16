@@ -85,16 +85,15 @@ const receipts = [
 
     <figure class="verify-block reveal" style="--d:440ms">
       <figcaption class="verify-caption">
-        Run it yourself — from a clone of the repo:
+        Run the published verifier against the shipped fixtures:
       </figcaption>
       <pre
-        class="verify-pre"><code>pnpm --dir cli install && pnpm --dir cli build
-node cli/dist/index.js proof verify \
+        class="verify-pre"><code>pnpm dlx @zakelfassi/skdd@1.2.0 proof verify \
   examples/proof-carrying-skill/receipts/valid-production.json \
   --skill examples/proof-carrying-skill/finish-the-loop/SKILL.md
 <span class="out-pass">✓ proof receipt verified</span>
 
-node cli/dist/index.js proof verify \
+pnpm dlx @zakelfassi/skdd@1.2.0 proof verify \
   examples/proof-carrying-skill/receipts/sentry-circular-evidence.json
 <span class="out-fail">✗ proof receipt refused
 ✗ CIRCULAR_EVIDENCE: Evidence 'poller-self-report-001' was produced by the run executor.

@@ -2,9 +2,9 @@
 /**
  * FinalCta.astro — install / try the verifier / GitHub.
  * Commands verified against the repo:
- *  - `pnpm dlx @zakelfassi/skdd init` is published (npm 1.1.0).
- *  - `skdd proof verify` is in the repo at HEAD but not yet in the published
- *    npm release, so the verifier path is shown from a clone.
+ *  - `pnpm dlx @zakelfassi/skdd init` is published.
+ *  - `skdd proof verify` is published in npm 1.2.0; the clone only supplies
+ *    the real fixture and bound SKILL.md used by the example command.
  */
 const repo = "https://github.com/zakelfassi/skills-driven-development";
 ---
@@ -26,12 +26,12 @@ const repo = "https://github.com/zakelfassi/skills-driven-development";
       <h3 class="final-label">Try the verifier</h3>
       <pre class="final-pre"><code>git clone {repo.replace("https://", "https://")}.git
 cd skills-driven-development
-pnpm --dir cli install && pnpm --dir cli build
-node cli/dist/index.js proof verify \
-  examples/proof-carrying-skill/receipts/valid-production.json</code></pre>
+pnpm dlx @zakelfassi/skdd@1.2.0 proof verify \
+  examples/proof-carrying-skill/receipts/valid-production.json \
+  --skill examples/proof-carrying-skill/finish-the-loop/SKILL.md</code></pre>
       <p class="final-note">
-        The proof verifier ships in the repo today and lands in the next npm
-        release of <code>@zakelfassi/skdd</code>.
+        Published in <code>@zakelfassi/skdd@1.2.0</code>. The receipt is
+        recomputed locally against the exact skill bytes it claims to verify.
       </p>
     </div>
   </div>
