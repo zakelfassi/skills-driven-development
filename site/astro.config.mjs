@@ -3,11 +3,10 @@ import { defineConfig } from "astro/config";
 import starlight from "@astrojs/starlight";
 import rehypeMermaid from "rehype-mermaid";
 
-// Deployed to GitHub Pages under the repo name by default.
-// If a custom domain (skdd.dev) is set up later, change SITE + BASE here —
-// every head link below derives from BASE, so nothing else needs edits.
-const SITE = "https://zakelfassi.github.io";
-const BASE = "/skills-driven-development";
+// The canonical GitHub Pages custom domain. Every asset and metadata URL below
+// derives from these values, keeping root-relative links correct on skdd.dev.
+const SITE = "https://skdd.dev";
+const BASE = "";
 
 export default defineConfig({
   site: SITE,
