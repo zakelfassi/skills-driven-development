@@ -14,10 +14,10 @@
       "statement": "A signed-in user sees every authorized project in the production calendar.",
       "target": {
         "environment": "production",
-        "resource": "theedit.me/calendar",
+        "resource": "example.com/calendar",
         "revision": "git:calendar123"
       },
-      "digest": "a7bb38f0c9d18ffb2b2398f443a45234361c156dcf73cda6faf40074461d69a9"
+      "digest": "bdc7bc35967da78f73a1eb6341474d99244e1d5be6a9c032b2e461de31a9994f"
     }
   ],
   "evidence": [
@@ -32,7 +32,7 @@
       "probe": "open the calendar without a project query and inspect the project selector",
       "target": {
         "environment": "production",
-        "resource": "theedit.me/calendar",
+        "resource": "example.com/calendar",
         "revision": "git:calendar123"
       },
       "observed_at": "2026-07-16T03:09:00.000Z",
